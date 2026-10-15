@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 120 80" fill="none" aria-hidden="true">
+  <g stroke="#e6f2f1" stroke-width="1" opacity="0.55">
+    <path d="M0 20 Q15 8 30 20 Q45 32 60 20 Q75 8 90 20 Q105 32 120 20"/>
+    <path d="M0 40 Q15 28 30 40 Q45 52 60 40 Q75 28 90 40 Q105 52 120 40"/>
+    <path d="M0 60 Q15 48 30 60 Q45 72 60 60 Q75 48 90 60 Q105 72 120 60"/>
+    <path d="M0 80 Q15 68 30 80 Q45 92 60 80 Q75 68 90 80 Q105 92 120 80"/>
+  </g>
+</svg>
