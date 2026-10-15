@@ -2,6 +2,7 @@ import { supabase } from '../../lib/supabase'
 import {
   type Athlete,
   type CatchRow,
+  type JudgeCandidate,
   type MiniTour,
   type ScheduleSegment,
   type Team,
@@ -11,6 +12,7 @@ import {
   type TournamentEntry,
   type TournamentRosterMember,
   type ZoneCode,
+  type ZoneJudgeRow,
 } from './types'
 
 export async function fetchTournaments(): Promise<Tournament[]> {
@@ -654,6 +656,133 @@ export async function updateCatchWeight(catchId: string, weightGrams: number): P
     .update({ weight_grams: weightGrams })
     .eq('id', catchId)
   if (error) throw error
+}
+
+/** Один итоговый вес команды за тур: все уловы тура → одна запись на МТ1. */
+export async function upsertTourWeight(input: {
+  entryId: string
+  tournamentId: string
+  tourNumber: 1 | 2
+  weightGrams: number
+  userId: string
+}): Promise<CatchRow> {
+  const { data: miniTours, error: mtError } = await supabase
+    .from('mini_tours')
+    .select('*')
+    .eq('tournament_id', input.tournamentId)
+    .eq('tour_number', input.tourNumber)
+  if (mtError) throw mtError
+
+  const tours = (miniTours ?? []) as MiniTour[]
+  const mt1 = tours.find((m) => m.mini_number === 1) ?? tours[0]
+  if (!mt1) throw new Error(`Нет мини-туров для тура ${input.tourNumber}`)
+
+  const miniIds = tours.map((m) => m.id)
+  if (miniIds.length > 0) {
+    const { error: delError } = await supabase
+      .from('catches')
+      .delete()
+      .eq('entry_id', input.entryId)
+      .in('mini_tour_id', miniIds)
+    if (delError) throw delError
+  }
+
+  return addCatch({
+    entryId: input.entryId,
+    miniTourId: mt1.id,
+    weightGrams: input.weightGrams,
+    userId: input.userId,
+  })
+}
+
+export async function deleteTourWeight(input: {
+  entryId: string
+  tournamentId: string
+  tourNumber: 1 | 2
+}): Promise<void> {
+  const { data: miniTours, error: mtError } = await supabase
+    .from('mini_tours')
+    .select('id')
+    .eq('tournament_id', input.tournamentId)
+    .eq('tour_number', input.tourNumber)
+  if (mtError) throw mtError
+
+  const miniIds = (miniTours ?? []).map((m) => m.id as string)
+  if (miniIds.length === 0) return
+
+  const { error } = await supabase
+    .from('catches')
+    .delete()
+    .eq('entry_id', input.entryId)
+    .in('mini_tour_id', miniIds)
+  if (error) throw error
+}
+
+export async function fetchJudgeCandidates(): Promise<JudgeCandidate[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, role')
+    .eq('role', 'judge')
+    .order('full_name')
+  if (error) throw error
+  return (data ?? []) as JudgeCandidate[]
+}
+
+export async function fetchZoneJudges(tournamentId: string): Promise<ZoneJudgeRow[]> {
+  const { data, error } = await supabase
+    .from('tournament_zone_judges')
+    .select('*, profile:profiles(id, full_name, role)')
+    .eq('tournament_id', tournamentId)
+    .order('zone')
+  if (error) throw error
+  return (data ?? []).map((row) => {
+    const r = row as ZoneJudgeRow & { profile?: ZoneJudgeRow['profile'] | ZoneJudgeRow['profile'][] }
+    const profile = Array.isArray(r.profile) ? r.profile[0] : r.profile
+    return { ...r, profile }
+  })
+}
+
+export async function setZoneJudge(input: {
+  tournamentId: string
+  userId: string
+  zone: ZoneCode
+}): Promise<ZoneJudgeRow> {
+  const { data, error } = await supabase
+    .from('tournament_zone_judges')
+    .upsert(
+      {
+        tournament_id: input.tournamentId,
+        user_id: input.userId,
+        zone: input.zone,
+      },
+      { onConflict: 'tournament_id,user_id' },
+    )
+    .select('*, profile:profiles(id, full_name, role)')
+    .single()
+  if (error) throw error
+  const r = data as ZoneJudgeRow & { profile?: ZoneJudgeRow['profile'] | ZoneJudgeRow['profile'][] }
+  const profile = Array.isArray(r.profile) ? r.profile[0] : r.profile
+  return { ...r, profile }
+}
+
+export async function removeZoneJudge(id: string): Promise<void> {
+  const { error } = await supabase.from('tournament_zone_judges').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function fetchProfilesByIds(
+  ids: string[],
+): Promise<Map<string, { id: string; full_name: string | null }>> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  const map = new Map<string, { id: string; full_name: string | null }>()
+  if (unique.length === 0) return map
+
+  const { data, error } = await supabase.from('profiles').select('id, full_name').in('id', unique)
+  if (error) throw error
+  for (const p of data ?? []) {
+    map.set(p.id, { id: p.id, full_name: p.full_name })
+  }
+  return map
 }
 
 export type { TournamentRosterMember }

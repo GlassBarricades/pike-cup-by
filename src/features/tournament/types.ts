@@ -106,3 +106,18 @@ export type CatchRow = {
   created_by: string | null
   created_at: string
 }
+
+export type ZoneJudgeRow = {
+  id: string
+  tournament_id: string
+  user_id: string
+  zone: ZoneCode
+  created_at: string
+  profile?: { id: string; full_name: string | null; role: string }
+}
+
+export type JudgeCandidate = {
+  id: string
+  full_name: string | null
+  role: string
+}

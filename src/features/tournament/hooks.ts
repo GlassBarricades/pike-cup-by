@@ -10,7 +10,9 @@ import {
   fetchAthletesWithTeams,
   fetchCatches,
   fetchEntries,
+  fetchJudgeCandidates,
   fetchMiniTours,
+  fetchProfilesByIds,
   fetchSegments,
   fetchTeamById,
   fetchTeamMembershipHistory,
@@ -19,6 +21,7 @@ import {
   fetchTeams,
   fetchTournamentById,
   fetchTournaments,
+  fetchZoneJudges,
 } from './api'
 import { pickCurrentTournament } from './date'
 import { computeStandings, type StandingRow } from './scoring'
@@ -32,6 +35,8 @@ export const tournamentKeys = {
   miniTours: (id: string) => ['tournament', id, 'miniTours'] as const,
   entries: (id: string) => ['tournament', id, 'entries'] as const,
   catches: (id: string) => ['tournament', id, 'catches'] as const,
+  zoneJudges: (id: string) => ['tournament', id, 'zoneJudges'] as const,
+  judgeCandidates: ['judgeCandidates'] as const,
   teams: ['teams'] as const,
   athletes: ['athletes'] as const,
 }
@@ -223,6 +228,34 @@ export function useTeamMembers(teamId: string | undefined) {
   })
 }
 
+export function useZoneJudges(tournamentId: string | undefined) {
+  return useQuery({
+    queryKey: tournamentKeys.zoneJudges(tournamentId ?? ''),
+    queryFn: () => fetchZoneJudges(tournamentId!),
+    enabled: Boolean(tournamentId),
+  })
+}
+
+export function useJudgeCandidates() {
+  return useQuery({
+    queryKey: tournamentKeys.judgeCandidates,
+    queryFn: fetchJudgeCandidates,
+  })
+}
+
+export function useCatchAuthors(catches: { created_by: string | null }[]) {
+  const ids = useMemo(
+    () => [...new Set(catches.map((c) => c.created_by).filter((id): id is string => Boolean(id)))],
+    [catches],
+  )
+
+  return useQuery({
+    queryKey: ['catchAuthors', ids.slice().sort().join(',')],
+    queryFn: () => fetchProfilesByIds(ids),
+    enabled: ids.length > 0,
+  })
+}
+
 export function useTournamentRealtime(tournamentId: string | undefined) {
   const queryClient = useQueryClient()
 
@@ -236,6 +269,13 @@ export function useTournamentRealtime(tournamentId: string | undefined) {
         { event: '*', schema: 'public', table: 'catches' },
         () => {
           void queryClient.invalidateQueries({ queryKey: tournamentKeys.catches(tournamentId) })
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournament_zone_judges', filter: `tournament_id=eq.${tournamentId}` },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: tournamentKeys.zoneJudges(tournamentId) })
         },
       )
       .on(

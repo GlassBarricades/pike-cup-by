@@ -96,3 +96,20 @@ export function oppositeZone(zone: 'A' | 'B' | null | undefined): 'A' | 'B' | nu
   if (zone === 'B') return 'A'
   return null
 }
+
+/** Физическая зона команды в данном туре: I = стартовая, II = противоположная. */
+export function physicalZone(
+  startZone: 'A' | 'B' | null | undefined,
+  tourNumber: 1 | 2,
+): 'A' | 'B' | null {
+  if (!startZone) return null
+  return tourNumber === 1 ? startZone : oppositeZone(startZone)
+}
+
+/** Текущий тур по ключу сегмента расписания (`tour1_*` / `tour2_*`). */
+export function tourNumberFromSegmentKey(key: string | null | undefined): 1 | 2 | null {
+  if (!key) return null
+  if (key.startsWith('tour1')) return 1
+  if (key.startsWith('tour2')) return 2
+  return null
+}
