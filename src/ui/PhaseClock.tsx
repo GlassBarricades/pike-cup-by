@@ -27,7 +27,7 @@ export function PhaseClock({
   if (!phase) return null
 
   const label =
-    phase.kind === 'before'
+    phase.kind === 'before' || phase.kind === 'gap'
       ? (phase.nextSegment?.title ?? 'До старта')
       : phase.kind === 'active'
         ? (phase.segment?.title ?? 'Этап')
@@ -57,13 +57,20 @@ export function PhaseClock({
             </Text>
           )}
         </Stack>
-        {minutesLeft != null && phase.kind === 'active' && (
-          <Text className="pc-display pc-tabular" style={{ fontSize: '1.75rem', color: 'var(--pc-signal)' }}>
-            {minutesLeft}
-            <Text span size="sm" c="dimmed" ml={4} style={{ fontFamily: 'var(--pc-font-body)' }}>
-              мин
+        {minutesLeft != null && (phase.kind === 'active' || phase.kind === 'gap') && (
+          <Stack gap={0} align="flex-end">
+            <Text className="pc-display pc-tabular" style={{ fontSize: '1.75rem', color: 'var(--pc-signal)' }}>
+              {minutesLeft}
+              <Text span size="sm" c="dimmed" ml={4} style={{ fontFamily: 'var(--pc-font-body)' }}>
+                мин
+              </Text>
             </Text>
-          </Text>
+            {phase.kind === 'gap' && (
+              <Text size="xs" c="dimmed">
+                до следующего этапа
+              </Text>
+            )}
+          </Stack>
         )}
       </Group>
     </Panel>

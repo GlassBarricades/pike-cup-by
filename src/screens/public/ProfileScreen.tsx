@@ -5,55 +5,61 @@ import { canManageRoles, isStaff, roleLabel } from '../../features/auth/permissi
 import { PageHero, Panel } from '../../ui'
 
 export function ProfileScreen() {
-  const { user, profile, role, signOut } = useAuth()
+    const { user, profile, role, signOut } = useAuth()
 
-  return (
-    <div className="pc-page pc-page--narrow">
-      <Stack gap="lg">
-        <PageHero title="Профиль" subtitle="Аккаунт PikeCup" />
+    return (
+        <div className="pc-page pc-page--narrow">
+            <Stack gap="lg">
+                <PageHero title="Профиль" subtitle="Аккаунт PikeCup" />
 
-        <Panel>
-          <Stack gap="sm">
-            <Text size="sm">
-              Email:{' '}
-              <Text span fw={600}>
-                {user?.email}
-              </Text>
-            </Text>
-            <Text size="sm">
-              Роль:{' '}
-              <Text span fw={600} className="pc-display">
-                {role ? roleLabel[role] : '—'}
-              </Text>
-            </Text>
-            {profile?.full_name && (
-              <Text size="sm">
-                Имя:{' '}
-                <Text span fw={600}>
-                  {profile.full_name}
-                </Text>
-              </Text>
-            )}
-          </Stack>
-        </Panel>
+                <Panel>
+                    <Stack gap="sm">
+                        <Text size="sm">
+                            Email:{' '}
+                            <Text span fw={600}>
+                                {user?.email}
+                            </Text>
+                        </Text>
+                        <Text size="sm">
+                            Роль:{' '}
+                            <Text span fw={600} className="pc-display">
+                                {role ? roleLabel[role] : '—'}
+                            </Text>
+                        </Text>
+                        {profile?.full_name && (
+                            <Text size="sm">
+                                Имя:{' '}
+                                <Text span fw={600}>
+                                    {profile.full_name}
+                                </Text>
+                            </Text>
+                        )}
+                    </Stack>
+                </Panel>
 
-        <Group>
-          {isStaff(role) && (
-            <Button component={Link} to="/staff" color="signal">
-              Штаб
-            </Button>
-          )}
-          {canManageRoles(role) && (
-            <Button component={Link} to="/admin" variant="outline" color="signal">
-              Админ
-            </Button>
-          )}
-        </Group>
+                <Group>
+                    {role === 'judge' ? (
+                        <Button component={Link} to="/staff/console" color="signal">
+                            Пульт
+                        </Button>
+                    ) : (
+                        isStaff(role) && (
+                            <Button component={Link} to="/staff" color="signal">
+                                Штаб
+                            </Button>
+                        )
+                    )}
+                    {canManageRoles(role) && (
+                        <Button component={Link} to="/admin" variant="outline" color="signal">
+                            Админ
+                        </Button>
+                    )}
+                </Group>
 
-        <Button color="gray" variant="light" onClick={() => void signOut()}>
-          Выйти
-        </Button>
-      </Stack>
-    </div>
-  )
+                <Button color="gray" variant="light" onClick={() => void signOut()}>
+                    Выйти
+                </Button>
+            </Stack>
+        </div>
+    )
 }

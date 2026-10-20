@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { IconDeviceGamepad2, IconFishHook } from '@tabler/icons-react'
 import { updateScheduleOps } from '../../features/tournament/api'
+import { fishingScheduleReady } from '../../features/tournament/scheduleEdit'
+import { ScheduleEditor } from './ScheduleEditor'
 import { canManageTournament } from '../../features/auth/permissions'
 import { useAuth } from '../../features/auth/AuthProvider'
 import {
@@ -18,12 +20,14 @@ import {
   formatTime,
   getCurrentPhase,
   physicalZone,
+  tourNumberFromPhase,
 } from '../../features/tournament/schedule'
 import { useNow } from '../../features/tournament/useNow'
 import type { CatchRow, MiniTour, TournamentEntry } from '../../features/tournament/types'
 import {
   ActionTile,
   EmptyState,
+  LakeBoard,
   PageHero,
   Panel,
   PhaseClock,
@@ -72,7 +76,7 @@ export function DayScreen() {
   })
 
   const zoneProgress = useMemo(() => {
-    const tour: 1 | 2 = phase?.segment?.key?.startsWith('tour2') ? 2 : 1
+    const tour: 1 | 2 = tourNumberFromPhase(phase) ?? 1
     const inA = entries.filter((e) => physicalZone(e.start_zone, tour) === 'A')
     const inB = entries.filter((e) => physicalZone(e.start_zone, tour) === 'B')
     const weighed = (list: TournamentEntry[]) =>
@@ -81,7 +85,7 @@ export function DayScreen() {
       zoneA: { weighed: weighed(inA), total: inA.length },
       zoneB: { weighed: weighed(inB), total: inB.length },
     }
-  }, [entries, catches, miniTours, phase?.segment?.key])
+  }, [entries, catches, miniTours, phase])
 
   if (!tournament) {
     return (
@@ -130,6 +134,11 @@ export function DayScreen() {
       </PageHero>
 
       <div>
+        <SectionTitle>Карта водоёма</SectionTitle>
+        <LakeBoard tournament={tournament} segments={segments} entries={entries} catches={catches} miniTours={miniTours} />
+      </div>
+
+      <div>
         <SectionTitle>Прогресс зон</SectionTitle>
         <ZoneSplit zoneA={zoneProgress.zoneA} zoneB={zoneProgress.zoneB} />
       </div>
@@ -148,6 +157,10 @@ export function DayScreen() {
           icon={IconFishHook}
         />
       </SimpleGrid>
+
+      {canManageTournament(role) && fishingScheduleReady(segments) ? (
+        <ScheduleEditor tournamentId={tournament.id} segments={segments} />
+      ) : null}
 
       <Panel>
         <Stack gap="md">
@@ -203,7 +216,7 @@ export function DayScreen() {
         </Stack>
       </Panel>
 
-      {canManageTournament(role) && (
+      {canManageTournament(role) && !fishingScheduleReady(segments) && (
         <Panel>
           <Stack gap="xs">
             <Text fw={600}>План (эффективное время)</Text>

@@ -12,7 +12,7 @@ import {
   useSegments,
   useTournamentRealtime,
 } from '../../features/tournament/hooks'
-import { getCurrentPhase } from '../../features/tournament/schedule'
+import { getCurrentPhase, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { useNow } from '../../features/tournament/useNow'
 import type { CatchRow, MiniTour, TournamentEntry } from '../../features/tournament/types'
 import { BrandMark, EmptyState, LiveBadge } from '../../ui'
@@ -56,13 +56,13 @@ export function HomeScreen() {
 
   const weighedProgress = useMemo(() => {
     if (!tournament) return null
-    const tour: 1 | 2 = phase?.segment?.key?.startsWith('tour2') ? 2 : 1
+    const tour: 1 | 2 = tourNumberFromPhase(phase) ?? 1
     const assigned = entries.filter((e) => e.start_zone)
     const weighed = assigned.filter(
       (e: TournamentEntry) => tourWeight(e.id, tour, catches, miniTours) > 0,
     ).length
     return { weighed, total: assigned.length || entries.length }
-  }, [tournament, entries, catches, miniTours, phase?.segment?.key])
+  }, [tournament, entries, catches, miniTours, phase])
 
   if (isLoading) {
     return (

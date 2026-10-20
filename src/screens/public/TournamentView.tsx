@@ -5,7 +5,7 @@ import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { formatTournamentDate } from '../../features/tournament/date'
 import { useZoneJudges } from '../../features/tournament/hooks'
-import { getCurrentPhase, physicalZone } from '../../features/tournament/schedule'
+import { getCurrentPhase, physicalZone, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings } from '../../features/tournament/scoring'
 import {
   entryTeamName,
@@ -18,6 +18,7 @@ import {
 import { useNow } from '../../features/tournament/useNow'
 import {
   EmptyState,
+  LakeBoard,
   Leaderboard,
   NextAction,
   PageHero,
@@ -29,6 +30,7 @@ import {
   ZoneSplit,
 } from '../../ui'
 import { ResultsTab } from './ResultsTab'
+import { CatchLogTab } from './CatchLogTab'
 import { RulesTab } from './RulesTab'
 
 function tourWeight(
@@ -82,7 +84,7 @@ export function TournamentView({
   const top5 = standings.slice(0, 5)
 
   const zoneProgress = useMemo(() => {
-    const tour: 1 | 2 = phase?.segment?.key?.startsWith('tour2') ? 2 : 1
+    const tour: 1 | 2 = tourNumberFromPhase(phase) ?? 1
     const inA = entries.filter((e) => physicalZone(e.start_zone, tour) === 'A')
     const inB = entries.filter((e) => physicalZone(e.start_zone, tour) === 'B')
     const weighed = (list: TournamentEntry[]) =>
@@ -91,7 +93,7 @@ export function TournamentView({
       zoneA: { weighed: weighed(inA), total: inA.length },
       zoneB: { weighed: weighed(inB), total: inB.length },
     }
-  }, [entries, catches, miniTours, phase?.segment?.key])
+  }, [entries, catches, miniTours, phase])
 
   const teamsSorted = useMemo(
     () => [...entries].sort((a, b) => entryTeamName(a).localeCompare(entryTeamName(b), 'ru')),
@@ -151,7 +153,7 @@ export function TournamentView({
     }
     if (tournament.status === 'live' && phase) {
       const label =
-        phase.kind === 'before'
+        phase.kind === 'before' || phase.kind === 'gap'
           ? (phase.nextSegment?.title ?? 'До старта')
           : phase.kind === 'active'
             ? (phase.segment?.title ?? 'Этап')
@@ -171,7 +173,9 @@ export function TournamentView({
   const tabs = [
     { value: 'overview', label: 'Обзор' },
     { value: 'results', label: 'Таблица' },
+    { value: 'catches', label: 'Уловы' },
     { value: 'teams', label: `Команды (${teamsSorted.length})` },
+    { value: 'map', label: 'Карта' },
     { value: 'schedule', label: 'Расписание' },
     { value: 'rules', label: 'Регламент' },
   ]
@@ -232,7 +236,7 @@ export function TournamentView({
       {headerMobile}
       {headerDesktop}
 
-      <TabsBar tabs={tabs} defaultTab="overview">
+      <TabsBar tabs={tabs} defaultTab={tournament.status === 'live' ? 'results' : 'overview'}>
         {(active) => (
           <>
             {active === 'overview' && (
@@ -256,7 +260,7 @@ export function TournamentView({
                   {top5.length === 0 ? (
                     <EmptyState title="Таблица пуста" description="Результаты появятся после взвешивания" />
                   ) : (
-                    <Leaderboard rows={top5} compact />
+                    <Leaderboard rows={top5} compact tournamentId={tournament.id} />
                   )}
                 </div>
                 {!isFinished && (
@@ -295,6 +299,17 @@ export function TournamentView({
                 entries={entries}
                 catches={catches}
                 miniTours={miniTours}
+                segments={segments}
+              />
+            )}
+
+            {active === 'catches' && (
+              <CatchLogTab
+                tournament={tournament}
+                entries={entries}
+                catches={catches}
+                miniTours={miniTours}
+                segments={segments}
               />
             )}
 
@@ -318,23 +333,33 @@ export function TournamentView({
                         <Text fw={600}>{entryTeamName(e)}</Text>
                         <Text size="xs" c="dimmed">
                           Старт: зона {e.start_zone ?? '—'}
+                          {e.draw_slip ? ` · бумажка № ${e.draw_slip.code}` : ''}
                         </Text>
                       </div>
-                      {e.team_id && (
-                        <Button
-                          component={Link}
-                          to={`/teams/${e.team_id}`}
-                          variant="subtle"
-                          color="gray"
-                          size="compact-xs"
-                        >
-                          Карточка
-                        </Button>
-                      )}
+                      <Button
+                        component={Link}
+                        to={`/tournament/${tournament.id}/team/${e.id}`}
+                        variant="subtle"
+                        color="gray"
+                        size="compact-xs"
+                      >
+                        Сейчас
+                      </Button>
                     </Group>
                   ))}
                 </SimpleGrid>
               ))}
+
+            {active === 'map' && (
+              <LakeBoard
+                tournament={tournament}
+                segments={segments}
+                entries={entries}
+                catches={catches}
+                miniTours={miniTours}
+                followCatches={tournament.status === 'live'}
+              />
+            )}
 
             {active === 'schedule' && (
               <Timeline

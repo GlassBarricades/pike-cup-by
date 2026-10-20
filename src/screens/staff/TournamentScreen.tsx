@@ -9,7 +9,9 @@ import {
   TextInput,
 } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createTournament, updateTournamentMeta } from '../../features/tournament/api'
+import { useAuth } from '../../features/auth/AuthProvider'
+import { canManageRoles } from '../../features/auth/permissions'
+import { createTournament, deleteTournament, restartTournament, updateTournamentMeta } from '../../features/tournament/api'
 import { formatTournamentDate, statusLabel } from '../../features/tournament/date'
 import { tournamentKeys } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
@@ -17,6 +19,8 @@ import type { TournamentStatus } from '../../features/tournament/types'
 import { EmptyState, PageHero, Panel, SectionTitle } from '../../ui'
 
 export function TournamentScreen() {
+  const { role } = useAuth()
+  const isAdmin = canManageRoles(role)
   const { selected, setSelectedId, tournaments } = useStaffTournament()
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
@@ -65,6 +69,32 @@ export function TournamentScreen() {
       if (selected) {
         await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(selected.id) })
       }
+    },
+  })
+
+  const restartMutation = useMutation({
+    mutationFn: () => restartTournament(selected!.id, eventDate),
+    onSuccess: async () => {
+      setStatus('live')
+      const id = selected?.id
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
+      if (id) {
+        await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(id) })
+        await queryClient.invalidateQueries({ queryKey: tournamentKeys.segments(id) })
+        await queryClient.invalidateQueries({ queryKey: tournamentKeys.catches(id) })
+      }
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (tournamentId: string) => deleteTournament(tournamentId),
+    onSuccess: async (_data, tournamentId) => {
+      const next = tournaments.find((tournament) => tournament.id !== tournamentId)
+      setSelectedId(next?.id ?? null)
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
+      queryClient.removeQueries({ queryKey: ['tournament', tournamentId] })
     },
   })
 
@@ -219,6 +249,63 @@ export function TournamentScreen() {
             <Button color="signal" loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
               Сохранить
             </Button>
+            {saveMutation.isError && (
+              <Text c="red" size="sm">
+                {(saveMutation.error as Error).message}
+              </Text>
+            )}
+            {isAdmin && (
+              <>
+                <Button
+                  variant="light"
+                  color="yellow"
+                  disabled={!eventDate}
+                  loading={restartMutation.isPending}
+                  onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Перезапустить «${selected.name}» на ${eventDate}? Расписание переедет на эту дату, сдвиг и пауза сбросятся, уловы сотрутся, статус станет «Идёт». Заявки и бумажки останутся.`,
+                      )
+                    ) {
+                      return
+                    }
+                    restartMutation.mutate()
+                  }}
+                >
+                  Перезапустить турнир
+                </Button>
+                <Text size="xs" c="dimmed">
+                  Для отладки. Кнопка видна только администратору.
+                </Text>
+                {restartMutation.isError && (
+                  <Text c="red" size="sm">
+                    {(restartMutation.error as Error).message}
+                  </Text>
+                )}
+              </>
+            )}
+            <Button
+              color="red"
+              variant="light"
+              loading={deleteMutation.isPending}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    `Удалить турнир «${selected.name}»? Заявки, составы, уловы, расписание, судьи зон и регламент этого турнира будут стёрты. Справочник команд, спортсменов и бумажек останется.`,
+                  )
+                ) {
+                  return
+                }
+                deleteMutation.mutate(selected.id)
+              }}
+            >
+              Удалить турнир
+            </Button>
+            {deleteMutation.isError && (
+              <Text c="red" size="sm">
+                {(deleteMutation.error as Error).message}
+              </Text>
+            )}
           </Stack>
         </Panel>
       ) : (

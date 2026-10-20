@@ -9,6 +9,7 @@ import {
   fetchAthleteTournamentAppearances,
   fetchAthletesWithTeams,
   fetchCatches,
+  fetchDrawSlips,
   fetchEntries,
   fetchJudgeCandidates,
   fetchMiniTours,
@@ -36,6 +37,7 @@ export const tournamentKeys = {
   entries: (id: string) => ['tournament', id, 'entries'] as const,
   catches: (id: string) => ['tournament', id, 'catches'] as const,
   zoneJudges: (id: string) => ['tournament', id, 'zoneJudges'] as const,
+  drawSlips: ['drawSlips'] as const,
   judgeCandidates: ['judgeCandidates'] as const,
   teams: ['teams'] as const,
   athletes: ['athletes'] as const,
@@ -225,6 +227,13 @@ export function useTeamMembers(teamId: string | undefined) {
     queryKey: ['team', teamId, 'members'],
     queryFn: () => fetchActiveMemberships(teamId!),
     enabled: Boolean(teamId),
+  })
+}
+
+export function useDrawSlips() {
+  return useQuery({
+    queryKey: tournamentKeys.drawSlips,
+    queryFn: fetchDrawSlips,
   })
 }
 

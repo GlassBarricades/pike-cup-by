@@ -105,6 +105,42 @@ body {
   animation: pc-row-flash 1.2s ease-out;
 }
 
+.pc-peg-flash {
+  animation: pc-live-pulse 0.7s ease-in-out 4;
+}
+
+@keyframes pc-catch-ring {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.75);
+    opacity: 0;
+  }
+}
+
+.pc-catch-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pc-catch-ring 1.15s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-catch-ring {
+    animation: none;
+    opacity: 0.8;
+    transform: none;
+  }
+}
+
+.pc-lake-frame:fullscreen,
+.pc-results-frame:fullscreen {
+  width: 100%;
+  height: 100%;
+  background: var(--pc-bg);
+}
+
 /* Judge console swipe */
 .pc-judge-console {
   display: flex;

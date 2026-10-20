@@ -7,10 +7,12 @@ export function Leaderboard({
   rows,
   flashIds,
   compact,
+  tournamentId,
 }: {
   rows: StandingRow[]
   flashIds?: Set<string>
   compact?: boolean
+  tournamentId: string
 }) {
   if (rows.length === 0) {
     return (
@@ -79,19 +81,15 @@ export function Leaderboard({
                     </Text>
                   </Table.Td>
                   <Table.Td>
-                    {row.teamId ? (
-                      <Anchor
-                        component={Link}
-                        to={`/teams/${row.teamId}`}
-                        c="inherit"
-                        underline="never"
-                        fw={600}
-                      >
-                        {row.teamName}
-                      </Anchor>
-                    ) : (
-                      <Text fw={600}>{row.teamName}</Text>
-                    )}
+                    <Anchor
+                      component={Link}
+                      to={`/tournament/${tournamentId}/team/${row.entryId}`}
+                      c="inherit"
+                      underline="never"
+                      fw={600}
+                    >
+                      {row.teamName}
+                    </Anchor>
                     {!compact && row.rosterNames.length > 0 && (
                       <Text size="xs" c="dimmed">
                         {row.rosterNames.join(' · ')}

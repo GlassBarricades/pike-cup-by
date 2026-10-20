@@ -25,7 +25,8 @@ import {
   useTeamNameHistory,
 } from '../../features/tournament/hooks'
 import { formatPlace } from '../../features/tournament/scoring'
-import { Panel, SectionTitle } from '../../ui'
+import { formatSlipCode } from '../../features/tournament/slips'
+import { Panel, SectionTitle, SlipGrid } from '../../ui'
 import { entryTeamName } from '../../features/tournament/types'
 
 export function TeamDetailScreen() {
@@ -338,6 +339,14 @@ export function TeamDetailScreen() {
                 {standing.zoneBWeight} ({formatPlace(standing.zoneBPlace)}) · Σ мест{' '}
                 {formatPlace(standing.placeSum)} · вес {standing.totalWeight}
               </Text>
+            )}
+            {entry.draw_slip && (
+              <Stack gap={4} mt="xs">
+                <Text size="sm" fw={700}>
+                  Бумажка {formatSlipCode(entry.draw_slip.code)} · старт зона {entry.draw_slip.start_zone}
+                </Text>
+                <SlipGrid slip={entry.draw_slip} />
+              </Stack>
             )}
           </Panel>
         ))}

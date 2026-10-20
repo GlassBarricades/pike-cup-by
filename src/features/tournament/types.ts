@@ -24,6 +24,8 @@ export type Tournament = {
   zero_place_is_group_size_plus_one: boolean
 }
 
+export type ScheduleWindowKind = 'fishing' | 'move'
+
 export type ScheduleSegment = {
   id: string
   tournament_id: string
@@ -32,6 +34,12 @@ export type ScheduleSegment = {
   sort_order: number
   planned_starts_at: string
   planned_ends_at: string
+  /** null у строк архивных турниров, созданных до окон перехода */
+  window_kind?: ScheduleWindowKind | null
+  /** Куда идёт переход: тур 1–2. Только у window_kind = move */
+  move_tour?: 1 | 2 | null
+  /** Куда идёт переход: мини-тур 1–5. Только у window_kind = move */
+  move_mini?: number | null
 }
 
 export type MiniTour = {
@@ -72,9 +80,27 @@ export type TournamentEntry = {
   status: EntryStatus
   contact_phone: string | null
   start_zone: ZoneCode | null
+  draw_slip_id: string | null
   roster_locked_at: string | null
   team?: Team
   roster?: TournamentRosterMember[]
+  draw_slip?: DrawSlip | null
+}
+
+export type DrawSlipSector = {
+  id: string
+  slip_id: string
+  tour_number: 1 | 2
+  mini_number: number
+  sector_number: number
+}
+
+export type DrawSlip = {
+  id: string
+  code: string
+  start_zone: ZoneCode
+  sort_order: number
+  sectors?: DrawSlipSector[]
 }
 
 export type TeamNameHistoryRow = {

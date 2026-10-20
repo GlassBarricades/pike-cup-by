@@ -13,6 +13,7 @@ import { JudgeLayout } from '../layouts/JudgeLayout'
 
 import { HomeScreen } from '../screens/public/HomeScreen'
 import { EventScreen } from '../screens/public/EventScreen'
+import { TeamLiveScreen } from '../screens/public/TeamLiveScreen'
 import { LeaderboardScreen } from '../screens/public/LeaderboardScreen'
 import { RulesScreen } from '../screens/public/RulesScreen'
 import { ArchiveScreen } from '../screens/public/ArchiveScreen'
@@ -74,6 +75,7 @@ export const router = createBrowserRouter([
       { path: 'tournament/schedule', element: <RedirectToCurrent suffix="?tab=schedule" /> },
       { path: 'tournament/teams', element: <RedirectToCurrent suffix="?tab=teams" /> },
       { path: 'tournament/:tournamentId', element: <EventScreen /> },
+      { path: 'tournament/:tournamentId/team/:entryId', element: <TeamLiveScreen /> },
       { path: 'tournament/:tournamentId/results', element: <LeaderboardScreen /> },
       { path: 'tournament/:tournamentId/rules', element: <RulesScreen /> },
       {
