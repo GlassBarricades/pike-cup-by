@@ -1,11 +1,12 @@
-import { Box, Button, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { Anchor, Box, Button, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { formatTournamentDate } from '../../features/tournament/date'
 import { useZoneJudges } from '../../features/tournament/hooks'
-import { getCurrentPhase, physicalZone, tourNumberFromPhase } from '../../features/tournament/schedule'
+import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
+import { getCurrentPhase, physicalZone, slotTitle, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings } from '../../features/tournament/scoring'
 import {
   entryTeamName,
@@ -22,6 +23,7 @@ import {
   Leaderboard,
   NextAction,
   PageHero,
+  Panel,
   PhaseClock,
   SectionTitle,
   StatusBadge,
@@ -32,6 +34,68 @@ import {
 import { ResultsTab } from './ResultsTab'
 import { CatchLogTab } from './CatchLogTab'
 import { RulesTab } from './RulesTab'
+
+function LatestWeighing({
+  tournamentId,
+  entries,
+  catches,
+  miniTours,
+  live,
+}: {
+  tournamentId: string
+  entries: TournamentEntry[]
+  catches: CatchRow[]
+  miniTours: MiniTour[]
+  live: boolean
+}) {
+  const latest = useMemo(() => buildCatchLog(entries, catches, miniTours)[0] ?? null, [entries, catches, miniTours])
+  const known = useRef<Set<string>>(new Set())
+  const [flash, setFlash] = useState(false)
+
+  useEffect(() => {
+    const ids = new Set(catches.map((row) => row.id))
+    const seen = known.current
+    if (seen.size > 0 && catches.some((row) => !seen.has(row.id))) {
+      known.current = ids
+      setFlash(true)
+      const timer = window.setTimeout(() => setFlash(false), 1600)
+      return () => window.clearTimeout(timer)
+    }
+    known.current = ids
+  }, [catches])
+
+  if (!latest) {
+    if (!live) return null
+    return (
+      <Text size="sm" c="dimmed">
+        Взвешиваний ещё не было
+      </Text>
+    )
+  }
+
+  return (
+    <Panel p="sm" className={flash ? 'pc-peg-flash' : undefined}>
+      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
+        <div style={{ minWidth: 0 }}>
+          <Text size="xs" c="dimmed" tt="uppercase">
+            Последнее взвешивание · {formatCatchClock(latest.createdAt)}
+          </Text>
+          <Anchor component={Link} to={`/tournament/${tournamentId}/team/${latest.entryId}`} fw={700} c="inherit" underline="never">
+            {latest.teamName}
+          </Anchor>
+          <Text size="sm" c="dimmed">
+            {latest.tour && latest.mini ? slotTitle({ tour: latest.tour, mini: latest.mini }) : 'Мини-тур'}
+            {latest.zone ? ` · зона ${latest.zone}` : ''}
+            {latest.sector != null ? ` · сектор ${latest.sector}` : ''}
+          </Text>
+        </div>
+        <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.6rem', flexShrink: 0 }}>
+          {latest.grams.toLocaleString('ru-RU')} г
+        </Text>
+      </Group>
+    </Panel>
+  )
+}
 
 function tourWeight(
   entryId: string,
@@ -52,6 +116,7 @@ export function TournamentView({
   miniTours,
   segments,
   showBack,
+  spectator = false,
 }: {
   tournament: Tournament
   entries: TournamentEntry[]
@@ -59,6 +124,8 @@ export function TournamentView({
   miniTours: MiniTour[]
   segments: ScheduleSegment[]
   showBack?: boolean
+  /** Экран зрителя: без повторных меток «идёт». Сигнал живёт в пункте меню LIVE. */
+  spectator?: boolean
 }) {
   const now = useNow(5_000)
   const { user, role } = useAuth()
@@ -192,17 +259,27 @@ export function TournamentView({
           <Title order={3} className="pc-display" style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }} lineClamp={2}>
             {tournament.name}
           </Title>
-          <StatusBadge status={tournament.status} size="sm" />
+          {!spectator && <StatusBadge status={tournament.status} size="sm" />}
         </Group>
         <Text size="xs" c="dimmed">
           {formatTournamentDate(tournament.event_date)} · {tournament.location}
         </Text>
-        <PhaseClock
-          phase={phase}
-          delayMinutes={tournament.schedule_delay_minutes}
-          paused={Boolean(tournament.schedule_paused_at)}
-          archiveLabel={isFinished ? 'Архивный турнир — итоговый протокол' : undefined}
-        />
+        <Stack gap={8}>
+          <PhaseClock
+            phase={phase}
+            delayMinutes={tournament.schedule_delay_minutes}
+            paused={Boolean(tournament.schedule_paused_at)}
+            archiveLabel={isFinished ? 'Архивный турнир — итоговый протокол' : undefined}
+            showLiveMark={false}
+          />
+          <LatestWeighing
+            tournamentId={tournament.id}
+            entries={entries}
+            catches={catches}
+            miniTours={miniTours}
+            live={tournament.status === 'live'}
+          />
+        </Stack>
       </Stack>
     </Box>
   )
@@ -218,14 +295,25 @@ export function TournamentView({
         <PageHero
           title={tournament.name}
           subtitle={`${formatTournamentDate(tournament.event_date)} · ${tournament.location}`}
-          badge={<StatusBadge status={tournament.status} />}
+          badge={spectator ? undefined : <StatusBadge status={tournament.status} />}
+          mb={0}
         >
-          <PhaseClock
-            phase={phase}
-            delayMinutes={tournament.schedule_delay_minutes}
-            paused={Boolean(tournament.schedule_paused_at)}
-            archiveLabel={isFinished ? 'Архивный турнир — итоговый протокол' : undefined}
-          />
+          <Stack gap={8}>
+            <PhaseClock
+              phase={phase}
+              delayMinutes={tournament.schedule_delay_minutes}
+              paused={Boolean(tournament.schedule_paused_at)}
+              archiveLabel={isFinished ? 'Архивный турнир — итоговый протокол' : undefined}
+              showLiveMark={false}
+            />
+            <LatestWeighing
+              tournamentId={tournament.id}
+              entries={entries}
+              catches={catches}
+              miniTours={miniTours}
+              live={tournament.status === 'live'}
+            />
+          </Stack>
         </PageHero>
       </Stack>
     </Box>

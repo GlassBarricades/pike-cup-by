@@ -8,11 +8,13 @@ export function PhaseClock({
   delayMinutes = 0,
   paused = false,
   archiveLabel,
+  showLiveMark = true,
 }: {
   phase: CurrentPhase | null
   delayMinutes?: number
   paused?: boolean
   archiveLabel?: string
+  showLiveMark?: boolean
 }) {
   if (archiveLabel) {
     return (
@@ -44,7 +46,7 @@ export function PhaseClock({
       <Group justify="space-between" align="center" wrap="wrap" gap="sm">
         <Stack gap={2}>
           <Group gap="xs">
-            {phase.kind === 'active' && <LiveBadge />}
+            {showLiveMark && phase.kind === 'active' && <LiveBadge />}
             <Text className="pc-display" style={{ fontSize: '1.15rem' }}>
               {label}
             </Text>

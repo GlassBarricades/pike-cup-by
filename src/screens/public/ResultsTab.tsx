@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { Anchor, Box, Button, Group, Stack, Table, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
-import { getCurrentPhase, slotTitle, tourNumberFromPhase } from '../../features/tournament/schedule'
+import { getCurrentPhase, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../../features/tournament/scoring'
 import { useNow } from '../../features/tournament/useNow'
 import {
@@ -13,8 +13,7 @@ import {
   type ZoneCode,
 } from '../../features/tournament/types'
 import { readCheer } from '../../features/tournament/cheer'
-import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
-import { EmptyState, LiveBadge, Panel } from '../../ui'
+import { EmptyState, Panel } from '../../ui'
 
 type BoardView = 'A' | 'B' | 'sum'
 type GroupMode = 'now' | 'past'
@@ -61,8 +60,6 @@ export function ResultsTab({
   const [view, setView] = useState<BoardView>('sum')
   const [groupMode, setGroupMode] = useState<GroupMode>('now')
   const [search, setSearch] = useState('')
-  const [onlyCatch, setOnlyCatch] = useState(false)
-  const [onlyZero, setOnlyZero] = useState(false)
   const [fullscreen, setFullscreen] = useState<'off' | 'native' | 'page'>('off')
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
   const cheerId = useMemo(() => readCheer(tournament.id), [tournament.id])
@@ -135,18 +132,7 @@ export function ResultsTab({
       }
     })
 
-    const filtered = mapped.filter((item) => {
-      if (view === 'sum') {
-        if (onlyCatch && item.row.totalWeight <= 0) return false
-        if (onlyZero && item.placeA != null && item.placeB != null && item.row.zoneAWeight > 0 && item.row.zoneBWeight > 0) return false
-        return true
-      }
-      if (onlyCatch && item.zoneWeight <= 0) return false
-      if (onlyZero && !(item.zonePlace != null && item.zoneWeight === 0)) return false
-      return true
-    })
-
-    filtered.sort((a, b) => {
+    mapped.sort((a, b) => {
       if (view === 'sum') {
         if (a.sum == null && b.sum == null) return b.row.totalWeight - a.row.totalWeight
         if (a.sum == null) return 1
@@ -158,8 +144,8 @@ export function ResultsTab({
       if (b.zonePlace == null) return -1
       return a.zonePlace - b.zonePlace || b.zoneWeight - a.zoneWeight
     })
-    return filtered
-  }, [standings, search, view, zoneGroups, opened, onlyCatch, onlyZero])
+    return mapped
+  }, [standings, search, view, zoneGroups, opened])
 
   const placeKey = rows.map((item) => `${item.row.entryId}:${view === 'sum' ? item.sum ?? '' : item.zonePlace ?? ''}`).join('|')
   const [placeTrack, setPlaceTrack] = useState<{ key: string; places: Map<string, number>; shifts: Map<string, number> }>({
@@ -252,7 +238,6 @@ export function ResultsTab({
     return <EmptyState title="Таблица пуста" description="Результаты появятся после взвешивания" />
   }
 
-  const latest = buildCatchLog(entries, catches, miniTours)[0] ?? null
   const live = tournament.status === 'live'
 
   const expanded = fullscreen !== 'off'
@@ -280,38 +265,11 @@ export function ResultsTab({
     >
       <Stack gap="sm" style={expanded ? { flex: 1, minHeight: 0 } : undefined}>
         {live ? (
-          <Group gap="xs">
-            <LiveBadge label="Онлайн" />
-            <Text size="sm">Таблица обновляется сама</Text>
-          </Group>
-        ) : null}
-        {latest ? (
-          <Panel p="sm" className={flashIds.has(latest.entryId) ? 'pc-peg-flash' : undefined}>
-            <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
-              <div style={{ minWidth: 0 }}>
-                <Text size="xs" c="dimmed" tt="uppercase">
-                  Последнее взвешивание · {formatCatchClock(latest.createdAt)}
-                </Text>
-                <Anchor component={Link} to={`/tournament/${tournament.id}/team/${latest.entryId}`} fw={700} c="inherit" underline="never">
-                  {latest.teamName}
-                </Anchor>
-                <Text size="sm" c="dimmed">
-                  {latest.tour && latest.mini ? slotTitle({ tour: latest.tour, mini: latest.mini }) : 'Мини-тур'}
-                  {latest.zone ? ` · зона ${latest.zone}` : ''}
-                  {latest.sector != null ? ` · сектор ${latest.sector}` : ''}
-                </Text>
-              </div>
-              <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.6rem', flexShrink: 0 }}>
-                {grams(latest.grams)}
-              </Text>
-            </Group>
-          </Panel>
-        ) : live ? (
           <Text size="sm" c="dimmed">
-            Взвешиваний ещё не было
+            Таблица обновляется сама
           </Text>
         ) : null}
-        <Group justify="space-between" align="flex-end" wrap="wrap">
+        <Group justify="space-between" align="center" wrap="wrap" gap="xs">
           <Group gap={6}>
             {(
               [
@@ -325,6 +283,17 @@ export function ResultsTab({
               </Button>
             ))}
           </Group>
+          <TextInput
+            placeholder="Поиск: команда или рыбак"
+            value={search}
+            onChange={(event) => setSearch(event.currentTarget.value)}
+            style={{ flex: '1 1 180px' }}
+          />
+          {cheerId ? (
+            <Button size="xs" variant="light" color="signal" onClick={scrollToCheer}>
+              {cheerInView ? 'К моей команде' : 'Показать мою команду'}
+            </Button>
+          ) : null}
           <Button size="xs" variant={expanded ? 'filled' : 'default'} onClick={() => void toggleFullscreen()}>
             {expanded ? 'Свернуть' : 'На весь экран'}
           </Button>
@@ -362,26 +331,6 @@ export function ResultsTab({
             В этой зоне ещё не взвешивали
           </Text>
         ) : null}
-
-        <Group align="flex-end" wrap="wrap" gap="xs">
-          <TextInput
-            placeholder="Поиск: команда или рыбак"
-            value={search}
-            onChange={(event) => setSearch(event.currentTarget.value)}
-            style={{ flex: '1 1 220px' }}
-          />
-          <Button size="xs" variant={onlyCatch ? 'filled' : 'default'} onClick={() => setOnlyCatch((value) => !value)}>
-            С уловом
-          </Button>
-          <Button size="xs" variant={onlyZero ? 'filled' : 'default'} onClick={() => setOnlyZero((value) => !value)}>
-            Ноль в зоне
-          </Button>
-          {cheerId ? (
-            <Button size="xs" variant="light" color="signal" onClick={scrollToCheer}>
-              {cheerInView ? 'К моей команде' : 'Показать мою команду'}
-            </Button>
-          ) : null}
-        </Group>
 
         <Text size="xs" c="dimmed" className="pc-tabular">
           {rows.length} команд
@@ -431,48 +380,45 @@ function ResultsTable({
     )
   }
 
+  const placeCol = { width: 52, paddingInline: 6 }
+  const numCol = { width: 36, paddingInline: 4, whiteSpace: 'nowrap' as const }
+  const weightCol = { width: 76, paddingInline: 4, whiteSpace: 'nowrap' as const }
+
   return (
     <Panel p={0}>
-      <Table.ScrollContainer minWidth={view === 'sum' ? 720 : 560}>
-        <Table horizontalSpacing="sm" verticalSpacing={8}>
-          <Table.Thead>
-            <Table.Tr style={{ borderBottom: '1px solid var(--pc-line)' }}>
-              {view === 'sum' ? (
-                <Table.Th className="pc-display" style={{ width: 72, fontSize: 12, color: 'var(--pc-muted)' }}>
+      <Table horizontalSpacing={0} verticalSpacing={8} style={{ tableLayout: 'fixed', width: '100%' }}>
+        <Table.Thead>
+          <Table.Tr style={{ borderBottom: '1px solid var(--pc-line)' }}>
+            <Table.Th className="pc-display" style={{ ...placeCol, fontSize: 12, color: 'var(--pc-muted)' }}>
+              {view === 'sum' ? 'Σ' : 'Место'}
+            </Table.Th>
+            <Table.Th className="pc-display" style={{ fontSize: 12, color: 'var(--pc-muted)', paddingInline: 6 }}>
+              Команда
+            </Table.Th>
+            {view === 'sum' ? (
+              <>
+                <Table.Th ta="right" className="pc-display" style={{ ...numCol, fontSize: 12, color: 'var(--pc-muted)' }}>
+                  A
+                </Table.Th>
+                <Table.Th ta="right" className="pc-display" style={{ ...numCol, fontSize: 12, color: 'var(--pc-muted)' }}>
+                  B
+                </Table.Th>
+                <Table.Th ta="right" className="pc-display" style={{ ...weightCol, fontSize: 12, color: 'var(--pc-muted)' }}>
+                  Вес
+                </Table.Th>
+              </>
+            ) : (
+              <>
+                <Table.Th ta="right" className="pc-display" style={{ ...weightCol, fontSize: 12, color: 'var(--pc-muted)' }}>
+                  Вес
+                </Table.Th>
+                <Table.Th ta="right" className="pc-display" style={{ ...numCol, width: 44, fontSize: 12, color: 'var(--pc-muted)' }}>
                   Σ
                 </Table.Th>
-              ) : (
-                <Table.Th className="pc-display" style={{ width: 72, fontSize: 12, color: 'var(--pc-muted)' }}>
-                  Место
-                </Table.Th>
-              )}
-              <Table.Th className="pc-display" style={{ fontSize: 12, color: 'var(--pc-muted)' }}>
-                Команда
-              </Table.Th>
-              {view === 'sum' ? (
-                <>
-                  <Table.Th ta="right" className="pc-display" style={{ fontSize: 12, color: 'var(--pc-muted)' }}>
-                    A
-                  </Table.Th>
-                  <Table.Th ta="right" className="pc-display" style={{ fontSize: 12, color: 'var(--pc-muted)' }}>
-                    B
-                  </Table.Th>
-                  <Table.Th ta="right" className="pc-display" style={{ fontSize: 12, color: 'var(--pc-muted)' }}>
-                    Вес
-                  </Table.Th>
-                </>
-              ) : (
-                <>
-                  <Table.Th ta="right" className="pc-display" style={{ fontSize: 12, color: 'var(--pc-muted)' }}>
-                    Вес
-                  </Table.Th>
-                  <Table.Th ta="right" className="pc-display" style={{ fontSize: 12, color: 'var(--pc-muted)' }}>
-                    Σ
-                  </Table.Th>
-                </>
-              )}
-            </Table.Tr>
-          </Table.Thead>
+              </>
+            )}
+          </Table.Tr>
+        </Table.Thead>
           <Table.Tbody>
             {rows.map((item, index) => {
               const hero = view === 'sum' ? item.sum : item.zonePlace
@@ -496,9 +442,9 @@ function ResultsTable({
                         : undefined,
                   }}
                 >
-                  <Table.Td>
-                    <Group gap={6} wrap="nowrap">
-                      <Text className="pc-display pc-tabular" style={{ fontSize: top ? '1.45rem' : '1.15rem', color: top || cheer ? 'var(--pc-signal)' : undefined }}>
+                  <Table.Td style={placeCol}>
+                    <Group gap={4} wrap="nowrap">
+                      <Text className="pc-display pc-tabular" style={{ fontSize: top ? '1.25rem' : '1.05rem', color: top || cheer ? 'var(--pc-signal)' : undefined }}>
                         {hero == null ? '—' : formatPlace(hero)}
                       </Text>
                       {shift != null && shift !== 0 ? (
@@ -508,34 +454,41 @@ function ResultsTable({
                       ) : null}
                     </Group>
                   </Table.Td>
-                  <Table.Td>
-                    <Anchor component={Link} to={`/tournament/${tournamentId}/team/${item.row.entryId}`} c="inherit" underline="never" fw={600}>
+                  <Table.Td style={{ paddingInline: 6, overflow: 'hidden' }}>
+                    <Anchor
+                      component={Link}
+                      to={`/tournament/${tournamentId}/team/${item.row.entryId}`}
+                      c="inherit"
+                      underline="never"
+                      fw={600}
+                      style={{ display: 'block', lineHeight: 1.25 }}
+                    >
                       {item.row.teamName}
                     </Anchor>
                     {item.row.rosterNames.length > 0 ? (
-                      <Text size="xs" c="dimmed">
+                      <Text size="xs" c="dimmed" lineClamp={2}>
                         {item.row.rosterNames.join(' · ')}
                       </Text>
                     ) : null}
                   </Table.Td>
                   {view === 'sum' ? (
                     <>
-                      <Table.Td ta="right" className="pc-tabular">
+                      <Table.Td ta="right" className="pc-tabular" style={numCol}>
                         {item.placeA == null ? '—' : formatPlace(item.placeA)}
                       </Table.Td>
-                      <Table.Td ta="right" className="pc-tabular">
+                      <Table.Td ta="right" className="pc-tabular" style={numCol}>
                         {item.placeB == null ? '—' : formatPlace(item.placeB)}
                       </Table.Td>
-                      <Table.Td ta="right" className="pc-tabular" fw={600}>
+                      <Table.Td ta="right" className="pc-tabular" fw={600} style={weightCol}>
                         {grams(item.row.totalWeight)}
                       </Table.Td>
                     </>
                   ) : (
                     <>
-                      <Table.Td ta="right" className="pc-tabular" fw={600}>
+                      <Table.Td ta="right" className="pc-tabular" fw={600} style={weightCol}>
                         {grams(item.zoneWeight)}
                       </Table.Td>
-                      <Table.Td ta="right" className="pc-tabular">
+                      <Table.Td ta="right" className="pc-tabular" style={{ ...numCol, width: 44 }}>
                         {item.sum == null ? '—' : formatPlace(item.sum)}
                       </Table.Td>
                     </>
@@ -544,8 +497,7 @@ function ResultsTable({
               )
             })}
           </Table.Tbody>
-        </Table>
-      </Table.ScrollContainer>
+      </Table>
     </Panel>
   )
 }

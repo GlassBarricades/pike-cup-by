@@ -1,4 +1,4 @@
-import { Badge, Button, Group, Stack, Text, Title } from '@mantine/core'
+import { Badge, Button, Group, Stack, Text, Title, UnstyledButton } from '@mantine/core'
 import { IconClipboardList, IconSettings } from '@tabler/icons-react'
 import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
@@ -12,10 +12,10 @@ import {
   useSegments,
   useTournamentRealtime,
 } from '../../features/tournament/hooks'
-import { getCurrentPhase, tourNumberFromPhase } from '../../features/tournament/schedule'
+import { getCurrentPhase, tourNumberFromPhase, type CurrentPhase } from '../../features/tournament/schedule'
 import { useNow } from '../../features/tournament/useNow'
 import type { CatchRow, MiniTour, TournamentEntry } from '../../features/tournament/types'
-import { BrandMark, EmptyState, LiveBadge } from '../../ui'
+import { BrandMark, EmptyState } from '../../ui'
 import { TournamentView } from './TournamentView'
 
 function tourWeight(
@@ -28,6 +28,22 @@ function tourWeight(
   return catches
     .filter((c) => c.entry_id === entryId && miniIds.has(c.mini_tour_id))
     .reduce((s, c) => s + c.weight_grams, 0)
+}
+
+function liveAnnounceLine(phase: CurrentPhase | null, paused: boolean) {
+  if (!phase) return paused ? 'Пауза' : 'Идёт турнир'
+  const label =
+    phase.kind === 'before' || phase.kind === 'gap'
+      ? (phase.nextSegment?.title ?? 'До старта')
+      : phase.kind === 'active'
+        ? (phase.segment?.title ?? 'Этап')
+        : 'Финиш дня'
+  const msLeft =
+    phase.endsAtEffective != null && (phase.kind === 'active' || phase.kind === 'gap')
+      ? Math.max(0, phase.endsAtEffective.getTime() - phase.effectiveNow.getTime())
+      : null
+  const minutes = msLeft != null ? `${Math.ceil(msLeft / 60_000)} мин` : null
+  return [paused ? 'Пауза' : null, label, minutes].filter(Boolean).join(' · ')
 }
 
 function formatHomeDateLine(now: Date) {
@@ -91,58 +107,85 @@ export function HomeScreen() {
     )
   }
 
+  const live = tournament.status === 'live'
+  const showWeighed = !live && weighedProgress && weighedProgress.total > 0
+  const showStaff = isStaff(role)
+  const showAdmin = canManageRoles(role)
+
   return (
-    <div className="pc-page pc-page--wide">
+    <div className={live ? 'pc-page' : 'pc-page pc-page--wide'}>
       <Stack gap="lg">
         <Stack gap="xs">
           <Title order={3} className="pc-display" tt="capitalize">
             {formatHomeDateLine(now)}
           </Title>
-          <Group gap={8} wrap="wrap">
-            {tournament.status === 'live' && <LiveBadge />}
-            {weighedProgress && weighedProgress.total > 0 && (
-              <Badge variant="outline" color="gray" size="lg" radius={0}>
-                Взвешено · {weighedProgress.weighed}/{weighedProgress.total}
-              </Badge>
-            )}
-            {isStaff(role) && (
-              <Badge
-                variant="light"
-                color="gray"
-                size="lg"
-                radius={0}
-                component={Link}
-                to="/staff"
-                leftSection={<IconClipboardList size={14} />}
-                style={{ cursor: 'pointer', minHeight: 28 }}
-              >
-                Штаб
-              </Badge>
-            )}
-            {canManageRoles(role) && (
-              <Badge
-                variant="light"
-                color="gray"
-                size="lg"
-                radius={0}
-                component={Link}
-                to="/admin"
-                leftSection={<IconSettings size={14} />}
-                style={{ cursor: 'pointer', minHeight: 28 }}
-              >
-                Админ
-              </Badge>
-            )}
-          </Group>
+          {(showWeighed || showStaff || showAdmin) && (
+            <Group gap={8} wrap="wrap">
+              {showWeighed && (
+                <Badge variant="outline" color="gray" size="lg" radius={0}>
+                  Взвешено · {weighedProgress.weighed}/{weighedProgress.total}
+                </Badge>
+              )}
+              {showStaff && (
+                <Badge
+                  variant="light"
+                  color="gray"
+                  size="lg"
+                  radius={0}
+                  component={Link}
+                  to="/staff"
+                  leftSection={<IconClipboardList size={14} />}
+                  style={{ cursor: 'pointer', minHeight: 28 }}
+                >
+                  Штаб
+                </Badge>
+              )}
+              {showAdmin && (
+                <Badge
+                  variant="light"
+                  color="gray"
+                  size="lg"
+                  radius={0}
+                  component={Link}
+                  to="/admin"
+                  leftSection={<IconSettings size={14} />}
+                  style={{ cursor: 'pointer', minHeight: 28 }}
+                >
+                  Админ
+                </Badge>
+              )}
+            </Group>
+          )}
         </Stack>
 
-        <TournamentView
-          tournament={tournament}
-          entries={entries}
-          catches={catches}
-          miniTours={miniTours}
-          segments={segments}
-        />
+        {live ? (
+          <UnstyledButton component={Link} to="/live" className="pc-live-card">
+            <Stack gap={6}>
+              <Text className="pc-display" style={{ fontSize: '1.45rem', lineHeight: 1.1 }}>
+                {tournament.name}
+              </Text>
+              <Text>
+                {liveAnnounceLine(phase, Boolean(tournament.schedule_paused_at))}
+              </Text>
+              {weighedProgress && weighedProgress.total > 0 && (
+                <Text size="sm" c="dimmed">
+                  Взвешено · {weighedProgress.weighed}/{weighedProgress.total}
+                </Text>
+              )}
+              <Text size="sm" fw={700} style={{ color: 'var(--pc-live)' }}>
+                Смотреть
+              </Text>
+            </Stack>
+          </UnstyledButton>
+        ) : (
+          <TournamentView
+            tournament={tournament}
+            entries={entries}
+            catches={catches}
+            miniTours={miniTours}
+            segments={segments}
+          />
+        )}
       </Stack>
     </div>
   )

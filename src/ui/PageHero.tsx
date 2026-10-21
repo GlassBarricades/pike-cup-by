@@ -8,6 +8,7 @@ export function PageHero({
   meta,
   actions,
   children,
+  mb = 'lg',
 }: {
   title: ReactNode
   subtitle?: ReactNode
@@ -15,9 +16,10 @@ export function PageHero({
   meta?: ReactNode
   actions?: ReactNode
   children?: ReactNode
+  mb?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 0
 }) {
   return (
-    <Stack gap="sm" mb="lg">
+    <Stack gap="sm" mb={mb}>
       <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
         <div>
           <Group gap="sm" wrap="wrap" mb={4}>

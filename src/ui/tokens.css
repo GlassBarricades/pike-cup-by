@@ -6,6 +6,7 @@
   --pc-text: #e8eaed;
   --pc-muted: #8a9099;
   --pc-signal: #ff5a1f;
+  --pc-live: #ff3b30;
   --pc-zone-a: #3d74f0;
   --pc-zone-b: #1f9693;
   --pc-font-display: 'Barlow Condensed', Inter, sans-serif;
@@ -20,6 +21,7 @@
   --pc-line: #d5d9e0;
   --pc-text: #0b0d10;
   --pc-muted: #5c6570;
+  --pc-live: #d21f1f;
 }
 
 *,
@@ -101,6 +103,28 @@ body {
   animation: pc-live-pulse 1.4s ease-in-out infinite;
 }
 
+.pc-nav-live {
+  animation: pc-live-pulse 1.4s ease-in-out infinite;
+}
+
+.pc-live-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--pc-panel);
+  border: 1px solid var(--pc-line);
+  border-left: 4px solid var(--pc-live);
+  border-radius: var(--pc-radius);
+  padding: 0.9rem 1rem;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.pc-live-card:hover {
+  background: var(--pc-raised);
+}
+
 .pc-catch-flash {
   animation: pc-row-flash 1.2s ease-out;
 }
@@ -131,6 +155,10 @@ body {
     animation: none;
     opacity: 0.8;
     transform: none;
+  }
+
+  .pc-nav-live {
+    animation: none;
   }
 }
 

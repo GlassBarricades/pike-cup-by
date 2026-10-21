@@ -80,14 +80,8 @@ function clampCamera(camera: Camera, width: number, height: number): Camera {
     const scale = pxPerWorld(zoom)
     const worldW = width / scale
     const worldH = height / scale
-    const cx =
-        worldW >= LAKE_VIEW.width
-            ? LAKE_VIEW.width / 2
-            : Math.min(LAKE_VIEW.width - worldW / 2, Math.max(worldW / 2, camera.cx))
-    const cy =
-        worldH >= LAKE_VIEW.height
-            ? LAKE_VIEW.height / 2
-            : Math.min(LAKE_VIEW.height - worldH / 2, Math.max(worldH / 2, camera.cy))
+    const cx = worldW >= LAKE_VIEW.width ? LAKE_VIEW.width / 2 : Math.min(LAKE_VIEW.width - worldW / 2, Math.max(worldW / 2, camera.cx))
+    const cy = worldH >= LAKE_VIEW.height ? LAKE_VIEW.height / 2 : Math.min(LAKE_VIEW.height - worldH / 2, Math.max(worldH / 2, camera.cy))
     return { cx, cy, zoom }
 }
 
@@ -96,13 +90,12 @@ function labelBox(
     scale: number,
     zoom: number,
     slot: number,
+    stand: { x: number; y: number }
 ): { x: number; y: number; w: number; h: number; anchor: { x: number; y: number }; font: number } | null {
-    const at = markerPosition(marker)
-    if (!at) return null
     const text = shortName(marker.teamName)
     const font = screenPx(13, zoom, 12, 16) / scale
-    const ring = screenPx([34, 54, 76][slot] ?? 34, zoom, 30, 80) / scale
-    const anchor = outward(at, marker.state === 'moving' ? ring * 0.75 : ring)
+    const ring = screenPx([26, 46, 68][slot] ?? 26, zoom, 20, 72) / scale
+    const anchor = outward(stand, marker.state === 'moving' ? ring * 0.75 : ring)
     const w = text.length * font * 0.62
     const h = font * 1.35
     return { x: anchor.x - w / 2, y: anchor.y - h / 2, w, h, anchor, font }
@@ -117,31 +110,61 @@ function grams(value: number): string {
     return `${value.toLocaleString('ru-RU')} г`
 }
 
+function pegRadius(scale: number, zoom: number): number {
+    return screenPx(3.2, zoom, 2.4, 4.5) / scale
+}
+
 function SectorPegs({ zone, occupied, scale, zoom }: { zone: ZoneCode; occupied: Set<number>; scale: number; zoom: number }) {
-    const radius = screenPx(3.2, zoom, 2.4, 4.5) / scale
+    const radius = pegRadius(scale, zoom)
     const font = screenPx(9, zoom, 7, 12) / scale
-    const ring = screenPx(14, zoom, 11, 18) / scale
+    const ring = radius + screenPx(11, zoom, 9, 14) / scale
+    const halo = screenPx(2.4, zoom, 1.6, 3) / scale
     return sectorPoints(zone).map((point, index) => {
         const sector = index + 1
-        if (occupied.has(sector)) return null
-        const label = outward(point, ring)
+        const taken = occupied.has(sector)
+        const label = outward(point, -ring)
         return (
             <g key={`${zone}-${sector}`}>
-                <circle cx={point.x} cy={point.y} r={radius} fill={zoneColor(zone)} opacity={0.85} />
+                <circle cx={point.x} cy={point.y} r={radius} fill={zoneColor(zone)} opacity={taken ? 1 : 0.85} />
                 <text
                     x={label.x}
                     y={label.y}
                     textAnchor="middle"
                     dominantBaseline="middle"
-                    fill="var(--pc-muted)"
+                    fill="var(--pc-text)"
+                    stroke="var(--pc-panel)"
+                    strokeWidth={halo}
+                    paintOrder="stroke"
                     fontSize={font}
-                    style={{ fontFamily: 'var(--pc-font-body)' }}
+                    style={{ fontFamily: 'var(--pc-font-body)', pointerEvents: 'none' }}
                 >
                     {sector}
                 </text>
             </g>
         )
     })
+}
+
+/** Ближний зазор до соседнего сектора. Кружки крупнее зазора уводим через один подальше от воды. */
+function sectorGap(zone: ZoneCode, sector: number): number {
+    const points = sectorPoints(zone)
+    const index = sector - 1
+    const point = points[index]
+    if (!point) return 40
+    const gaps: number[] = []
+    if (index > 0) gaps.push(Math.hypot(point.x - points[index - 1].x, point.y - points[index - 1].y))
+    if (index < points.length - 1) gaps.push(Math.hypot(points[index + 1].x - point.x, points[index + 1].y - point.y))
+    return gaps.length > 0 ? Math.min(...gaps) : 40
+}
+
+function markerBadge(marker: TeamMarker, scale: number, zoom: number, emphasis: boolean, crowded: boolean) {
+    const at = markerPosition(marker)
+    if (!at) return null
+    const radius = screenPx(emphasis ? 12 : 10, zoom, 8, 15) / scale
+    const pad = screenPx(5, zoom, 4, 7) / scale
+    const stagger = crowded && marker.state !== 'moving' && radius * 2 > sectorGap(marker.zone, marker.sector) * 0.9 && marker.sector % 2 === 1
+    const lift = radius + pad + (stagger ? radius * 2 + pad : 0)
+    return { at, stand: outward(at, lift), radius }
 }
 
 function TeamMark({
@@ -152,6 +175,7 @@ function TeamMark({
     cheered,
     spot,
     labelSlot,
+    crowded,
     scale,
     zoom,
     onSelect,
@@ -163,70 +187,75 @@ function TeamMark({
     cheered: boolean
     spot: CatchSpot | null
     labelSlot: number | null
+    crowded: boolean
     scale: number
     zoom: number
     onSelect: (entryId: string) => void
 }) {
-    const at = markerPosition(marker)
-    if (!at) return null
-    const label = spot || labelSlot == null ? null : labelBox(marker, scale, zoom, labelSlot)
-    const radius = screenPx(selected ? 18 : cheered || leader || spot ? 16 : 14, zoom, 13, 20) / scale
-    const stroke = screenPx(selected || cheered || leader || spot ? 3 : 2, zoom, 2, 3.5) / scale
-    const callout = spot ? outward(at, screenPx(52, zoom, 40, 64) / scale) : null
+    const emphasis = selected || cheered || leader || Boolean(spot)
+    const badge = markerBadge(marker, scale, zoom, emphasis, crowded)
+    if (!badge) return null
+    const { at, stand, radius } = badge
+    const label = spot || labelSlot == null ? null : labelBox(marker, scale, zoom, labelSlot, stand)
+    const stroke = screenPx(emphasis ? 2.4 : 1.6, zoom, 1.4, 3) / scale
+    const callout = spot ? outward(stand, radius + screenPx(28, zoom, 22, 36) / scale) : null
     const calloutWeight = screenPx(18, zoom, 15, 22) / scale
     const calloutName = screenPx(13, zoom, 12, 16) / scale
     const halo = screenPx(4, zoom, 3, 5) / scale
+    const place = spectator?.finalPlace
+    const caption = place != null ? formatPlace(place) : String(marker.sector)
+    const font = radius * (caption.length >= 2 ? 0.68 : 0.82)
+    const stem = outward(at, pegRadius(scale, zoom))
 
     return (
-        <g
-            data-entry={marker.entryId}
-            role="button"
-            tabIndex={0}
-            style={{ cursor: 'pointer' }}
-            onClick={(event) => {
-                event.stopPropagation()
-                onSelect(marker.entryId)
-            }}
-            onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
+        <g data-entry={marker.entryId}>
+            <line
+                x1={stem.x}
+                y1={stem.y}
+                x2={stand.x}
+                y2={stand.y}
+                stroke={zoneColor(marker.zone)}
+                strokeWidth={screenPx(1.4, zoom, 1, 2) / scale}
+                opacity={0.85}
+                style={{ pointerEvents: 'none' }}
+            />
+            <g
+                role="button"
+                tabIndex={0}
+                style={{ cursor: 'pointer' }}
+                onClick={(event) => {
+                    event.stopPropagation()
                     onSelect(marker.entryId)
-                }
-            }}
-        >
-            {spot ? (
+                }}
+                onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onSelect(marker.entryId)
+                    }
+                }}
+            >
+                {spot ? <circle cx={stand.x} cy={stand.y} r={radius * 1.7} className="pc-catch-ring" fill="none" stroke="var(--pc-signal)" strokeWidth={stroke} /> : null}
                 <circle
-                    cx={at.x}
-                    cy={at.y}
-                    r={radius * 2.1}
-                    className="pc-catch-ring"
-                    fill="none"
-                    stroke="var(--pc-signal)"
+                    cx={stand.x}
+                    cy={stand.y}
+                    r={radius}
+                    fill={zoneColor(marker.zone)}
+                    stroke={spot || cheered || leader ? 'var(--pc-signal)' : 'var(--pc-panel)'}
                     strokeWidth={stroke}
                 />
-            ) : null}
-            <circle
-                cx={at.x}
-                cy={at.y}
-                r={radius}
-                fill={zoneColor(marker.zone)}
-                stroke={spot || cheered || leader ? 'var(--pc-signal)' : 'var(--pc-panel)'}
-                strokeWidth={stroke}
-            />
-            {spectator?.finalPlace != null ? (
                 <text
-                    x={at.x}
-                    y={at.y}
+                    x={stand.x}
+                    y={stand.y}
                     textAnchor="middle"
                     dominantBaseline="middle"
                     fill="var(--pc-panel)"
-                    fontSize={screenPx(spectator.finalPlace >= 10 ? 9 : 11, zoom, 9, 13) / scale}
+                    fontSize={font}
                     fontWeight={700}
                     style={{ fontFamily: 'var(--pc-font-display)', pointerEvents: 'none' }}
                 >
-                    {formatPlace(spectator.finalPlace)}
+                    {caption}
                 </text>
-            ) : null}
+            </g>
             {callout && spot ? (
                 <g style={{ pointerEvents: 'none' }}>
                     <text
@@ -412,6 +441,7 @@ export function LakeMap({
     const [showTags, setShowTags] = useState(false)
     const [fullscreen, setFullscreen] = useState<'off' | 'native' | 'page'>('off')
     const [drive, setDrive] = useState<'auto' | 'hand'>(followCatches ? 'auto' : 'hand')
+    const [heldId, setHeldId] = useState<string | null>(null)
     const [spotlight, setSpotlight] = useState<CatchSpot | null>(null)
     const [queued, setQueued] = useState<CatchSpot | null>(null)
     const [seenArrivalId, setSeenArrivalId] = useState<string | null>(null)
@@ -435,11 +465,7 @@ export function LakeMap({
         A: new Set(visibleMarkers.filter((marker) => marker.zone === 'A').map((marker) => marker.sector)),
         B: new Set(visibleMarkers.filter((marker) => marker.zone === 'B').map((marker) => marker.sector)),
     }
-    const suggestions = query.trim()
-        ? spectators
-              .filter((row) => row.teamName.toLocaleLowerCase('ru').includes(query.trim().toLocaleLowerCase('ru')))
-              .slice(0, 6)
-        : []
+    const suggestions = query.trim() ? spectators.filter((row) => row.teamName.toLocaleLowerCase('ru').includes(query.trim().toLocaleLowerCase('ru'))).slice(0, 6) : []
     const scale = pxPerWorld(camera.zoom)
     const worldW = stageSize.w / scale
     const worldH = stageSize.h / scale
@@ -490,8 +516,7 @@ export function LakeMap({
     function glideTo(target: Camera) {
         const from = cameraRef.current
         const next = clampCamera(target, sizeRef.current.w, sizeRef.current.h)
-        const same =
-            Math.abs(from.cx - next.cx) < 0.5 && Math.abs(from.cy - next.cy) < 0.5 && Math.abs(from.zoom - next.zoom) < 0.02
+        const same = Math.abs(from.cx - next.cx) < 0.5 && Math.abs(from.cy - next.cy) < 0.5 && Math.abs(from.zoom - next.zoom) < 0.02
         const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
         if (same) {
             cancelGlide()
@@ -536,11 +561,13 @@ export function LakeMap({
         if (!followCatches || soloEntryId) return
         setDrive('hand')
         setTracking(false)
+        setHeldId(null)
     }
 
     function focusEntry(entryId: string) {
         cancelGlide()
         setSelectedId(entryId)
+        setHeldId(drive === 'auto' ? entryId : null)
         setQuery('')
         setZoneFilter('all')
         const marker = markers.find((item) => item.entryId === entryId)
@@ -553,6 +580,7 @@ export function LakeMap({
     function cheerFor(entryId: string) {
         cancelGlide()
         setCheerId(entryId)
+        setHeldId(null)
         writeCheer(tournamentId, entryId)
         setTracking(true)
         setSelectedId(entryId)
@@ -672,15 +700,21 @@ export function LakeMap({
     useEffect(() => {
         if (!spotlight) return
         const own = spotlight.entryId === cheerIdRef.current
-        const timer = window.setTimeout(() => {
-            const next = queuedRef.current
-            queuedRef.current = null
-            setQueued(null)
-            if (next) {
-                setSpotlight(next)
-                if (driveRef.current === 'auto') setZoneFilter('all')
-            } else setSpotlight(null)
-        }, own ? OWN_HOLD_MS : OTHER_HOLD_MS)
+        const timer = window.setTimeout(
+            () => {
+                const next = queuedRef.current
+                queuedRef.current = null
+                setQueued(null)
+                if (next) {
+                    setSpotlight(next)
+                    if (driveRef.current === 'auto') setZoneFilter('all')
+                } else {
+                    if (driveRef.current === 'auto') setHeldId(spotlight.entryId)
+                    setSpotlight(null)
+                }
+            },
+            own ? OWN_HOLD_MS : OTHER_HOLD_MS
+        )
         return () => window.clearTimeout(timer)
     }, [spotlight])
 
@@ -691,19 +725,21 @@ export function LakeMap({
             if (target) glideTo(target)
             return
         }
+        if (heldId) return
         if (cheerId) {
             const target = markerFrame(cheerId, FOCUS_ZOOM)
             if (target) glideTo(target)
             return
         }
         glideTo(readableCamera())
-    }, [spotlight, drive, selectedId, cheerId, soloEntryId])
+    }, [spotlight, drive, selectedId, cheerId, soloEntryId, heldId])
 
     useEffect(() => {
         if (glidingRef.current) return
         if (!soloEntryId && drive === 'auto' && phase === 'spot') return
-        const followCheer = !soloEntryId && drive === 'auto' && phase === 'rest' && !selectedId ? cheerId : null
-        const followId = soloEntryId ?? followCheer ?? (tracking ? cheerId : null)
+        const directed = !soloEntryId && drive === 'auto' && phase === 'rest' && !selectedId ? heldId : null
+        const followCheer = !directed && !soloEntryId && drive === 'auto' && phase === 'rest' && !selectedId ? cheerId : null
+        const followId = soloEntryId ?? directed ?? followCheer ?? (tracking ? cheerId : null)
         if (!followId) return
         const marker = markers.find((item) => item.entryId === followId)
         const at = marker ? markerPosition(marker) : null
@@ -711,20 +747,31 @@ export function LakeMap({
         const cam = cameraRef.current
         if (Math.abs(cam.cx - at.x) < 0.5 && Math.abs(cam.cy - at.y) < 0.5) return
         commit(clampCamera({ ...cam, cx: at.x, cy: at.y }, sizeRef.current.w, sizeRef.current.h))
-    }, [soloEntryId, tracking, cheerId, markers, drive, phase, selectedId])
+    }, [soloEntryId, tracking, cheerId, markers, drive, phase, selectedId, heldId])
 
     const leaderId = leaders[0]?.entryId
     const labelSlots = new Map<string, number>()
     const placedLabels: { x: number; y: number; w: number; h: number }[] = []
+    const occupiedSector = (marker: TeamMarker) =>
+        marker.state !== 'moving' &&
+        visibleMarkers.some(
+            (other) =>
+                other.entryId !== marker.entryId &&
+                other.state !== 'moving' &&
+                other.zone === marker.zone &&
+                Math.abs(other.sector - marker.sector) === 1,
+        )
     const pegObstacles = visibleMarkers.flatMap((marker) => {
-        const at = markerPosition(marker)
-        if (!at) return []
-        const radius = screenPx(marker.entryId === selectedId ? 18 : marker.entryId === leaderId ? 16 : 14, camera.zoom, 13, 20) / scale
-        return [{ x: at.x - radius, y: at.y - radius, w: radius * 2, h: radius * 2 }]
+        const badge = markerBadge(marker, scale, camera.zoom, marker.entryId === selectedId || marker.entryId === heldId || marker.entryId === leaderId, occupiedSector(marker))
+        if (!badge) return []
+        const { stand, radius } = badge
+        return [{ x: stand.x - radius, y: stand.y - radius, w: radius * 2, h: radius * 2 }]
     })
     const labeled = [...visibleMarkers].sort((a, b) => {
         if (a.entryId === cheerId) return -1
         if (b.entryId === cheerId) return 1
+        if (a.entryId === heldId) return -1
+        if (b.entryId === heldId) return 1
         if (a.entryId === selectedId) return -1
         if (b.entryId === selectedId) return 1
         if (a.entryId === leaderId) return -1
@@ -732,14 +779,16 @@ export function LakeMap({
         return (byId.get(a.entryId)?.finalPlace ?? 99) - (byId.get(b.entryId)?.finalPlace ?? 99)
     })
     for (const marker of labeled) {
-        const pinned = marker.entryId === cheerId || marker.entryId === soloEntryId
+        const pinned = marker.entryId === cheerId || marker.entryId === soloEntryId || marker.entryId === heldId
         const force = pinned || marker.entryId === selectedId
         if (!showTags && !pinned && !soloEntryId) continue
         const preferred = marker.sector % 2
         const slots = force ? [2, 1, 0] : [preferred, 1 - preferred, 2]
         let chosen: number | null = null
         for (const slot of slots) {
-            const box = labelBox(marker, scale, camera.zoom, slot)
+            const stand = markerBadge(marker, scale, camera.zoom, force, occupiedSector(marker))?.stand
+            if (!stand) break
+            const box = labelBox(marker, scale, camera.zoom, slot, stand)
             if (!box) break
             const hitsPeg = pegObstacles.some((item) => boxesOverlap(item, box, scale))
             const hitsLabel = placedLabels.some((item) => boxesOverlap(item, box, scale))
@@ -750,7 +799,8 @@ export function LakeMap({
         }
         if (chosen == null && force) {
             chosen = 2
-            const box = labelBox(marker, scale, camera.zoom, 2)
+            const stand = markerBadge(marker, scale, camera.zoom, true, occupiedSector(marker))?.stand
+            const box = stand ? labelBox(marker, scale, camera.zoom, 2, stand) : null
             if (box) placedLabels.push(box)
         }
         if (chosen != null) labelSlots.set(marker.entryId, chosen)
@@ -777,341 +827,367 @@ export function LakeMap({
                     : undefined
             }
         >
-        <Stack gap="sm" style={expanded ? { flex: 1, minHeight: 0 } : undefined}>
-            <Group justify="space-between" align="flex-end" wrap="wrap">
-                <Text className="pc-display" style={{ fontSize: '1.15rem' }}>
-                    {title}
-                </Text>
-                <Group gap={6}>
-                    {soloEntryId ? null : (
-                        <Button size="xs" variant={showTags ? 'filled' : 'default'} onClick={() => setShowTags((value) => !value)}>
-                            {showTags ? 'Скрыть теги' : 'Теги'}
-                        </Button>
-                    )}
-                    {followCatches && !soloEntryId ? (
-                        <>
-                            <Button size="xs" variant={drive === 'auto' ? 'filled' : 'default'} onClick={() => setDrive('auto')}>
-                                Авто
-                            </Button>
-                            <Button size="xs" variant={drive === 'hand' ? 'filled' : 'default'} onClick={takeHand}>
-                                Сам
-                            </Button>
-                        </>
-                    ) : null}
-                    <Button size="xs" variant={expanded ? 'filled' : 'default'} onClick={() => void toggleFullscreen()}>
-                        {expanded ? 'Свернуть' : 'На весь экран'}
-                    </Button>
-                </Group>
-            </Group>
-
-            {soloEntryId || leaders.length === 0 ? null : (
-                <Group gap="xs" wrap="wrap">
-                    {leaders.map((row) => (
-                        <Button
-                            key={row.entryId}
-                            size="xs"
-                            variant={selectedId === row.entryId ? 'filled' : 'light'}
-                            color={row.entryId === leaderId ? 'signal' : 'gray'}
-                            onClick={() => focusEntry(row.entryId)}
-                        >
-                            {row.finalPlace == null ? '' : `${formatPlace(row.finalPlace)}. `}
-                            {row.teamName} · {grams(row.totalWeight)}
-                        </Button>
-                    ))}
-                </Group>
-            )}
-
-            {soloEntryId || !cheerId || !byId.get(cheerId) ? null : (
-                <Group gap="xs">
-                    <Button size="xs" variant="filled" color="signal" onClick={() => cheerFor(cheerId)}>
-                        Болею за {byId.get(cheerId)?.teamName}
-                    </Button>
-                    <Button size="xs" variant="default" onClick={stopCheer}>
-                        Хватит
-                    </Button>
-                </Group>
-            )}
-
-            {soloEntryId ? null : (
-            <Group align="flex-start" wrap="wrap" gap="sm">
-                <Box style={{ position: 'relative', flex: '1 1 280px', minWidth: 240 }}>
-                    <TextInput
-                        placeholder="Найти команду"
-                        value={query}
-                        onChange={(event) => setQuery(event.currentTarget.value)}
-                        onKeyDown={(event) => {
-                            const first = suggestions[0]
-                            if (event.key === 'Enter' && first) focusEntry(first.entryId)
-                        }}
-                    />
-                    {suggestions.length > 0 ? (
-                        <Panel p={4} style={{ position: 'absolute', zIndex: 2, left: 0, right: 0, top: '100%' }}>
-                            <Stack gap={2}>
-                                {suggestions.map((row) => (
-                                    <Button key={row.entryId} variant="subtle" justify="space-between" onClick={() => focusEntry(row.entryId)}>
-                                        <span>{row.teamName}</span>
-                                        <Text span size="xs" c="dimmed">
-                                            {row.finalPlace == null ? '' : formatPlace(row.finalPlace)}
-                                        </Text>
-                                    </Button>
-                                ))}
-                            </Stack>
-                        </Panel>
-                    ) : null}
-                </Box>
-                <Group gap={6}>
-                    {(
-                        [
-                            ['all', 'Все'],
-                            ['A', 'Зона A'],
-                            ['B', 'Зона B'],
-                        ] as const
-                    ).map(([value, label]) => (
-                        <Button key={value} size="xs" variant={zoneFilter === value ? 'filled' : 'default'} onClick={() => setZoneFilter(value)}>
-                            {label}
-                        </Button>
-                    ))}
-                </Group>
-            </Group>
-            )}
-
-            <Box
-                style={{
-                    position: expanded || soloEntryId ? 'relative' : 'sticky',
-                    top: expanded || soloEntryId ? undefined : 8,
-                    zIndex: 2,
-                    background: 'var(--pc-bg)',
-                    ...(expanded ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : undefined),
-                }}
-            >
-            {spotlight ? (
-                <Group
-                    data-catch-strip
-                    justify="space-between"
-                    align="center"
-                    wrap="nowrap"
-                    gap="sm"
-                    px="sm"
-                    py={6}
-                    mb={6}
-                    style={{
-                        border: '1px solid var(--pc-line)',
-                        borderRadius: 'var(--pc-radius)',
-                        background: 'var(--pc-panel)',
-                    }}
-                >
-                    <div style={{ minWidth: 0 }}>
-                        <Text size="xs" c="dimmed" tt="uppercase">
-                            Взвешивание
-                        </Text>
-                        <Text fw={700} lineClamp={1}>
-                            {spotlight.teamName}
-                        </Text>
-                        <Text size="sm" c="dimmed">
-                            {spotlight.zone ? `зона ${spotlight.zone}` : 'зона'}
-                            {spotlight.sector != null ? ` · сектор ${spotlight.sector}` : ''}
-                        </Text>
-                    </div>
-                    <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.5rem', flexShrink: 0 }}>
-                        {grams(spotlight.grams)}
+            <Stack gap="sm" style={expanded ? { flex: 1, minHeight: 0 } : undefined}>
+                <Group justify="space-between" align="flex-end" wrap="wrap">
+                    <Text className="pc-display" style={{ fontSize: '1.15rem' }}>
+                        {title}
                     </Text>
+                    <Group gap={6}>
+                        {soloEntryId ? null : (
+                            <Button size="xs" variant={showTags ? 'filled' : 'default'} onClick={() => setShowTags((value) => !value)}>
+                                {showTags ? 'Скрыть теги' : 'Теги'}
+                            </Button>
+                        )}
+                        {followCatches && !soloEntryId ? (
+                            <>
+                                <Button size="xs" variant={drive === 'auto' ? 'filled' : 'default'} onClick={() => setDrive('auto')}>
+                                    Авто
+                                </Button>
+                                <Button size="xs" variant={drive === 'hand' ? 'filled' : 'default'} onClick={takeHand}>
+                                    Сам
+                                </Button>
+                            </>
+                        ) : null}
+                        <Button size="xs" variant={expanded ? 'filled' : 'default'} onClick={() => void toggleFullscreen()}>
+                            {expanded ? 'Свернуть' : 'На весь экран'}
+                        </Button>
+                    </Group>
                 </Group>
-            ) : null}
-            <Box
-                    ref={stageRef}
-                    style={{
-                        width: soloEntryId
-                            ? `min(100%, calc(min(52dvh, 520px) * ${LAKE_FRAME.width / LAKE_FRAME.height}))`
-                            : `min(100%, calc(min(82dvh, 900px) * ${LAKE_FRAME.width / LAKE_FRAME.height}))`,
-                        maxWidth: 980,
-                        marginInline: 'auto',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        background: 'var(--pc-panel)',
-                        border: '1px solid var(--pc-line)',
-                        borderRadius: 'var(--pc-radius)',
-                        cursor: 'grab',
-                        touchAction: 'none',
-                        ...(expanded
-                            ? { width: '100%', height: '100%', maxHeight: 'none', flex: 1, minHeight: 0 }
-                            : {
-                                  aspectRatio: `${LAKE_FRAME.width} / ${LAKE_FRAME.height}`,
-                                  height: 'auto',
-                                  maxHeight: soloEntryId ? 'min(52dvh, 520px)' : 'min(82dvh, 900px)',
-                              }),
-                    }}
-                    onClick={(event) => {
-                        if (movedRef.current) return
-                        if ((event.target as Element).closest('[data-entry], [data-card], [data-camera-ui]')) return
-                        if (!soloEntryId) setTracking(false)
-                        setSelectedId(null)
-                    }}
-                    onPointerDown={(event) => {
-                        if ((event.target as Element).closest('[data-entry], [data-card], [data-camera-ui]')) return
-                        movedRef.current = false
-                        pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-                        if (pointersRef.current.size === 1) {
-                            const cam = cameraRef.current
-                            dragRef.current = { x: event.clientX, y: event.clientY, cx: cam.cx, cy: cam.cy }
-                            stageRef.current?.setPointerCapture(event.pointerId)
-                        }
-                        if (pointersRef.current.size === 2) {
-                            const [a, b] = [...pointersRef.current.values()]
-                            const midX = (a.x + b.x) / 2
-                            const midY = (a.y + b.y) / 2
-                            const world = worldAt(midX, midY)
-                            pinchRef.current = {
-                                distance: Math.hypot(a.x - b.x, a.y - b.y) || 1,
-                                zoom: cameraRef.current.zoom,
-                                worldX: world?.x ?? cameraRef.current.cx,
-                                worldY: world?.y ?? cameraRef.current.cy,
-                            }
-                            dragRef.current = null
-                        }
-                    }}
-                    onPointerMove={(event) => {
-                        if (!pointersRef.current.has(event.pointerId)) return
-                        pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
-                        if (pointersRef.current.size >= 2 && pinchRef.current) {
-                            const [a, b] = [...pointersRef.current.values()]
-                            const distance = Math.hypot(a.x - b.x, a.y - b.y) || 1
-                            const midX = (a.x + b.x) / 2
-                            const midY = (a.y + b.y) / 2
-                            movedRef.current = true
-                            takeHand()
-                            lookAt(pinchRef.current.worldX, pinchRef.current.worldY, pinchRef.current.zoom * (distance / pinchRef.current.distance), midX, midY)
-                            return
-                        }
-                        const drag = dragRef.current
-                        if (!drag) return
-                        const dx = event.clientX - drag.x
-                        const dy = event.clientY - drag.y
-                        if (Math.hypot(dx, dy) > 4) movedRef.current = true
-                        if (!soloEntryId && movedRef.current) {
-                            setTracking(false)
-                            if (followCatches && drive === 'auto') takeHand()
-                        }
-                        const current = pxPerWorld(cameraRef.current.zoom)
-                        commit({ cx: drag.cx - dx / current, cy: drag.cy - dy / current, zoom: cameraRef.current.zoom })
-                    }}
-                    onPointerUp={(event) => {
-                        pointersRef.current.delete(event.pointerId)
-                        dragRef.current = null
-                        if (pointersRef.current.size < 2) pinchRef.current = null
-                    }}
-                    onPointerCancel={(event) => {
-                        pointersRef.current.delete(event.pointerId)
-                        dragRef.current = null
-                        pinchRef.current = null
-                    }}
-                >
-                    <svg
-                        viewBox={viewBox}
-                        preserveAspectRatio="xMidYMid meet"
-                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
-                        role="img"
-                        aria-label="Схема водоёма"
-                    >
-                        <path
-                            d={WATER_PATH}
-                            fill="color-mix(in srgb, #2f6f9f 42%, var(--pc-panel))"
-                            stroke="color-mix(in srgb, var(--pc-text) 28%, #2f6f9f)"
-                            strokeWidth={screenPx(2.5, camera.zoom, 1.5, 3) / scale}
-                        />
-                        <path d={ISLAND_PATH} fill="color-mix(in srgb, #6b8f71 45%, var(--pc-panel))" stroke="var(--pc-line)" strokeWidth={screenPx(1.2, camera.zoom, 1, 2) / scale} />
-                        <text x={LAKE_LABELS.zoneA.x} y={LAKE_LABELS.zoneA.y} fill="var(--pc-zone-a)" fontSize={screenPx(16, camera.zoom, 12, 20) / scale} fontWeight={700} style={{ fontFamily: 'var(--pc-font-display)' }}>
-                            ЗОНА A
-                        </text>
-                        <text x={LAKE_LABELS.zoneB.x} y={LAKE_LABELS.zoneB.y} fill="var(--pc-zone-b)" fontSize={screenPx(16, camera.zoom, 12, 20) / scale} fontWeight={700} style={{ fontFamily: 'var(--pc-font-display)' }}>
-                            ЗОНА B
-                        </text>
-                        <text x={LAKE_LABELS.river.x} y={LAKE_LABELS.river.y} fill="var(--pc-muted)" fontSize={screenPx(12, camera.zoom, 10, 14) / scale} style={{ fontFamily: 'var(--pc-font-body)' }}>
-                            Березовка
-                        </text>
-                        <text
-                            x={LAKE_LABELS.road.x}
-                            y={LAKE_LABELS.road.y}
-                            fill="var(--pc-muted)"
-                            fontSize={screenPx(11, camera.zoom, 9, 13) / scale}
-                            transform={`rotate(${LAKE_LABELS.road.rotate} ${LAKE_LABELS.road.x} ${LAKE_LABELS.road.y})`}
-                            style={{ fontFamily: 'var(--pc-font-body)' }}
-                        >
-                            дорога
-                        </text>
-                        <SectorPegs zone="A" occupied={occupied.A} scale={scale} zoom={camera.zoom} />
-                        <SectorPegs zone="B" occupied={occupied.B} scale={scale} zoom={camera.zoom} />
-                        {visibleMarkers.map((marker) => (
-                            <TeamMark
-                                key={marker.entryId}
-                                marker={marker}
-                                spectator={byId.get(marker.entryId)}
-                                selected={marker.entryId === selectedId}
-                                leader={marker.entryId === leaderId}
-                                cheered={marker.entryId === cheerId}
-                                spot={spotlight?.entryId === marker.entryId ? spotlight : null}
-                                labelSlot={labelSlots.get(marker.entryId) ?? null}
-                                scale={scale}
-                                zoom={camera.zoom}
-                                onSelect={focusEntry}
-                            />
+
+                {soloEntryId || leaders.length === 0 ? null : (
+                    <Group gap="xs" wrap="wrap">
+                        {leaders.map((row) => (
+                            <Button
+                                key={row.entryId}
+                                size="xs"
+                                variant={selectedId === row.entryId ? 'filled' : 'light'}
+                                color={row.entryId === leaderId ? 'signal' : 'gray'}
+                                onClick={() => focusEntry(row.entryId)}
+                            >
+                                {row.finalPlace == null ? '' : `${formatPlace(row.finalPlace)}. `}
+                                {row.teamName} · {grams(row.totalWeight)}
+                            </Button>
                         ))}
-                    </svg>
-                </Box>
-                <Group data-camera-ui gap={6} justify="center">
-                    <Button size="sm" variant="default" aria-label="Отдалить" onClick={() => zoomBy(1 / ZOOM_STEP)}>
-                        −
-                    </Button>
-                    <Text size="xs" className="pc-tabular" w={52} ta="center">
-                        {Math.round(camera.zoom * 100)}%
-                    </Text>
-                    <Button size="sm" variant="default" aria-label="Приблизить" onClick={() => zoomBy(ZOOM_STEP)}>
-                        +
-                    </Button>
-                    <Button size="sm" variant="light" onClick={fitLake}>
-                        Всё озеро
-                    </Button>
-                </Group>
-                {selected && !soloEntryId ? (
-                    <Box
-                        data-card
-                        style={{
-                            position: 'absolute',
-                            inset: 0,
-                            zIndex: 3,
-                            display: 'grid',
-                            placeItems: 'center',
-                            pointerEvents: 'none',
-                        }}
-                    >
-                        <Box style={{ pointerEvents: 'auto', width: 'min(340px, calc(100% - 24px))', maxHeight: 'min(78%, 420px)', overflow: 'auto' }}>
-                            <ResultCard
-                                spectator={selected}
-                                marker={selectedMarker}
-                                miniTitle={miniTitle}
-                                cheering={selected.entryId === cheerId}
-                                tournamentId={tournamentId}
-                                onCheer={() => (selected.entryId === cheerId ? stopCheer() : cheerFor(selected.entryId))}
-                                onClose={() => {
-                                    setTracking(false)
-                                    setSelectedId(null)
+                    </Group>
+                )}
+
+                {soloEntryId || !cheerId || !byId.get(cheerId) ? null : (
+                    <Group gap="xs">
+                        <Button size="xs" variant="filled" color="signal" onClick={() => cheerFor(cheerId)}>
+                            Болею за {byId.get(cheerId)?.teamName}
+                        </Button>
+                        <Button size="xs" variant="default" onClick={stopCheer}>
+                            Хватит
+                        </Button>
+                    </Group>
+                )}
+
+                {soloEntryId ? null : (
+                    <Group align="flex-start" wrap="wrap" gap="sm">
+                        <Box style={{ position: 'relative', flex: '1 1 280px', minWidth: 240 }}>
+                            <TextInput
+                                placeholder="Найти команду"
+                                value={query}
+                                onChange={(event) => setQuery(event.currentTarget.value)}
+                                onKeyDown={(event) => {
+                                    const first = suggestions[0]
+                                    if (event.key === 'Enter' && first) focusEntry(first.entryId)
                                 }}
                             />
+                            {suggestions.length > 0 ? (
+                                <Panel p={4} style={{ position: 'absolute', zIndex: 2, left: 0, right: 0, top: '100%' }}>
+                                    <Stack gap={2}>
+                                        {suggestions.map((row) => (
+                                            <Button key={row.entryId} variant="subtle" justify="space-between" onClick={() => focusEntry(row.entryId)}>
+                                                <span>{row.teamName}</span>
+                                                <Text span size="xs" c="dimmed">
+                                                    {row.finalPlace == null ? '' : formatPlace(row.finalPlace)}
+                                                </Text>
+                                            </Button>
+                                        ))}
+                                    </Stack>
+                                </Panel>
+                            ) : null}
                         </Box>
+                        <Group gap={6}>
+                            {(
+                                [
+                                    ['all', 'Все'],
+                                    ['A', 'Зона A'],
+                                    ['B', 'Зона B'],
+                                ] as const
+                            ).map(([value, label]) => (
+                                <Button key={value} size="xs" variant={zoneFilter === value ? 'filled' : 'default'} onClick={() => setZoneFilter(value)}>
+                                    {label}
+                                </Button>
+                            ))}
+                        </Group>
+                    </Group>
+                )}
+
+                <Box
+                    style={{
+                        position: expanded || soloEntryId ? 'relative' : 'sticky',
+                        top: expanded || soloEntryId ? undefined : 8,
+                        zIndex: 2,
+                        background: 'var(--pc-bg)',
+                        ...(expanded ? { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' } : undefined),
+                    }}
+                >
+                    {spotlight ? (
+                        <Group
+                            data-catch-strip
+                            justify="space-between"
+                            align="center"
+                            wrap="nowrap"
+                            gap="sm"
+                            px="sm"
+                            py={6}
+                            mb={6}
+                            style={{
+                                border: '1px solid var(--pc-line)',
+                                borderRadius: 'var(--pc-radius)',
+                                background: 'var(--pc-panel)',
+                            }}
+                        >
+                            <div style={{ minWidth: 0 }}>
+                                <Text size="xs" c="dimmed" tt="uppercase">
+                                    Взвешивание
+                                </Text>
+                                <Text fw={700} lineClamp={1}>
+                                    {spotlight.teamName}
+                                </Text>
+                                <Text size="sm" c="dimmed">
+                                    {spotlight.zone ? `зона ${spotlight.zone}` : 'зона'}
+                                    {spotlight.sector != null ? ` · сектор ${spotlight.sector}` : ''}
+                                </Text>
+                            </div>
+                            <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.5rem', flexShrink: 0 }}>
+                                {grams(spotlight.grams)}
+                            </Text>
+                        </Group>
+                    ) : null}
+                    <Box
+                        ref={stageRef}
+                        style={{
+                            width: soloEntryId
+                                ? `min(100%, calc(min(52dvh, 520px) * ${LAKE_FRAME.width / LAKE_FRAME.height}))`
+                                : `min(100%, calc(min(82dvh, 900px) * ${LAKE_FRAME.width / LAKE_FRAME.height}))`,
+                            maxWidth: 980,
+                            marginInline: 'auto',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            background: 'var(--pc-panel)',
+                            border: '1px solid var(--pc-line)',
+                            borderRadius: 'var(--pc-radius)',
+                            cursor: 'grab',
+                            touchAction: 'none',
+                            ...(expanded
+                                ? { width: '100%', height: '100%', maxHeight: 'none', flex: 1, minHeight: 0 }
+                                : {
+                                      aspectRatio: `${LAKE_FRAME.width} / ${LAKE_FRAME.height}`,
+                                      height: 'auto',
+                                      maxHeight: soloEntryId ? 'min(52dvh, 520px)' : 'min(82dvh, 900px)',
+                                  }),
+                        }}
+                        onClick={(event) => {
+                            if (movedRef.current) return
+                            if ((event.target as Element).closest('[data-entry], [data-card], [data-camera-ui]')) return
+                            if (!soloEntryId) setTracking(false)
+                            setSelectedId(null)
+                        }}
+                        onPointerDown={(event) => {
+                            if ((event.target as Element).closest('[data-entry], [data-card], [data-camera-ui]')) return
+                            movedRef.current = false
+                            pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+                            if (pointersRef.current.size === 1) {
+                                const cam = cameraRef.current
+                                dragRef.current = { x: event.clientX, y: event.clientY, cx: cam.cx, cy: cam.cy }
+                                stageRef.current?.setPointerCapture(event.pointerId)
+                            }
+                            if (pointersRef.current.size === 2) {
+                                const [a, b] = [...pointersRef.current.values()]
+                                const midX = (a.x + b.x) / 2
+                                const midY = (a.y + b.y) / 2
+                                const world = worldAt(midX, midY)
+                                pinchRef.current = {
+                                    distance: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+                                    zoom: cameraRef.current.zoom,
+                                    worldX: world?.x ?? cameraRef.current.cx,
+                                    worldY: world?.y ?? cameraRef.current.cy,
+                                }
+                                dragRef.current = null
+                            }
+                        }}
+                        onPointerMove={(event) => {
+                            if (!pointersRef.current.has(event.pointerId)) return
+                            pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+                            if (pointersRef.current.size >= 2 && pinchRef.current) {
+                                const [a, b] = [...pointersRef.current.values()]
+                                const distance = Math.hypot(a.x - b.x, a.y - b.y) || 1
+                                const midX = (a.x + b.x) / 2
+                                const midY = (a.y + b.y) / 2
+                                movedRef.current = true
+                                takeHand()
+                                lookAt(pinchRef.current.worldX, pinchRef.current.worldY, pinchRef.current.zoom * (distance / pinchRef.current.distance), midX, midY)
+                                return
+                            }
+                            const drag = dragRef.current
+                            if (!drag) return
+                            const dx = event.clientX - drag.x
+                            const dy = event.clientY - drag.y
+                            if (Math.hypot(dx, dy) > 4) movedRef.current = true
+                            if (!soloEntryId && movedRef.current) {
+                                setTracking(false)
+                                if (followCatches && drive === 'auto') takeHand()
+                            }
+                            const current = pxPerWorld(cameraRef.current.zoom)
+                            commit({ cx: drag.cx - dx / current, cy: drag.cy - dy / current, zoom: cameraRef.current.zoom })
+                        }}
+                        onPointerUp={(event) => {
+                            pointersRef.current.delete(event.pointerId)
+                            dragRef.current = null
+                            if (pointersRef.current.size < 2) pinchRef.current = null
+                        }}
+                        onPointerCancel={(event) => {
+                            pointersRef.current.delete(event.pointerId)
+                            dragRef.current = null
+                            pinchRef.current = null
+                        }}
+                    >
+                        <svg
+                            viewBox={viewBox}
+                            preserveAspectRatio="xMidYMid meet"
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
+                            role="img"
+                            aria-label="Схема водоёма"
+                        >
+                            <path
+                                d={WATER_PATH}
+                                fill="color-mix(in srgb, #2f6f9f 42%, var(--pc-panel))"
+                                stroke="color-mix(in srgb, var(--pc-text) 28%, #2f6f9f)"
+                                strokeWidth={screenPx(2.5, camera.zoom, 1.5, 3) / scale}
+                            />
+                            <path
+                                d={ISLAND_PATH}
+                                fill="color-mix(in srgb, #6b8f71 45%, var(--pc-panel))"
+                                stroke="var(--pc-line)"
+                                strokeWidth={screenPx(1.2, camera.zoom, 1, 2) / scale}
+                            />
+                            <text
+                                x={LAKE_LABELS.zoneA.x}
+                                y={LAKE_LABELS.zoneA.y}
+                                fill="var(--pc-zone-a)"
+                                fontSize={screenPx(16, camera.zoom, 12, 20) / scale}
+                                fontWeight={700}
+                                style={{ fontFamily: 'var(--pc-font-display)' }}
+                            >
+                                ЗОНА A
+                            </text>
+                            <text
+                                x={LAKE_LABELS.zoneB.x}
+                                y={LAKE_LABELS.zoneB.y}
+                                fill="var(--pc-zone-b)"
+                                fontSize={screenPx(16, camera.zoom, 12, 20) / scale}
+                                fontWeight={700}
+                                style={{ fontFamily: 'var(--pc-font-display)' }}
+                            >
+                                ЗОНА B
+                            </text>
+                            <text
+                                x={LAKE_LABELS.river.x}
+                                y={LAKE_LABELS.river.y}
+                                fill="var(--pc-muted)"
+                                fontSize={screenPx(12, camera.zoom, 10, 14) / scale}
+                                style={{ fontFamily: 'var(--pc-font-body)' }}
+                            >
+                                Березовка
+                            </text>
+                            <text
+                                x={LAKE_LABELS.road.x}
+                                y={LAKE_LABELS.road.y}
+                                fill="var(--pc-muted)"
+                                fontSize={screenPx(11, camera.zoom, 9, 13) / scale}
+                                transform={`rotate(${LAKE_LABELS.road.rotate} ${LAKE_LABELS.road.x} ${LAKE_LABELS.road.y})`}
+                                style={{ fontFamily: 'var(--pc-font-body)' }}
+                            >
+                                дорога
+                            </text>
+                            <SectorPegs zone="A" occupied={occupied.A} scale={scale} zoom={camera.zoom} />
+                            <SectorPegs zone="B" occupied={occupied.B} scale={scale} zoom={camera.zoom} />
+                            {visibleMarkers.map((marker) => (
+                                <TeamMark
+                                    key={marker.entryId}
+                                    marker={marker}
+                                    spectator={byId.get(marker.entryId)}
+                                    selected={marker.entryId === selectedId || marker.entryId === heldId}
+                                    leader={marker.entryId === leaderId}
+                                    cheered={marker.entryId === cheerId}
+                                    spot={spotlight?.entryId === marker.entryId ? spotlight : null}
+                                    labelSlot={labelSlots.get(marker.entryId) ?? null}
+                                    crowded={occupiedSector(marker)}
+                                    scale={scale}
+                                    zoom={camera.zoom}
+                                    onSelect={focusEntry}
+                                />
+                            ))}
+                        </svg>
                     </Box>
-                ) : null}
-            </Box>
-            <Text size="xs" c="dimmed">
-                {soloEntryId
-                    ? (note ?? 'На схеме только эта команда. Сдвиг и щипок двигают камеру.')
-                    : followCatches
-                      ? `${note ? `${note}. ` : ''}${
-                          drive === 'auto'
-                            ? 'Авто: камера подъезжает к свежему улову. Если болеете за команду, после чужого улова возвращается к ней.'
-                            : 'Сам: палец двигает камеру, щипок приближает. Новый улов остаётся подписью на берегу.'
-                        }`
-                      : `${note ? `${note}. ` : ''}Озеро стоит на месте: палец двигает камеру, щипок приближает. Нажмите на команду, чтобы открыть результат.`}
-            </Text>
-        </Stack>
+                    <Group data-camera-ui gap={6} justify="center">
+                        <Button size="sm" variant="default" aria-label="Отдалить" onClick={() => zoomBy(1 / ZOOM_STEP)}>
+                            −
+                        </Button>
+                        <Text size="xs" className="pc-tabular" w={52} ta="center">
+                            {Math.round(camera.zoom * 100)}%
+                        </Text>
+                        <Button size="sm" variant="default" aria-label="Приблизить" onClick={() => zoomBy(ZOOM_STEP)}>
+                            +
+                        </Button>
+                        <Button size="sm" variant="light" onClick={fitLake}>
+                            Всё озеро
+                        </Button>
+                    </Group>
+                    {selected && !soloEntryId ? (
+                        <Box
+                            data-card
+                            style={{
+                                position: 'absolute',
+                                inset: 0,
+                                zIndex: 3,
+                                display: 'grid',
+                                placeItems: 'center',
+                                pointerEvents: 'none',
+                            }}
+                        >
+                            <Box style={{ pointerEvents: 'auto', width: 'min(340px, calc(100% - 24px))', maxHeight: 'min(78%, 420px)', overflow: 'auto' }}>
+                                <ResultCard
+                                    spectator={selected}
+                                    marker={selectedMarker}
+                                    miniTitle={miniTitle}
+                                    cheering={selected.entryId === cheerId}
+                                    tournamentId={tournamentId}
+                                    onCheer={() => (selected.entryId === cheerId ? stopCheer() : cheerFor(selected.entryId))}
+                                    onClose={() => {
+                                        setTracking(false)
+                                        setSelectedId(null)
+                                    }}
+                                />
+                            </Box>
+                        </Box>
+                    ) : null}
+                </Box>
+                <Text size="xs" c="dimmed">
+                    {soloEntryId
+                        ? (note ?? 'На схеме только эта команда. Сдвиг и щипок двигают камеру.')
+                        : followCatches
+                          ? `${note ? `${note}. ` : ''}${
+                                drive === 'auto'
+                                    ? 'Авто: камера подъезжает к свежему улову и остаётся на этой команде. Следующий улов переводит её дальше.'
+                                    : 'Сам: палец двигает камеру, щипок приближает. Новый улов остаётся подписью на берегу.'
+                            }`
+                          : `${note ? `${note}. ` : ''}Озеро стоит на месте: палец двигает камеру, щипок приближает. Нажмите на команду, чтобы открыть результат.`}
+                </Text>
+            </Stack>
         </Box>
     )
 }
@@ -1164,12 +1240,19 @@ export function LakeBoard({
     const hasSlips = entries.some((entry) => entry.draw_slip)
     const standings = useMemo(
         () => computeStandings(entries, catches, miniTours, { zeroPlaceIsGroupSizePlusOne: tournament.zero_place_is_group_size_plus_one }),
-        [entries, catches, miniTours, tournament.zero_place_is_group_size_plus_one],
+        [entries, catches, miniTours, tournament.zero_place_is_group_size_plus_one]
     )
     const slipByEntry = useMemo(() => new Map(entries.map((entry) => [entry.id, entry.draw_slip?.code ?? null])), [entries])
     const spectators = standings.map((row) => toSpectator(row, mapWindow, catches, miniTours, slipByEntry.get(row.entryId) ?? null))
     const leaders = spectators.slice(0, 3)
-    const catchKey = useMemo(() => catches.map((row) => row.id).sort().join('|'), [catches])
+    const catchKey = useMemo(
+        () =>
+            catches
+                .map((row) => row.id)
+                .sort()
+                .join('|'),
+        [catches]
+    )
     const [seenCatchKey, setSeenCatchKey] = useState<string | null>(null)
     const [arrival, setArrival] = useState<CatchSpot | null>(null)
     if (seenCatchKey !== catchKey) {
@@ -1206,18 +1289,18 @@ export function LakeBoard({
             : 'На карте только команды с бумажкой'
     const miniTitle = mapWindow.state === 'off' ? null : mapWindow.state === 'moving' ? `Переход · мини-тур ${mapWindow.mini}` : `Мини-тур ${mapWindow.mini}`
 
-        return (
-            <LakeMap
-                title={mapWindow.label}
-                markers={markers}
-                spectators={onlyEntryId ? spectators.filter((row) => row.entryId === onlyEntryId) : spectators}
-                leaders={onlyEntryId ? [] : leaders}
-                arrival={arrival}
-                followCatches={followCatches}
-                miniTitle={miniTitle}
-                note={note}
-                tournamentId={tournament.id}
-                soloEntryId={onlyEntryId}
-            />
-        )
+    return (
+        <LakeMap
+            title={mapWindow.label}
+            markers={markers}
+            spectators={onlyEntryId ? spectators.filter((row) => row.entryId === onlyEntryId) : spectators}
+            leaders={onlyEntryId ? [] : leaders}
+            arrival={arrival}
+            followCatches={followCatches}
+            miniTitle={miniTitle}
+            note={note}
+            tournamentId={tournament.id}
+            soloEntryId={onlyEntryId}
+        />
+    )
 }

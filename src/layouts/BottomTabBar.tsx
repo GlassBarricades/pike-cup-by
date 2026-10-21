@@ -1,12 +1,14 @@
 import { Box, Text, UnstyledButton } from '@mantine/core'
 import { NavLink as RouterNavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthProvider'
+import { useActiveTournament } from '../features/tournament/hooks'
 import { getNavItems, isNavActive } from './navItems'
 
 export function BottomTabBar() {
     const { pathname } = useLocation()
     const { role } = useAuth()
-    const items = getNavItems(role)
+    const { data: active } = useActiveTournament()
+    const items = getNavItems(role, { live: active?.status === 'live' })
 
     return (
         <Box
@@ -20,14 +22,16 @@ export function BottomTabBar() {
                 paddingBottom: 'env(safe-area-inset-bottom)',
             }}
         >
-            {items.map(({ to, label, icon: Icon, accent }) => {
+            {items.map(({ to, label, icon: Icon, accent, pulse }) => {
                 const active = isNavActive(pathname, to)
                 const marked = Boolean(accent)
+                const pulsing = Boolean(pulse)
                 return (
                     <UnstyledButton
                         key={to}
                         component={RouterNavLink}
                         to={to}
+                        className={pulsing ? 'pc-nav-live' : undefined}
                         style={{
                             display: 'flex',
                             flexDirection: 'column',
@@ -35,13 +39,19 @@ export function BottomTabBar() {
                             justifyContent: 'center',
                             gap: 2,
                             minHeight: 56,
-                            color: active || marked ? '#fff' : 'var(--pc-muted)',
-                            background: marked ? 'var(--pc-signal)' : 'transparent',
+                            color: pulsing ? 'var(--pc-live)' : active || marked ? '#fff' : 'var(--pc-muted)',
+                            background: pulsing
+                                ? active
+                                    ? 'color-mix(in srgb, var(--pc-live) 14%, transparent)'
+                                    : 'transparent'
+                                : marked
+                                  ? 'var(--pc-signal)'
+                                  : 'transparent',
                             textDecoration: 'none',
                         }}
                     >
-                        <Icon size={22} stroke={active || marked ? 2 : 1.75} />
-                        <Text size="xs" fw={active || marked ? 700 : 500} className="pc-display" style={{ fontSize: 11 }}>
+                        <Icon size={22} stroke={active || marked || pulsing ? 2 : 1.75} />
+                        <Text size="xs" fw={active || marked || pulsing ? 700 : 500} className="pc-display" style={{ fontSize: 11 }}>
                             {label}
                         </Text>
                     </UnstyledButton>

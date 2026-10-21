@@ -3,14 +3,11 @@ import { IconClipboardList, IconDeviceGamepad2, IconSettings } from '@tabler/ico
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthProvider'
 import { canManageRoles, isStaff } from '../features/auth/permissions'
-import { useActiveTournament } from '../features/tournament/hooks'
-import { BrandMark, LiveBadge, ThemeToggle } from '../ui'
+import { BrandMark, ThemeToggle } from '../ui'
 
 export function TopBar() {
-    const { data: active } = useActiveTournament()
     const { user, profile, role, loading } = useAuth()
     const location = useLocation()
-    const showLive = active?.status === 'live'
     const showJudge = role === 'judge'
     const showStaff = isStaff(role) && !showJudge
     const showAdmin = canManageRoles(role)
@@ -28,7 +25,6 @@ export function TopBar() {
         >
             <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
                 <BrandMark size="sm" />
-                {showLive && <LiveBadge />}
                 <Text size="xs" c="dimmed" visibleFrom="sm">
                     Беларусь
                 </Text>

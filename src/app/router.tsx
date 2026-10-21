@@ -12,6 +12,7 @@ import { AdminLayout } from '../layouts/AdminLayout'
 import { JudgeLayout } from '../layouts/JudgeLayout'
 
 import { HomeScreen } from '../screens/public/HomeScreen'
+import { LiveScreen } from '../screens/public/LiveScreen'
 import { EventScreen } from '../screens/public/EventScreen'
 import { TeamLiveScreen } from '../screens/public/TeamLiveScreen'
 import { LeaderboardScreen } from '../screens/public/LeaderboardScreen'
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
     element: <PublicLayout />,
     children: [
       { index: true, element: <HomeScreen /> },
+      { path: 'live', element: <LiveScreen /> },
       { path: 'people', element: <PeopleHubScreen /> },
       {
         path: 'athletes',

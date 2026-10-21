@@ -3,44 +3,56 @@ import { IconClipboardList, IconLogout, IconSettings } from '@tabler/icons-react
 import { Link, NavLink as RouterNavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthProvider'
 import { canManageRoles, isStaff } from '../features/auth/permissions'
+import { useActiveTournament } from '../features/tournament/hooks'
 import { getNavItems, isNavActive } from './navItems'
 
 export function SideRail() {
     const { pathname } = useLocation()
     const navigate = useNavigate()
     const { role, user, signOut } = useAuth()
-    const items = getNavItems(role)
+    const { data: active } = useActiveTournament()
+    const items = getNavItems(role, { live: active?.status === 'live' })
 
     return (
         <Stack gap={4} p="sm" component="nav" h="100%" justify="space-between">
             <Stack gap={4}>
-                {items.map(({ to, label, icon: Icon, accent }) => {
+                {items.map(({ to, label, icon: Icon, accent, pulse }) => {
                     const active = isNavActive(pathname, to)
                     const marked = Boolean(accent)
+                    const pulsing = Boolean(pulse)
                     return (
                         <UnstyledButton
                             key={to}
                             component={RouterNavLink}
                             to={to}
                             end={to === '/'}
+                            className={pulsing ? 'pc-nav-live' : undefined}
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 10,
                                 padding: '10px 12px',
                                 borderRadius: 'var(--pc-radius)',
-                                background: marked
-                                    ? 'var(--pc-signal)'
-                                    : active
-                                      ? 'color-mix(in srgb, var(--pc-signal) 14%, transparent)'
-                                      : 'transparent',
-                                color: marked ? '#fff' : active ? 'var(--pc-signal)' : 'var(--pc-muted)',
+                                background: pulsing
+                                    ? active
+                                        ? 'color-mix(in srgb, var(--pc-live) 14%, transparent)'
+                                        : 'transparent'
+                                    : marked
+                                      ? 'var(--pc-signal)'
+                                      : active
+                                        ? 'color-mix(in srgb, var(--pc-signal) 14%, transparent)'
+                                        : 'transparent',
+                                color: pulsing ? 'var(--pc-live)' : marked ? '#fff' : active ? 'var(--pc-signal)' : 'var(--pc-muted)',
                                 textDecoration: 'none',
-                                borderLeft: marked || active ? '2px solid var(--pc-signal)' : '2px solid transparent',
+                                borderLeft: pulsing
+                                    ? '2px solid var(--pc-live)'
+                                    : marked || active
+                                      ? '2px solid var(--pc-signal)'
+                                      : '2px solid transparent',
                             }}
                         >
-                            <Icon size={20} stroke={active || marked ? 2 : 1.75} />
-                            <Text size="sm" fw={active || marked ? 700 : 500} className="pc-display">
+                            <Icon size={20} stroke={active || marked || pulsing ? 2 : 1.75} />
+                            <Text size="sm" fw={active || marked || pulsing ? 700 : 500} className="pc-display">
                                 {label}
                             </Text>
                         </UnstyledButton>
