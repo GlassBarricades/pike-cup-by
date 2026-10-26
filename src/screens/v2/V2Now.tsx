@@ -3,15 +3,18 @@ import { Anchor, Group, SimpleGrid, Stack, Text } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { formatCatchClock } from '../../features/tournament/catchLog'
 import { formatPlace } from '../../features/tournament/scoring'
-import { slotTitle } from '../../features/tournament/schedule'
-import { formatPlaceShift, gramsLabel, shoreLeaders } from '../../features/tournament/spectator'
+import { physicalZone, slotTitle } from '../../features/tournament/schedule'
+import { formatPlaceShift, gramsLabel, shoreLeaders, sumGap, zoneGap, gapLine } from '../../features/tournament/spectator'
+import { useCheer } from '../../features/tournament/cheer'
+import { slipSector } from '../../features/tournament/slips'
 import { useRulesSeen } from '../../features/tournament/v2Store'
 import { PhaseClock, Panel } from '../../ui'
-import { useV2Tournament } from './context'
+import { useV2Tournament, type V2TournamentValue } from './context'
 import { RulesComic } from './RulesComic'
 
 export function V2Now() {
-  const { tournament, story } = useV2Tournament()
+  const { tournament, entries, story } = useV2Tournament()
+  const cheer = useCheer(tournament.id)
   const seen = useRulesSeen()
   const [comic, setComic] = useState(!seen)
   const latest = story.moments[0] ?? null
@@ -35,6 +38,7 @@ export function V2Now() {
           <Text size="sm">{story.shoreNote}</Text>
         </Panel>
       ) : null}
+      <CheerStrip entries={entries} story={story} cheer={cheer} tournamentId={tournament.id} />
 
       <Panel p="sm">
         <Text size="xs" c="dimmed" tt="uppercase">
@@ -194,6 +198,63 @@ export function V2Now() {
         </Text>
         <ZeroList />
       </Panel>
+    </Stack>
+  )
+}
+
+function CheerStrip({
+  entries,
+  story,
+  cheer,
+  tournamentId,
+}: {
+  entries: V2TournamentValue['entries']
+  story: V2TournamentValue['story']
+  cheer: { entryIds: string[]; primaryId: string | null }
+  tournamentId: string
+}) {
+  const ordered = [
+    ...cheer.entryIds.filter((id) => id === cheer.primaryId),
+    ...cheer.entryIds.filter((id) => id !== cheer.primaryId),
+  ]
+  const cards = ordered.flatMap((id) => {
+    const standing = story.standings.find((row) => row.entryId === id)
+    if (!standing) return []
+    const entry = entries.find((item) => item.id === id)
+    const slot = story.clock
+    const zone = entry && slot ? physicalZone(entry.start_zone ?? entry.draw_slip?.start_zone, slot.tour) : null
+    const sector = entry && slot ? slipSector(entry.draw_slip, slot.tour, slot.mini) : null
+    const tour = slot?.tour ?? 1
+    const shore = entry ? physicalZone(entry.start_zone ?? entry.draw_slip?.start_zone, tour) : null
+    const gap = shore ? zoneGap(standing, story.standings, shore) : sumGap(standing, story.standings)
+    const last = story.moments.find((moment) => moment.entryId === id)
+    return [{ standing, zone, sector, gap, last, primary: id === cheer.primaryId }]
+  })
+  if (cards.length === 0) return null
+  return (
+    <Stack gap="xs">
+      {cards.map((card) => (
+        <Panel key={card.standing.entryId} p="sm">
+          <Group justify="space-between" align="flex-start" wrap="nowrap">
+            <div>
+              <Anchor component={Link} to={`/live/t/${tournamentId}/team/${card.standing.entryId}`} fw={700} c="inherit" underline="never">
+                {card.standing.teamName}
+              </Anchor>
+              <Text size="xs" c="var(--pc-signal)">
+                {card.primary ? 'Главная' : 'Болею'}
+              </Text>
+              <Text size="sm">
+                Место {formatPlace(card.standing.finalPlace)}
+                {card.zone && card.sector != null ? ` · зона ${card.zone} · сектор ${card.sector}` : ' · сектор ещё не открыт'}
+              </Text>
+              {gapLine(card.gap) ? <Text size="sm">{gapLine(card.gap)}</Text> : null}
+            </div>
+            <Text className="pc-display pc-tabular" c="var(--pc-signal)">
+              {card.last ? gramsLabel(card.last.grams) : '—'}
+            </Text>
+          </Group>
+        </Panel>
+      ))}
     </Stack>
   )
 }

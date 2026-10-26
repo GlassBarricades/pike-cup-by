@@ -13,7 +13,7 @@ import {
   type TournamentEntry,
   type ZoneCode,
 } from '../../features/tournament/types'
-import { readCheer } from '../../features/tournament/cheer'
+import { useCheer } from '../../features/tournament/cheer'
 import { EmptyState, Panel } from '../../ui'
 
 type BoardView = 'A' | 'B' | 'sum'
@@ -63,7 +63,8 @@ export function ResultsTab({
   const [search, setSearch] = useState('')
   const [fullscreen, setFullscreen] = useState<'off' | 'native' | 'page'>('off')
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
-  const cheerId = useMemo(() => readCheer(tournament.id), [tournament.id])
+  const cheer = useCheer(tournament.id)
+  const cheerId = cheer.primaryId
 
   const phase = tournament.status === 'finished' ? null : getCurrentPhase(tournament, segments, now)
   const liveTour = tourNumberFromPhase(phase)
@@ -384,7 +385,7 @@ export function ResultsTab({
             view={view}
             flashIds={flashIds}
             shifts={placeTrack.shifts}
-            cheerId={cheerId}
+            cheerIds={cheer.entryIds}
             rowRefs={rowRefs}
             tournamentId={tournament.id}
           />
@@ -400,7 +401,7 @@ function ResultsTable({
   view,
   flashIds,
   shifts,
-  cheerId,
+  cheerIds,
   rowRefs,
   tournamentId,
 }: {
@@ -408,7 +409,7 @@ function ResultsTable({
   view: BoardView
   flashIds: Set<string>
   shifts: Map<string, number>
-  cheerId: string | null
+  cheerIds: string[]
   rowRefs: MutableRefObject<Map<string, HTMLTableRowElement>>
   tournamentId: string
 }) {
@@ -465,7 +466,7 @@ function ResultsTable({
             {rows.map((item, index) => {
               const hero = view === 'sum' ? item.sum : item.zonePlace
               const top = index < 3 && hero != null
-              const cheer = item.row.entryId === cheerId
+              const mine = cheerIds.includes(item.row.entryId)
               const shift = shifts.get(item.row.entryId)
               return (
                 <Table.Tr
@@ -477,7 +478,7 @@ function ResultsTable({
                   className={flashIds.has(item.row.entryId) ? 'pc-catch-flash' : undefined}
                   style={{
                     borderBottom: '1px solid var(--pc-line)',
-                    background: cheer
+                    background: mine
                       ? 'color-mix(in srgb, var(--pc-signal) 16%, transparent)'
                       : top
                         ? 'color-mix(in srgb, var(--pc-signal) 6%, transparent)'
@@ -486,7 +487,7 @@ function ResultsTable({
                 >
                   <Table.Td style={placeCol}>
                     <Group gap={4} wrap="nowrap">
-                      <Text className="pc-display pc-tabular" style={{ fontSize: top ? '1.25rem' : '1.05rem', color: top || cheer ? 'var(--pc-signal)' : undefined }}>
+                      <Text className="pc-display pc-tabular" style={{ fontSize: top ? '1.25rem' : '1.05rem', color: top || mine ? 'var(--pc-signal)' : undefined }}>
                         {hero == null ? '—' : formatPlace(hero)}
                       </Text>
                       {shift != null && shift !== 0 ? (

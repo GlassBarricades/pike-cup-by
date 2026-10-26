@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom'
 import { formatCatchClock } from '../../features/tournament/catchLog'
 import { slotTitle } from '../../features/tournament/schedule'
 import { formatPlaceShift, gramsLabel } from '../../features/tournament/spectator'
+import { useCheer } from '../../features/tournament/cheer'
 import { EmptyState } from '../../ui'
 import { useV2Tournament } from './context'
 
 export function V2Feed() {
   const { tournament, story } = useV2Tournament()
+  const cheer = useCheer(tournament.id)
   if (story.moments.length === 0) {
     return <EmptyState title="Лента пустая" description="Строка появится с первым взвешиванием." />
   }
@@ -17,6 +19,7 @@ export function V2Feed() {
         const shift = formatPlaceShift(moment.zonePlaceBefore, moment.zonePlaceAfter)
         const sumShift = moment.sumBefore != null && moment.sumAfter != null ? formatPlaceShift(moment.sumBefore, moment.sumAfter) : null
         const sectorQuery = moment.zone && moment.sector != null ? `?zone=${moment.zone}&sector=${moment.sector}` : ''
+        const mine = cheer.entryIds.includes(moment.entryId)
         return (
           <Group
             key={moment.id}
@@ -24,7 +27,10 @@ export function V2Feed() {
             align="flex-start"
             wrap="nowrap"
             py="xs"
-            style={{ borderBottom: '1px solid var(--pc-line)' }}
+            style={{
+              borderBottom: '1px solid var(--pc-line)',
+              background: mine ? 'color-mix(in srgb, var(--pc-signal) 16%, transparent)' : undefined,
+            }}
           >
             <div>
               <Text size="sm">
@@ -48,7 +54,7 @@ export function V2Feed() {
                 </Anchor>
               ) : null}
             </div>
-            <Text fw={700} className="pc-tabular" style={{ flexShrink: 0 }}>
+            <Text fw={700} className="pc-tabular" c={mine ? 'var(--pc-signal)' : undefined} style={{ flexShrink: 0 }}>
               {gramsLabel(moment.grams)}
             </Text>
           </Group>

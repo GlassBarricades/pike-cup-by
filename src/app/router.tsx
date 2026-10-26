@@ -41,9 +41,9 @@ import { V2Fame } from '../screens/v2/V2Fame'
 import { V2Feed } from '../screens/v2/V2Feed'
 import { V2Map } from '../screens/v2/V2Map'
 import { V2Matrix } from '../screens/v2/V2Matrix'
-import { V2Me } from '../screens/v2/V2Me'
 import { V2Now } from '../screens/v2/V2Now'
 import { V2Pair } from '../screens/v2/V2Pair'
+import { V2Review } from '../screens/v2/V2Review'
 import { V2Schedule } from '../screens/v2/V2Schedule'
 import { V2Home, V2Shell } from '../screens/v2/V2Shell'
 import { V2Table } from '../screens/v2/V2Table'
@@ -124,13 +124,14 @@ export const router = createBrowserRouter([
           { index: true, element: <V2Home /> },
           { path: 'archive', element: <V2Archive /> },
           { path: 'fame', element: <V2Fame /> },
-          { path: 'me', element: <V2Me /> },
+          { path: 'me', element: <Navigate to="/live" replace /> },
           { path: 'athletes/:athleteId', element: <V2Athlete /> },
           { path: 'teams/:teamId', element: <V2Pair /> },
           {
             path: 't/:tournamentId',
             element: <V2TournamentOutlet />,
             children: [
+              { path: 'review', element: <V2Review /> },
               {
                 element: <V2TournamentFrame />,
                 children: [

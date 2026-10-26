@@ -5,7 +5,7 @@ import { ISLAND_PATH, LAKE_FRAME, LAKE_LABELS, LAKE_READING, LAKE_VIEW, WATER_PA
 import { resolveMapWindow, teamMarkers, type MapWindow, type TeamMarker } from '../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../features/tournament/scoring'
 import { formatSlipCode } from '../features/tournament/slips'
-import { clearCheer, readCheer, writeCheer } from '../features/tournament/cheer'
+import { readCheer, setPrimaryCheer, toggleCheer, useCheer } from '../features/tournament/cheer'
 import { buildCatchLog } from '../features/tournament/catchLog'
 import type { CatchRow, MiniTour, ScheduleSegment, Tournament, TournamentEntry, ZoneCode } from '../features/tournament/types'
 import { useNow } from '../features/tournament/useNow'
@@ -358,16 +358,20 @@ function ResultCard({
     marker,
     miniTitle,
     cheering,
+    primary,
     tournamentId,
     onCheer,
+    onMakePrimary,
     onClose,
 }: {
     spectator: MapSpectator
     marker: TeamMarker | null
     miniTitle: string | null
     cheering: boolean
+    primary: boolean
     tournamentId: string
     onCheer: () => void
+    onMakePrimary: () => void
     onClose: () => void
 }) {
     return (
@@ -428,6 +432,16 @@ function ResultCard({
                     <Button size="xs" variant={cheering ? 'filled' : 'light'} color={cheering ? 'signal' : undefined} onClick={onCheer}>
                         {cheering ? 'Хватит болеть' : 'Болею за них'}
                     </Button>
+                    {cheering && !primary ? (
+                        <Button size="xs" variant="default" onClick={onMakePrimary}>
+                            Главная
+                        </Button>
+                    ) : null}
+                    {primary ? (
+                        <Text size="xs" c="var(--pc-signal)">
+                            Главная
+                        </Text>
+                    ) : null}
                 </Group>
             </Stack>
         </Panel>
@@ -486,12 +500,14 @@ export function LakeMap({
     const queuedRef = useRef<CatchSpot | null>(null)
     const cheerIdRef = useRef<string | null>(null)
     const driveRef = useRef<'auto' | 'hand'>(followCatches ? 'auto' : 'hand')
+    const cheer = useCheer(soloEntryId ? undefined : tournamentId)
+    const cheerId = cheer.primaryId
+    const cheerIds = cheer.entryIds
     const storedCheer = soloEntryId ? null : readCheer(tournamentId)
     const [camera, setCamera] = useState<Camera>(home)
     const [stageSize, setStageSize] = useState({ w: 360, h: 386 })
     const [zoneFilter, setZoneFilter] = useState<'all' | ZoneCode>('all')
     const [query, setQuery] = useState('')
-    const [cheerId, setCheerId] = useState<string | null>(storedCheer)
     const [selectedId, setSelectedId] = useState<string | null>(storedCheer)
     const [tracking, setTracking] = useState(Boolean(soloEntryId) || storedCheer != null)
     const [showTags, setShowTags] = useState(false)
@@ -644,9 +660,8 @@ export function LakeMap({
 
     function cheerFor(entryId: string) {
         cancelGlide()
-        setCheerId(entryId)
         setHeldId(null)
-        writeCheer(tournamentId, entryId)
+        setPrimaryCheer(tournamentId, entryId)
         setTracking(true)
         setSelectedId(entryId)
         setQuery('')
@@ -656,8 +671,7 @@ export function LakeMap({
     }
 
     function stopCheer() {
-        setCheerId(null)
-        clearCheer()
+        if (cheerId) toggleCheer(tournamentId, cheerId)
         setTracking(false)
     }
 
@@ -856,8 +870,11 @@ export function LakeMap({
         return [{ x: stand.x - radius, y: stand.y - radius, w: radius * 2, h: radius * 2 }]
     })
     const labeled = [...visibleMarkers].sort((a, b) => {
+        const aCheer = cheerIds.includes(a.entryId)
+        const bCheer = cheerIds.includes(b.entryId)
         if (a.entryId === cheerId) return -1
         if (b.entryId === cheerId) return 1
+        if (aCheer !== bCheer) return aCheer ? -1 : 1
         if (a.entryId === heldId) return -1
         if (b.entryId === heldId) return 1
         if (a.entryId === selectedId) return -1
@@ -1252,7 +1269,7 @@ export function LakeMap({
                                     spectator={byId.get(marker.entryId)}
                                     selected={marker.entryId === selectedId || marker.entryId === heldId}
                                     leader={marker.entryId === leaderId}
-                                    cheered={marker.entryId === cheerId}
+                                    cheered={cheerIds.includes(marker.entryId)}
                                     spot={spotlight?.entryId === marker.entryId ? spotlight : null}
                                     labelSlot={labelSlots.get(marker.entryId) ?? null}
                                     crowded={occupiedSector(marker)}
@@ -1294,9 +1311,18 @@ export function LakeMap({
                                     spectator={selected}
                                     marker={selectedMarker}
                                     miniTitle={miniTitle}
-                                    cheering={selected.entryId === cheerId}
+                                    cheering={cheerIds.includes(selected.entryId)}
+                                    primary={selected.entryId === cheerId}
                                     tournamentId={tournamentId}
-                                    onCheer={() => (selected.entryId === cheerId ? stopCheer() : cheerFor(selected.entryId))}
+                                    onCheer={() => {
+                                        if (cheerIds.includes(selected.entryId)) {
+                                            toggleCheer(tournamentId, selected.entryId)
+                                            if (selected.entryId === cheerId) setTracking(false)
+                                            return
+                                        }
+                                        cheerFor(selected.entryId)
+                                    }}
+                                    onMakePrimary={() => cheerFor(selected.entryId)}
                                     onClose={() => {
                                         setTracking(false)
                                         setSelectedId(null)

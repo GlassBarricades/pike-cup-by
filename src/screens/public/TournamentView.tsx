@@ -203,6 +203,11 @@ export function TournamentView({
     <Stack gap="md">
       {headerMobile}
       {headerDesktop}
+      {isOver ? (
+        <Button component={Link} to={`/live/t/${tournament.id}/review`} size="sm" variant="light" color="signal" w="fit-content">
+          Разбор
+        </Button>
+      ) : null}
 
       <TabsBar tabs={tabs} defaultTab="results">
         {(active) => (

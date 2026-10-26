@@ -1,21 +1,20 @@
-import { useState } from 'react'
 import { Button, Group, Stack, Text, Title } from '@mantine/core'
 import { Link, useParams } from 'react-router-dom'
-import { clearCheer, readCheer, writeCheer } from '../../features/tournament/cheer'
+import { setPrimaryCheer, toggleCheer, useCheer } from '../../features/tournament/cheer'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone, slotTitle } from '../../features/tournament/schedule'
 import { bestWorstSlot, gapLine, gramsLabel, sumGap, zoneGap } from '../../features/tournament/spectator'
 import { entryTeamName } from '../../features/tournament/types'
-import { toggleFollowTeam, useV2Follow } from '../../features/tournament/v2Store'
 import { Panel } from '../../ui'
 import { useV2Tournament } from './context'
 
 export function V2Team() {
   const { entryId } = useParams()
   const { tournament, entries, story } = useV2Tournament()
-  const follow = useV2Follow()
-  const [cheerOn, setCheerOn] = useState(() => Boolean(entryId && readCheer(tournament.id) === entryId))
+  const cheer = useCheer(tournament.id)
   const entry = entries.find((item) => item.id === entryId)
+  const cheerOn = Boolean(entry && cheer.entryIds.includes(entry.id))
+  const primary = Boolean(entry && cheer.primaryId === entry.id)
   const standing = story.standings.find((row) => row.entryId === entryId)
   const matrix = story.matrix.find((row) => row.entryId === entryId)
   const ends = bestWorstSlot(matrix)
@@ -39,22 +38,19 @@ export function V2Team() {
           size="xs"
           variant={cheerOn ? 'filled' : 'light'}
           color={cheerOn ? 'signal' : undefined}
-          onClick={() => {
-            if (cheerOn) {
-              clearCheer()
-              setCheerOn(false)
-              return
-            }
-            writeCheer(tournament.id, entry.id)
-            setCheerOn(true)
-          }}
+          onClick={() => toggleCheer(tournament.id, entry.id)}
         >
           {cheerOn ? 'Хватит болеть' : 'Болею за них'}
         </Button>
-        {entry.team_id ? (
-          <Button size="xs" variant={follow.teamIds.includes(entry.team_id) ? 'filled' : 'default'} onClick={() => toggleFollowTeam(entry.team_id!)}>
-            {follow.teamIds.includes(entry.team_id) ? 'В моих' : 'В мои'}
+        {cheerOn && !primary ? (
+          <Button size="xs" variant="default" onClick={() => setPrimaryCheer(tournament.id, entry.id)}>
+            Сделать главной
           </Button>
+        ) : null}
+        {primary ? (
+          <Text size="xs" c="var(--pc-signal)">
+            Главная для карты и группы
+          </Text>
         ) : null}
         <Button component={Link} to={`/live/t/${tournament.id}/compare?a=${entry.id}`} size="xs" variant="default">
           Сравнить
@@ -80,16 +76,23 @@ export function V2Team() {
         <Text size="xs" c="dimmed" tt="uppercase">
           Траектория дня
         </Text>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 140, marginTop: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 172, marginTop: 12 }}>
           {story.slots.map((slot, index) => {
             const cell = matrix?.cells[index]
             const grams = cell?.grams ?? 0
             return (
-              <div key={`${slot.tour}-${slot.mini}`} style={{ flex: 1, minWidth: 0 }}>
+              <div
+                key={`${slot.tour}-${slot.mini}`}
+                style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}
+              >
+                <Text ta="center" className="pc-tabular" style={{ fontSize: 11, lineHeight: 1.1 }}>
+                  {cell?.grams == null ? '—' : cell.grams.toLocaleString('ru-RU')}
+                </Text>
                 <div
                   title={cell?.grams == null ? 'нет веса' : gramsLabel(cell.grams)}
                   style={{
                     height: `${Math.max(4, (grams / max) * 110)}px`,
+                    marginTop: 4,
                     background: cell?.grams == null ? 'var(--pc-line)' : 'var(--pc-signal)',
                   }}
                 />

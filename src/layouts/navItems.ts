@@ -1,4 +1,4 @@
-import { IconAntennaBars5, IconArchive, IconDeviceGamepad2, IconHome, IconUserCircle, IconUsersGroup, type Icon } from '@tabler/icons-react'
+import { IconAntennaBars5, IconArchive, IconChartHistogram, IconDeviceGamepad2, IconHome, IconUserCircle, IconUsersGroup, type Icon } from '@tabler/icons-react'
 import type { AppRole } from '../features/auth/types'
 
 export type NavItem = {
@@ -11,10 +11,12 @@ export type NavItem = {
     pulse?: boolean
 }
 
-export function getNavItems(role?: AppRole | null, options?: { live?: boolean }): NavItem[] {
+export function getNavItems(role?: AppRole | null, options?: { live?: boolean; reviewTo?: string | null }): NavItem[] {
     const items: NavItem[] = [{ to: '/', label: 'Главная', icon: IconHome }]
     if (options?.live) {
         items.push({ to: '/live', label: 'LIVE', icon: IconAntennaBars5, pulse: true })
+    } else if (options?.reviewTo) {
+        items.push({ to: options.reviewTo, label: 'Разбор', icon: IconChartHistogram })
     }
     items.push(
         { to: '/tournament', label: 'Турниры', icon: IconArchive },
@@ -41,7 +43,10 @@ export function isNavActive(pathname: string, to: string) {
         return pathname === '/profile'
     }
     if (to === '/live') {
-        return pathname === '/live' || pathname.startsWith('/live/')
+        return pathname === '/live' || (pathname.startsWith('/live/') && !pathname.includes('/review'))
+    }
+    if (to.includes('/review')) {
+        return pathname === to
     }
     return pathname === to || pathname.startsWith(`${to}/`)
 }

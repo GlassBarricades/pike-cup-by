@@ -1,5 +1,5 @@
-import { Anchor, Group, Stack } from '@mantine/core'
-import { Link, Navigate, Outlet } from 'react-router-dom'
+import { Stack } from '@mantine/core'
+import { Navigate, Outlet } from 'react-router-dom'
 import { formatTournamentDate } from '../../features/tournament/date'
 import { useActiveTournament, useTournaments } from '../../features/tournament/hooks'
 import { EmptyState, SurfaceCard } from '../../ui'
@@ -7,20 +7,7 @@ import { EmptyState, SurfaceCard } from '../../ui'
 export function V2Shell() {
   return (
     <div className="pc-page pc-page--wide">
-      <Stack gap="md">
-        <Group gap="sm">
-          <Anchor component={Link} to="/live/archive" size="sm" c="dimmed">
-            Архив
-          </Anchor>
-          <Anchor component={Link} to="/live/fame" size="sm" c="dimmed">
-            Зал славы
-          </Anchor>
-          <Anchor component={Link} to="/live/me" size="sm" c="dimmed">
-            Мои
-          </Anchor>
-        </Group>
-        <Outlet />
-      </Stack>
+      <Outlet />
     </div>
   )
 }

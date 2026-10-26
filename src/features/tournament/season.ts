@@ -3,9 +3,10 @@ import { fetchCatches, fetchEntries, fetchMiniTours, fetchTournaments } from './
 import { computeStandings } from './scoring'
 import type { SeasonBundle } from './spectator'
 
-export function useSeasonDigest() {
+export function useSeasonDigest(enabled = true) {
   return useQuery({
     queryKey: ['v2', 'season-digest'],
+    enabled,
     staleTime: 60_000,
     queryFn: async (): Promise<SeasonBundle[]> => {
       const tournaments = (await fetchTournaments()).filter((tournament) => tournament.status !== 'draft')

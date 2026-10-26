@@ -100,13 +100,24 @@ export function useSegmentsForTournaments(tournamentIds: string[]) {
   })
 }
 
-/** Пункт LIVE только пока по расписанию идёт соревнование, а не пока в базе висит status=live. */
-export function useShowLiveNav() {
+function useActiveStage() {
   const { data: tournament, isSuccess: tournamentReady } = useActiveTournament()
   const { data: segments, isSuccess: segmentsReady } = useSegments(tournament?.id)
   const now = useNow(5_000)
-  if (!tournamentReady || !tournament || !segmentsReady) return false
-  return getCompetitionStage(tournament, segments, now) === 'live'
+  if (!tournamentReady || !tournament || !segmentsReady) return null
+  return { id: tournament.id, stage: getCompetitionStage(tournament, segments, now) }
+}
+
+/** Пункт LIVE только пока по расписанию идёт соревнование, а не пока в базе висит status=live. */
+export function useShowLiveNav() {
+  return useActiveStage()?.stage === 'live'
+}
+
+/** Пункт «Разбор» для активного турнира, когда день уже закончился. */
+export function useReviewNavTo() {
+  const active = useActiveStage()
+  if (!active || active.stage !== 'completed') return null
+  return `/live/t/${active.id}/review`
 }
 
 export function useMiniTours(tournamentId: string | undefined) {

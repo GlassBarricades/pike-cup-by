@@ -1,14 +1,15 @@
 import { Box, Text, UnstyledButton } from '@mantine/core'
 import { NavLink as RouterNavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthProvider'
-import { useShowLiveNav } from '../features/tournament/hooks'
+import { useReviewNavTo, useShowLiveNav } from '../features/tournament/hooks'
 import { getNavItems, isNavActive } from './navItems'
 
 export function BottomTabBar() {
     const { pathname } = useLocation()
     const { role } = useAuth()
     const live = useShowLiveNav()
-    const items = getNavItems(role, { live })
+    const reviewTo = useReviewNavTo()
+    const items = getNavItems(role, { live, reviewTo })
 
     return (
         <Box

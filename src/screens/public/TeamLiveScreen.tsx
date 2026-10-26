@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Anchor, Button, Group, Stack, Text, Title } from '@mantine/core'
 import { Link, useParams } from 'react-router-dom'
 import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
-import { clearCheer, readCheer, writeCheer } from '../../features/tournament/cheer'
+import { setPrimaryCheer, toggleCheer, useCheer } from '../../features/tournament/cheer'
 import { useCatches, useEntries, useMiniTours, useSegments, useTournament, useTournamentRealtime } from '../../features/tournament/hooks'
 import { clockWeighSlot, getCurrentPhase, physicalZone, resolveMapWindow, slotTitle, teamMarkers, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../../features/tournament/scoring'
@@ -38,9 +38,9 @@ export function TeamLiveScreen() {
     const now = useNow(1_000)
 
     const entry = entries.find((item) => item.id === entryId)
-    const storedCheer = Boolean(tournament && entry && readCheer(tournament.id) === entry.id)
-    const [cheerState, setCheerState] = useState<{ entryId: string; on: boolean } | null>(null)
-    const cheering = cheerState != null && cheerState.entryId === entry?.id ? cheerState.on : storedCheer
+    const cheer = useCheer(tournament?.id)
+    const cheering = Boolean(entry && cheer.entryIds.includes(entry.id))
+    const primary = Boolean(entry && cheer.primaryId === entry.id)
 
     const phase = tournament && tournament.status !== 'finished' ? getCurrentPhase(tournament, segments, now) : null
     const mapWindow = tournament ? resolveMapWindow(tournament, segments, now) : null
@@ -185,17 +185,22 @@ export function TeamLiveScreen() {
                     variant={cheering ? 'filled' : 'light'}
                     color={cheering ? 'signal' : undefined}
                     onClick={() => {
-                        if (cheering) {
-                            clearCheer()
-                            setCheerState({ entryId: entry.id, on: false })
-                            return
-                        }
-                        writeCheer(tournament.id, entry.id)
-                        setCheerState({ entryId: entry.id, on: true })
+                        if (!tournament || !entry) return
+                        toggleCheer(tournament.id, entry.id)
                     }}
                 >
                     {cheering ? 'Хватит болеть' : 'Болею за них'}
                 </Button>
+                {cheering && !primary && tournament && entry ? (
+                    <Button size="xs" variant="default" onClick={() => setPrimaryCheer(tournament.id, entry.id)}>
+                        Сделать главной
+                    </Button>
+                ) : null}
+                {primary ? (
+                    <Text size="xs" c="var(--pc-signal)">
+                        Главная для карты и группы
+                    </Text>
+                ) : null}
                 {entry.team_id ? (
                     <Button component={Link} to={`/teams/${entry.team_id}`} size="xs" variant="default">
                         О команде
