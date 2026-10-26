@@ -1,13 +1,9 @@
 import { Anchor, Box, Button, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useAuth } from '../../features/auth/AuthProvider'
-import { canManageTournament } from '../../features/auth/permissions'
 import { formatTournamentDate } from '../../features/tournament/date'
-import { useZoneJudges } from '../../features/tournament/hooks'
 import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
-import { getCurrentPhase, physicalZone, slotTitle, tourNumberFromPhase } from '../../features/tournament/schedule'
-import { computeStandings } from '../../features/tournament/scoring'
+import { getCompetitionStage, getCurrentPhase, slotTitle } from '../../features/tournament/schedule'
 import {
   entryTeamName,
   type CatchRow,
@@ -20,16 +16,12 @@ import { useNow } from '../../features/tournament/useNow'
 import {
   EmptyState,
   LakeBoard,
-  Leaderboard,
-  NextAction,
   PageHero,
   Panel,
   PhaseClock,
-  SectionTitle,
-  StatusBadge,
+  StageBadge,
   TabsBar,
   Timeline,
-  ZoneSplit,
 } from '../../ui'
 import { ResultsTab } from './ResultsTab'
 import { CatchLogTab } from './CatchLogTab'
@@ -97,18 +89,6 @@ function LatestWeighing({
   )
 }
 
-function tourWeight(
-  entryId: string,
-  tourNumber: 1 | 2,
-  catches: CatchRow[],
-  miniTours: MiniTour[],
-) {
-  const miniIds = new Set(miniTours.filter((m) => m.tour_number === tourNumber).map((m) => m.id))
-  return catches
-    .filter((c) => c.entry_id === entryId && miniIds.has(c.mini_tour_id))
-    .reduce((s, c) => s + c.weight_grams, 0)
-}
-
 export function TournamentView({
   tournament,
   entries,
@@ -128,117 +108,17 @@ export function TournamentView({
   spectator?: boolean
 }) {
   const now = useNow(5_000)
-  const { user, role } = useAuth()
-  const { data: zoneJudges = [] } = useZoneJudges(tournament.id)
-  const [, setSearchParams] = useSearchParams()
-  const isFinished = tournament.status === 'finished'
-  const phase = !isFinished ? getCurrentPhase(tournament, segments, now) : null
-  const isOrg = canManageTournament(role)
-
-  const myJudgeZone = useMemo(() => {
-    if (!user) return null
-    return zoneJudges.find((j) => j.user_id === user.id)?.zone ?? null
-  }, [zoneJudges, user])
-
-  const standings = useMemo(
-    () =>
-      computeStandings(entries, catches, miniTours, {
-        zeroPlaceIsGroupSizePlusOne: tournament.zero_place_is_group_size_plus_one,
-      }),
-    [entries, catches, miniTours, tournament.zero_place_is_group_size_plus_one],
-  )
-
-  const top5 = standings.slice(0, 5)
-
-  const zoneProgress = useMemo(() => {
-    const tour: 1 | 2 = tourNumberFromPhase(phase) ?? 1
-    const inA = entries.filter((e) => physicalZone(e.start_zone, tour) === 'A')
-    const inB = entries.filter((e) => physicalZone(e.start_zone, tour) === 'B')
-    const weighed = (list: TournamentEntry[]) =>
-      list.filter((e) => tourWeight(e.id, tour, catches, miniTours) > 0).length
-    return {
-      zoneA: { weighed: weighed(inA), total: inA.length },
-      zoneB: { weighed: weighed(inB), total: inB.length },
-    }
-  }, [entries, catches, miniTours, phase])
+  const stage = getCompetitionStage(tournament, segments, now)
+  const isOver = stage === 'completed'
+  const phase = isOver ? null : getCurrentPhase(tournament, segments, now)
+  const activeKey = phase?.kind === 'active' ? phase.segment?.key : null
 
   const teamsSorted = useMemo(
     () => [...entries].sort((a, b) => entryTeamName(a).localeCompare(entryTeamName(b), 'ru')),
     [entries],
   )
 
-  const prepIncomplete = useMemo(() => {
-    if (!isOrg || !tournament || tournament.status === 'live' || tournament.status === 'finished') {
-      return false
-    }
-    const unassigned = entries.filter((e) => !e.start_zone).length
-    const judgesA = zoneJudges.filter((j) => j.zone === 'A').length
-    const judgesB = zoneJudges.filter((j) => j.zone === 'B').length
-    const rulesLen = tournament.rules_content?.trim().length ?? 0
-    const rulesOk = Boolean(tournament.rules_locked_at) || rulesLen > 40
-    return (
-      entries.length === 0 ||
-      unassigned > 0 ||
-      judgesA === 0 ||
-      judgesB === 0 ||
-      !rulesOk
-    )
-  }, [isOrg, tournament, entries, zoneJudges])
-
-  const nextAction = (() => {
-    if (myJudgeZone) {
-      return (
-        <NextAction
-          title={`Вы судья зоны ${myJudgeZone}`}
-          message="Откройте пульт для взвешивания команд на воде."
-          ctaLabel="Открыть пульт"
-          ctaTo="/staff/console"
-        />
-      )
-    }
-    if (prepIncomplete) {
-      return (
-        <NextAction
-          title="Подготовка не завершена"
-          message="Проверьте заявки, зоны, судей и регламент в штабе."
-          ctaLabel="В Штаб"
-          ctaTo="/staff"
-          color="orange"
-        />
-      )
-    }
-    if (isFinished) {
-      return (
-        <NextAction
-          title="Итоговый протокол"
-          message="Турнир завершён — откройте полную таблицу."
-          ctaLabel="Таблица"
-          onCtaClick={() => setSearchParams({ tab: 'results' })}
-          color="gray"
-        />
-      )
-    }
-    if (tournament.status === 'live' && phase) {
-      const label =
-        phase.kind === 'before' || phase.kind === 'gap'
-          ? (phase.nextSegment?.title ?? 'До старта')
-          : phase.kind === 'active'
-            ? (phase.segment?.title ?? 'Этап')
-            : 'Финиш дня'
-      return (
-        <NextAction
-          title={label}
-          message="Следите за фазой и результатами взвешивания."
-          ctaLabel="Расписание"
-          onCtaClick={() => setSearchParams({ tab: 'schedule' })}
-        />
-      )
-    }
-    return null
-  })()
-
   const tabs = [
-    { value: 'overview', label: 'Обзор' },
     { value: 'results', label: 'Таблица' },
     { value: 'catches', label: 'Уловы' },
     { value: 'teams', label: `Команды (${teamsSorted.length})` },
@@ -259,7 +139,7 @@ export function TournamentView({
           <Title order={3} className="pc-display" style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }} lineClamp={2}>
             {tournament.name}
           </Title>
-          {!spectator && <StatusBadge status={tournament.status} size="sm" />}
+          {!spectator && <StageBadge stage={stage} size="sm" />}
         </Group>
         <Text size="xs" c="dimmed">
           {formatTournamentDate(tournament.event_date)} · {tournament.location}
@@ -269,7 +149,7 @@ export function TournamentView({
             phase={phase}
             delayMinutes={tournament.schedule_delay_minutes}
             paused={Boolean(tournament.schedule_paused_at)}
-            archiveLabel={isFinished ? 'Архивный турнир — итоговый протокол' : undefined}
+            archiveLabel={isOver ? 'Завершено' : undefined}
             showLiveMark={false}
           />
           <LatestWeighing
@@ -277,7 +157,7 @@ export function TournamentView({
             entries={entries}
             catches={catches}
             miniTours={miniTours}
-            live={tournament.status === 'live'}
+            live={stage === 'live'}
           />
         </Stack>
       </Stack>
@@ -295,7 +175,7 @@ export function TournamentView({
         <PageHero
           title={tournament.name}
           subtitle={`${formatTournamentDate(tournament.event_date)} · ${tournament.location}`}
-          badge={spectator ? undefined : <StatusBadge status={tournament.status} />}
+          badge={spectator ? undefined : <StageBadge stage={stage} />}
           mb={0}
         >
           <Stack gap={8}>
@@ -303,7 +183,7 @@ export function TournamentView({
               phase={phase}
               delayMinutes={tournament.schedule_delay_minutes}
               paused={Boolean(tournament.schedule_paused_at)}
-              archiveLabel={isFinished ? 'Архивный турнир — итоговый протокол' : undefined}
+              archiveLabel={isOver ? 'Завершено' : undefined}
               showLiveMark={false}
             />
             <LatestWeighing
@@ -311,7 +191,7 @@ export function TournamentView({
               entries={entries}
               catches={catches}
               miniTours={miniTours}
-              live={tournament.status === 'live'}
+              live={stage === 'live'}
             />
           </Stack>
         </PageHero>
@@ -324,63 +204,9 @@ export function TournamentView({
       {headerMobile}
       {headerDesktop}
 
-      <TabsBar tabs={tabs} defaultTab={tournament.status === 'live' ? 'results' : 'overview'}>
+      <TabsBar tabs={tabs} defaultTab="results">
         {(active) => (
           <>
-            {active === 'overview' && (
-              <Stack gap="md">
-                {nextAction}
-                <div>
-                  <SectionTitle
-                    action={
-                      <Button
-                        variant="subtle"
-                        color="signal"
-                        size="compact-sm"
-                        onClick={() => setSearchParams({ tab: 'results' })}
-                      >
-                        Все
-                      </Button>
-                    }
-                  >
-                    Лидеры
-                  </SectionTitle>
-                  {top5.length === 0 ? (
-                    <EmptyState title="Таблица пуста" description="Результаты появятся после взвешивания" />
-                  ) : (
-                    <Leaderboard rows={top5} compact tournamentId={tournament.id} />
-                  )}
-                </div>
-                {!isFinished && (
-                  <div>
-                    <SectionTitle>Зоны · взвешивание</SectionTitle>
-                    <ZoneSplit zoneA={zoneProgress.zoneA} zoneB={zoneProgress.zoneB} />
-                  </div>
-                )}
-                <div>
-                  <SectionTitle
-                    action={
-                      <Button
-                        variant="subtle"
-                        color="signal"
-                        size="compact-sm"
-                        onClick={() => setSearchParams({ tab: 'schedule' })}
-                      >
-                        Полное
-                      </Button>
-                    }
-                  >
-                    Расписание
-                  </SectionTitle>
-                  <Timeline
-                    segments={segments.slice(0, 4)}
-                    activeKey={phase?.segment?.key}
-                    delayMinutes={tournament.schedule_delay_minutes}
-                  />
-                </div>
-              </Stack>
-            )}
-
             {active === 'results' && (
               <ResultsTab
                 tournament={tournament}
@@ -445,14 +271,14 @@ export function TournamentView({
                 entries={entries}
                 catches={catches}
                 miniTours={miniTours}
-                followCatches={tournament.status === 'live'}
+                followCatches={stage === 'live'}
               />
             )}
 
             {active === 'schedule' && (
               <Timeline
                 segments={segments}
-                activeKey={phase?.segment?.key}
+                activeKey={activeKey}
                 delayMinutes={tournament.schedule_delay_minutes}
               />
             )}

@@ -4,9 +4,10 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { lockTournamentRules, updateTournamentRules } from '../../features/tournament/api'
 import { tournamentKeys } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
+import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { EmptyState, PageHero, Panel } from '../../ui'
 
-export function RulesEditScreen() {
+export function RulesEditScreen({ embedded = false }: { embedded?: boolean }) {
   const { selected: tournament } = useStaffTournament()
   const [content, setContent] = useState('')
   const queryClient = useQueryClient()
@@ -37,7 +38,9 @@ export function RulesEditScreen() {
     },
   })
 
-  const locked = Boolean(tournament?.rules_locked_at)
+  const closed = useTournamentDayClosed()
+  const fixed = Boolean(tournament?.rules_locked_at)
+  const locked = fixed || closed
 
   if (!tournament) {
     return (
@@ -50,12 +53,19 @@ export function RulesEditScreen() {
 
   return (
     <Stack gap="md">
-      <PageHero
-        title="Регламент турнира"
-        subtitle="Снимок для текущего турнира. После фиксации публичная страница только читает эту версию."
-      />
+      {!embedded && (
+        <PageHero
+          title="Регламент турнира"
+          subtitle="Снимок для текущего турнира. После фиксации публичная страница только читает эту версию."
+        />
+      )}
       <Panel>
         <Stack gap="md">
+          {embedded && (
+            <Text size="sm" c="dimmed">
+              Снимок для этого турнира. После фиксации публичная страница только читает эту версию.
+            </Text>
+          )}
           <Textarea
             minRows={18}
             autosize
@@ -82,7 +92,9 @@ export function RulesEditScreen() {
           </Button>
           {locked && (
             <Text size="sm" c="dimmed">
-              Регламент зафиксирован
+              {closed
+                ? 'Турнир завершён. Регламент откроется после перезапуска.'
+                : 'Регламент зафиксирован'}
             </Text>
           )}
         </Stack>

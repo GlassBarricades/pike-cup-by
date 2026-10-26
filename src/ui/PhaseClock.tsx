@@ -33,7 +33,7 @@ export function PhaseClock({
       ? (phase.nextSegment?.title ?? 'До старта')
       : phase.kind === 'active'
         ? (phase.segment?.title ?? 'Этап')
-        : 'Финиш дня'
+        : 'Завершено'
 
   const msLeft =
     phase.endsAtEffective != null

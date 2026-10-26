@@ -3,15 +3,15 @@ import { IconClipboardList, IconLogout, IconSettings } from '@tabler/icons-react
 import { Link, NavLink as RouterNavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthProvider'
 import { canManageRoles, isStaff } from '../features/auth/permissions'
-import { useActiveTournament } from '../features/tournament/hooks'
+import { useShowLiveNav } from '../features/tournament/hooks'
 import { getNavItems, isNavActive } from './navItems'
 
 export function SideRail() {
     const { pathname } = useLocation()
     const navigate = useNavigate()
     const { role, user, signOut } = useAuth()
-    const { data: active } = useActiveTournament()
-    const items = getNavItems(role, { live: active?.status === 'live' })
+    const live = useShowLiveNav()
+    const items = getNavItems(role, { live })
 
     return (
         <Stack gap={4} p="sm" component="nav" h="100%" justify="space-between">

@@ -18,17 +18,22 @@ export function TabsBar({
   tabs,
   defaultTab,
   param = 'tab',
+  extraValues = [],
   children,
 }: {
   tabs: TabItem[]
   defaultTab: string
   param?: string
+  /** Значения в адресе, которых нет в полосе, но они остаются открытыми. */
+  extraValues?: string[]
   children: (active: string) => ReactNode
 }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const fromUrl = searchParams.get(param) ?? defaultTab
   const available = tabs.map((t) => t.value)
-  const active = available.includes(fromUrl) ? fromUrl : defaultTab
+  const known = new Set([...available, ...extraValues])
+  const active = known.has(fromUrl) ? fromUrl : defaultTab
+  const selected = available.includes(active) ? active : null
 
   useEffect(() => {
     if (active === fromUrl) return
@@ -45,7 +50,7 @@ export function TabsBar({
 
   return (
     <Tabs
-      value={active}
+      value={selected}
       onChange={(v) => {
         setSearchParams(
           (prev) => {
@@ -60,7 +65,7 @@ export function TabsBar({
       variant="pills"
       radius={0}
     >
-      <Tabs.List mb="sm" grow style={listStyle}>
+      <Tabs.List mb="sm" grow className="pc-print-hide" style={listStyle}>
         {tabs.map((t) => (
           <Tabs.Tab key={t.value} value={t.value}>
             {t.label}

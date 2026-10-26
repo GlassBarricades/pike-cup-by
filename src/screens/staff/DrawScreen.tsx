@@ -14,6 +14,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { setEntryDrawSlip } from '../../features/tournament/api'
 import { tournamentKeys, useDrawSlips, useEntries } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
+import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { formatSlipCode, slipOptionLabel, slipSector } from '../../features/tournament/slips'
 import {
   entryTeamName,
@@ -21,7 +22,7 @@ import {
   type TournamentEntry,
   type ZoneCode,
 } from '../../features/tournament/types'
-import { EmptyState, PageHero, Panel, SectionTitle, SlipGrid } from '../../ui'
+import { ClosedDayNotice, EmptyState, PageHero, Panel, SectionTitle, SlipGrid } from '../../ui'
 
 function ZoneColumn({
   title,
@@ -190,6 +191,7 @@ function SlipCatalog({
 
 export function DrawScreen() {
   const { selected: tournament } = useStaffTournament()
+  const closed = useTournamentDayClosed()
   const { data: entries = [] } = useEntries(tournament?.id)
   const { data: slips = [] } = useDrawSlips()
   const queryClient = useQueryClient()
@@ -250,6 +252,8 @@ export function DrawScreen() {
         subtitle="Прикрепите бумажку к команде. Стартовая зона I тура записывается с карточки, II тур — противоположная зона."
       />
 
+      {closed && <ClosedDayNotice />}
+
       <Panel>
         <Stack gap="md">
           <SectionTitle>Прикрепить бумажку</SectionTitle>
@@ -309,7 +313,7 @@ export function DrawScreen() {
                             clearable
                             placeholder={slips.length === 0 ? 'В справочнике нет бумажек' : 'Бумажка'}
                             nothingFoundMessage="Нет свободных бумажек"
-                            disabled={slips.length === 0 || slipMutation.isPending}
+                            disabled={closed || slips.length === 0 || slipMutation.isPending}
                             style={{ flex: '1 1 14rem' }}
                           />
                         </Group>

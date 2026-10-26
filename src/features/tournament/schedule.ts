@@ -89,6 +89,27 @@ export function getCurrentPhase(
     }
 }
 
+/** Этап соревнования по часам расписания, без ручного статуса и без override. */
+export type CompetitionStage = 'registration' | 'live' | 'completed'
+
+export const competitionStageLabel: Record<CompetitionStage, string> = {
+    registration: 'Регистрация',
+    live: 'Лайф',
+    completed: 'Завершено',
+}
+
+export function getCompetitionStage(
+    tournament: Pick<Tournament, 'status' | 'schedule_delay_minutes' | 'schedule_paused_at' | 'live_phase_override'>,
+    segments: ScheduleSegment[],
+    now = new Date(),
+): CompetitionStage {
+    if (tournament.status === 'finished') return 'completed'
+    const phase = getCurrentPhase({ ...tournament, live_phase_override: null }, segments, now)
+    if (phase.kind === 'before') return 'registration'
+    if (phase.kind === 'after') return 'completed'
+    return 'live'
+}
+
 export function formatTime(iso: string, delayMinutes = 0): string {
     return shiftTime(iso, delayMinutes).toLocaleTimeString('ru-RU', {
         hour: '2-digit',

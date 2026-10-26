@@ -8,6 +8,7 @@ import {
   fetchAthleteMembershipHistory,
   fetchAthleteTournamentAppearances,
   fetchAthletesWithTeams,
+  fetchCatchRevisions,
   fetchCatches,
   fetchDrawSlips,
   fetchEntries,
@@ -15,6 +16,7 @@ import {
   fetchMiniTours,
   fetchProfilesByIds,
   fetchSegments,
+  fetchSegmentsForTournaments,
   fetchTeamById,
   fetchTeamMembershipHistory,
   fetchTeamNameHistory,
@@ -25,6 +27,8 @@ import {
   fetchZoneJudges,
 } from './api'
 import { pickCurrentTournament } from './date'
+import { getCompetitionStage } from './schedule'
+import { useNow } from './useNow'
 import { computeStandings, type StandingRow } from './scoring'
 import type { Tournament, TournamentEntry } from './types'
 
@@ -36,6 +40,7 @@ export const tournamentKeys = {
   miniTours: (id: string) => ['tournament', id, 'miniTours'] as const,
   entries: (id: string) => ['tournament', id, 'entries'] as const,
   catches: (id: string) => ['tournament', id, 'catches'] as const,
+  revisions: (id: string) => ['tournament', id, 'revisions'] as const,
   zoneJudges: (id: string) => ['tournament', id, 'zoneJudges'] as const,
   drawSlips: ['drawSlips'] as const,
   judgeCandidates: ['judgeCandidates'] as const,
@@ -84,6 +89,24 @@ export function useSegments(tournamentId: string | undefined) {
     queryFn: () => fetchSegments(tournamentId!),
     enabled: Boolean(tournamentId),
   })
+}
+
+export function useSegmentsForTournaments(tournamentIds: string[]) {
+  const ids = useMemo(() => [...tournamentIds].sort(), [tournamentIds])
+  return useQuery({
+    queryKey: [...tournamentKeys.list, 'segments', ids] as const,
+    queryFn: () => fetchSegmentsForTournaments(ids),
+    enabled: ids.length > 0,
+  })
+}
+
+/** Пункт LIVE только пока по расписанию идёт соревнование, а не пока в базе висит status=live. */
+export function useShowLiveNav() {
+  const { data: tournament, isSuccess: tournamentReady } = useActiveTournament()
+  const { data: segments, isSuccess: segmentsReady } = useSegments(tournament?.id)
+  const now = useNow(5_000)
+  if (!tournamentReady || !tournament || !segmentsReady) return false
+  return getCompetitionStage(tournament, segments, now) === 'live'
 }
 
 export function useMiniTours(tournamentId: string | undefined) {
@@ -249,6 +272,15 @@ export function useJudgeCandidates() {
   return useQuery({
     queryKey: tournamentKeys.judgeCandidates,
     queryFn: fetchJudgeCandidates,
+  })
+}
+
+export function useCatchRevisions(tournamentId: string | undefined, entryIds: string[]) {
+  const ids = entryIds.slice().sort().join(',')
+  return useQuery({
+    queryKey: [...tournamentKeys.revisions(tournamentId ?? ''), ids],
+    queryFn: () => fetchCatchRevisions(ids ? ids.split(',') : []),
+    enabled: Boolean(tournamentId) && entryIds.length > 0,
   })
 }
 

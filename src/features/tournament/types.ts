@@ -133,6 +133,19 @@ export type CatchRow = {
   created_at: string
 }
 
+export type CatchRevisionAction = 'insert' | 'update' | 'delete'
+
+export type CatchRevision = {
+  id: string
+  catch_id: string | null
+  entry_id: string
+  mini_tour_id: string
+  weight_grams: number
+  action: CatchRevisionAction
+  actor_id: string | null
+  created_at: string
+}
+
 export type ZoneJudgeRow = {
   id: string
   tournament_id: string

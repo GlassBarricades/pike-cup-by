@@ -41,7 +41,7 @@ export function isNavActive(pathname: string, to: string) {
         return pathname === '/profile'
     }
     if (to === '/live') {
-        return pathname === '/live'
+        return pathname === '/live' || pathname.startsWith('/live/')
     }
     return pathname === to || pathname.startsWith(`${to}/`)
 }

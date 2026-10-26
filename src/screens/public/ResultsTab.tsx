@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { Anchor, Box, Button, Group, Stack, Table, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
-import { getCurrentPhase, tourNumberFromPhase } from '../../features/tournament/schedule'
+import { formatTournamentDate } from '../../features/tournament/date'
+import { getCompetitionStage, getCurrentPhase, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../../features/tournament/scoring'
 import { useNow } from '../../features/tournament/useNow'
 import {
@@ -238,16 +239,53 @@ export function ResultsTab({
     return <EmptyState title="Таблица пуста" description="Результаты появятся после взвешивания" />
   }
 
-  const live = tournament.status === 'live'
+  const live = getCompetitionStage(tournament, segments, now) === 'live'
 
   const expanded = fullscreen !== 'off'
   const podium = rows.filter((item) => (view === 'sum' ? item.sum != null : item.zonePlace != null)).slice(0, 3)
   const cheerInView = cheerId != null && rows.some((item) => item.row.entryId === cheerId)
 
+  const protocolRows = [...standings].sort(
+    (a, b) => a.finalPlace - b.finalPlace || a.teamName.localeCompare(b.teamName, 'ru'),
+  )
+
   return (
+    <>
+    <div className="pc-protocol">
+      <Text className="pc-display" style={{ fontSize: '1.4rem' }}>
+        {tournament.name}
+      </Text>
+      <Text size="sm" mb="sm">
+        {formatTournamentDate(tournament.event_date)} · {tournament.location}
+      </Text>
+      <table className="pc-protocol-table">
+        <thead>
+          <tr>
+            <th>Место</th>
+            <th>Команда</th>
+            <th>Состав</th>
+            <th>Вес A</th>
+            <th>Вес B</th>
+            <th>Сумма мест</th>
+          </tr>
+        </thead>
+        <tbody>
+          {protocolRows.map((row) => (
+            <tr key={row.entryId}>
+              <td>{formatPlace(row.finalPlace)}</td>
+              <td>{row.teamName}</td>
+              <td>{row.rosterNames.join(' · ')}</td>
+              <td>{grams(row.zoneAWeight)}</td>
+              <td>{grams(row.zoneBWeight)}</td>
+              <td>{formatPlace(row.placeSum)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
     <Box
       ref={frameRef}
-      className="pc-results-frame"
+      className="pc-results-frame pc-print-hide"
       style={
         expanded
           ? {
@@ -296,6 +334,9 @@ export function ResultsTab({
           ) : null}
           <Button size="xs" variant={expanded ? 'filled' : 'default'} onClick={() => void toggleFullscreen()}>
             {expanded ? 'Свернуть' : 'На весь экран'}
+          </Button>
+          <Button size="xs" variant="default" className="pc-print-hide" onClick={() => window.print()}>
+            Протокол
           </Button>
         </Group>
 
@@ -350,6 +391,7 @@ export function ResultsTab({
         </Box>
       </Stack>
     </Box>
+    </>
   )
 }
 

@@ -9,8 +9,9 @@ import {
   useZoneJudges,
 } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
+import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import type { ZoneCode, ZoneJudgeRow } from '../../features/tournament/types'
-import { EmptyState, PageHero, Panel } from '../../ui'
+import { ClosedDayNotice, EmptyState, PageHero, Panel } from '../../ui'
 
 function ZoneJudgeColumn({
   zone,
@@ -21,6 +22,7 @@ function ZoneJudgeColumn({
   assignedIds,
   tournamentId,
   onAssigned,
+  closed,
 }: {
   zone: ZoneCode
   title: string
@@ -30,6 +32,7 @@ function ZoneJudgeColumn({
   assignedIds: Set<string>
   tournamentId: string
   onAssigned: () => void
+  closed: boolean
 }) {
   const [userId, setUserId] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -86,6 +89,7 @@ function ZoneJudgeColumn({
                 size="compact-xs"
                 variant="subtle"
                 color="red"
+                disabled={closed}
                 loading={removeMutation.isPending && removeMutation.variables === j.id}
                 onClick={() => {
                   const name = j.profile?.full_name ?? 'судью'
@@ -108,13 +112,14 @@ function ZoneJudgeColumn({
         onChange={setUserId}
         searchable
         clearable
+        disabled={closed}
         nothingFoundMessage="Нет свободных судей"
         mb="xs"
       />
       <Button
         color={color}
         fullWidth
-        disabled={!userId || !tournamentId}
+        disabled={closed || !userId || !tournamentId}
         loading={assignMutation.isPending}
         onClick={() => assignMutation.mutate()}
       >
@@ -129,8 +134,9 @@ function ZoneJudgeColumn({
   )
 }
 
-export function JudgesScreen() {
+export function JudgesScreen({ embedded = false }: { embedded?: boolean }) {
   const { selected: tournament } = useStaffTournament()
+  const closed = useTournamentDayClosed()
   const { data: judges = [] } = useZoneJudges(tournament?.id)
   const { data: candidates = [] } = useJudgeCandidates()
 
@@ -158,10 +164,19 @@ export function JudgesScreen() {
 
   return (
     <Stack gap="lg" w="100%">
-      <PageHero
-        title="Судьи зон"
-        subtitle="Назначьте пользователей с ролью «Судья» на физические зоны A и B. Несколько судей на одну зону допустимы. Один судья — только одна зона в турнире."
-      />
+      {!embedded && (
+        <PageHero
+          title="Судьи зон"
+          subtitle="Назначьте пользователей с ролью «Судья» на физические зоны A и B. Несколько судей на одну зону допустимы. Один судья — только одна зона в турнире."
+        />
+      )}
+      {embedded && (
+        <Text size="sm" c="dimmed">
+          Несколько судей на одну зону можно. Один судья занимает только одну зону в этом турнире.
+        </Text>
+      )}
+
+      {closed && <ClosedDayNotice />}
 
       {candidates.length === 0 && (
         <Text size="sm" c="orange">
@@ -179,6 +194,7 @@ export function JudgesScreen() {
           assignedIds={assignedIds}
           tournamentId={tournament.id}
           onAssigned={() => undefined}
+          closed={closed}
         />
         <ZoneJudgeColumn
           zone="B"
@@ -189,6 +205,7 @@ export function JudgesScreen() {
           assignedIds={assignedIds}
           tournamentId={tournament.id}
           onAssigned={() => undefined}
+          closed={closed}
         />
       </Group>
     </Stack>

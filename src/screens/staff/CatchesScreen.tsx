@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import {
   Button,
   Group,
@@ -13,8 +13,9 @@ import { IconSearch } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { addCatch, deleteCatch, updateCatchWeight } from '../../features/tournament/api'
 import { useAuth } from '../../features/auth/AuthProvider'
-import { tournamentKeys, useCatches, useEntries, useMiniTours } from '../../features/tournament/hooks'
+import { tournamentKeys, useCatchAuthors, useCatches, useCatchRevisions, useEntries, useMiniTours } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
+import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { oppositeZone } from '../../features/tournament/schedule'
 import {
   entryTeamName,
@@ -44,9 +45,13 @@ function formatLogTime(iso: string): string {
 export function CatchesScreen() {
   const { user } = useAuth()
   const { selected: tournament } = useStaffTournament()
+  const closed = useTournamentDayClosed()
   const { data: entries = [] } = useEntries(tournament?.id)
   const { data: miniTours = [] } = useMiniTours(tournament?.id)
   const { data: catches = [] } = useCatches(tournament?.id)
+  const entryIds = useMemo(() => entries.map((entry) => entry.id), [entries])
+  const { data: revisions = [] } = useCatchRevisions(tournament?.id, entryIds)
+  const { data: authors } = useCatchAuthors(revisions.map((revision) => ({ created_by: revision.actor_id })))
   const queryClient = useQueryClient()
 
   const [entryId, setEntryId] = useState<string | null>(null)
@@ -59,9 +64,21 @@ export function CatchesScreen() {
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries])
   const miniById = useMemo(() => new Map(miniTours.map((m) => [m.id, m])), [miniTours])
 
+  const revisionsByCatch = useMemo(() => {
+    const map = new Map<string, typeof revisions>()
+    for (const revision of revisions) {
+      if (revision.action !== 'update' || !revision.catch_id) continue
+      const list = map.get(revision.catch_id) ?? []
+      list.push(revision)
+      map.set(revision.catch_id, list)
+    }
+    return map
+  }, [revisions])
+
   const invalidateCatches = async () => {
     if (tournament) {
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.catches(tournament.id) })
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.revisions(tournament.id) })
     }
   }
 
@@ -152,6 +169,12 @@ export function CatchesScreen() {
         subtitle="Для архива достаточно внести суммарный вес в любой мини-тур I и II тура (например МТ1). Веса по всем мини-турам одного тура суммируются в протоколе."
       />
 
+      {closed && (
+        <Text size="sm" c="dimmed">
+          Турнир завершён. Пульт закрыт, журнал можно править. Каждая правка остаётся в истории.
+        </Text>
+      )}
+
       <Panel>
         <Stack gap="md">
           <Select
@@ -228,9 +251,20 @@ export function CatchesScreen() {
                 <Table.Tbody>
                   {logRows.map(({ catch: c, entry, mini }) => {
                     const isEditing = editingId === c.id
+                    const history = revisionsByCatch.get(c.id) ?? []
                     return (
-                      <Table.Tr key={c.id}>
-                        <Table.Td>{entry ? entryTeamName(entry) : c.entry_id.slice(0, 8)}</Table.Td>
+                      <Fragment key={c.id}>
+                      <Table.Tr>
+                        <Table.Td>
+                          <Text size="sm">{entry ? entryTeamName(entry) : c.entry_id.slice(0, 8)}</Text>
+                          {history.map((revision) => (
+                            <Text key={revision.id} size="xs" c="dimmed">
+                              Было {revision.weight_grams.toLocaleString('ru-RU')} г ·{' '}
+                              {authors?.get(revision.actor_id ?? '')?.full_name?.trim() || 'Судья'} ·{' '}
+                              {formatLogTime(revision.created_at)}
+                            </Text>
+                          ))}
+                        </Table.Td>
                         <Table.Td>
                           <Text size="sm">
                             {mini ? miniTourLabel(entry, mini) : `МТ ${c.mini_tour_id.slice(0, 8)}…`}
@@ -312,6 +346,7 @@ export function CatchesScreen() {
                           </Group>
                         </Table.Td>
                       </Table.Tr>
+                      </Fragment>
                     )
                   })}
                 </Table.Tbody>

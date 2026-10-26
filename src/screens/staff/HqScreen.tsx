@@ -1,6 +1,5 @@
-import { Button, SimpleGrid, Stack, Text } from '@mantine/core'
-import { Link } from 'react-router-dom'
-import { IconClock, IconDeviceGamepad2, IconFishHook, IconFlagCheck } from '@tabler/icons-react'
+import { SimpleGrid, Stack, Text } from '@mantine/core'
+import { IconDeviceGamepad2, IconFishHook } from '@tabler/icons-react'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { formatTournamentDate, statusLabel } from '../../features/tournament/date'
@@ -29,10 +28,10 @@ export function HqScreen() {
             title: 'Турнир',
             done: Boolean(selected),
             warn: !selected,
-            status: selected ? `${selected.name} · ${statusLabel[selected.status]}` : tournaments.length === 0 ? 'Создать первый турнир' : 'Выберите турнир в меню',
+            status: selected ? `${selected.name} · ${statusLabel[selected.status]}` : 'Выберите турнир в меню',
         },
         {
-            to: '/staff/rules',
+            to: '/staff/tournament?tab=rules',
             title: 'Регламент',
             done: rulesLocked || rulesLen > 40,
             warn: Boolean(selected) && !rulesLocked && rulesLen <= 40,
@@ -59,7 +58,7 @@ export function HqScreen() {
                     : `Без зоны: ${unassigned}`,
         },
         {
-            to: '/staff/judges',
+            to: '/staff/tournament?tab=judges',
             title: 'Судьи',
             done: judgesA > 0 && judgesB > 0,
             warn: Boolean(selected) && (judgesA === 0 || judgesB === 0),
@@ -73,12 +72,11 @@ export function HqScreen() {
                 <div>
                     <PageHeader title="Судейский день" />
                     <Text size="sm" c="dimmed" mt={4}>
-                        {selected ? `${selected.name} · ${formatTournamentDate(selected.event_date)}` : 'Выберите турнир в меню, затем откройте пульт или центр дня.'}
+                        {selected ? `${selected.name} · ${formatTournamentDate(selected.event_date)}` : 'Выберите турнир в меню, затем откройте пульт.'}
                     </Text>
                 </div>
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
                     <ActionTile to="/staff/console" title="Пульт" description="Взвешивание на зоне" icon={IconDeviceGamepad2} disabled={!selected} />
-                    <ActionTile to="/staff/day" title="Центр дня" description="Сдвиг, пауза, прогресс зон" icon={IconClock} disabled={!selected} />
                 </SimpleGrid>
             </Stack>
         )
@@ -97,12 +95,7 @@ export function HqScreen() {
             {!selected && tournaments.length === 0 && (
                 <EmptyState
                     title="Нет турниров"
-                    description="Создайте первый турнир, чтобы открыть заявки, зоны и судейский день."
-                    action={
-                        <Button component={Link} to="/staff/tournament" color="signal">
-                            Создать турнир
-                        </Button>
-                    }
+                    description="Когда турнир появится в списке, его можно править в разделе «Турнир»."
                 />
             )}
 
@@ -118,10 +111,8 @@ export function HqScreen() {
             <div>
                 <SectionTitle>День турнира</SectionTitle>
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                    <ActionTile to="/staff/day" title="Центр дня" description="Сдвиг расписания и прогресс зон" icon={IconClock} disabled={!selected} />
                     <ActionTile to="/staff/console" title="Пульт" description="Взвешивание на зоне" icon={IconDeviceGamepad2} disabled={!selected} />
                     <ActionTile to="/staff/catches" title="Улов" description="Полный журнал турнира" icon={IconFishHook} disabled={!selected} />
-                    <ActionTile to="/staff/finish" title="Финиш" description="Закрыть турнир и протокол" icon={IconFlagCheck} disabled={!selected} />
                 </SimpleGrid>
             </div>
         </Stack>

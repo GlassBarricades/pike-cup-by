@@ -14,16 +14,13 @@ import {
 import { useDisclosure, useMediaQuery } from '@mantine/hooks'
 import {
   IconClipboardList,
-  IconClock,
   IconDeviceGamepad2,
   IconFishHook,
-  IconFlagCheck,
   IconHome,
   IconSettings,
   IconTournament,
   IconUsers,
   IconUsersGroup,
-  IconFileText,
 } from '@tabler/icons-react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../features/auth/AuthProvider'
@@ -44,13 +41,9 @@ type NavItem = {
 const staffNav: NavItem[] = [
   { to: '/staff', label: 'Обзор', icon: IconClipboardList },
   { to: '/staff/tournament', label: 'Турнир', icon: IconTournament, orgOnly: true },
-  { to: '/staff/rules', label: 'Регламент', icon: IconFileText, orgOnly: true },
   { to: '/staff/entries', label: 'Заявки', icon: IconUsersGroup, orgOnly: true },
   { to: '/staff/draw', label: 'Жеребьёвка', icon: IconUsers, orgOnly: true },
-  { to: '/staff/judges', label: 'Судьи', icon: IconUsers, orgOnly: true },
-  { to: '/staff/day', label: 'День', icon: IconClock },
   { to: '/staff/catches', label: 'Журнал', icon: IconFishHook, orgOnly: true },
-  { to: '/staff/finish', label: 'Итоги', icon: IconFlagCheck, orgOnly: true },
   { to: '/staff/console', label: 'Пульт судьи', icon: IconDeviceGamepad2 },
 ]
 
@@ -146,7 +139,7 @@ function StaffChrome() {
             ) : (
               <Select
                 label="Турнир"
-                placeholder={tournaments.length ? 'Выберите турнир' : 'Сначала создайте турнир'}
+                placeholder={tournaments.length ? 'Выберите турнир' : 'Нет турниров'}
                 data={tournaments.map((t) => ({
                   value: t.id,
                   label: `${formatTournamentDate(t.event_date)} · ${t.name} (${statusLabel[t.status]})`,

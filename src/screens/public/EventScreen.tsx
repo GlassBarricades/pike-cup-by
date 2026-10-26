@@ -16,10 +16,10 @@ export function EventScreen() {
   const { data: entries = [] } = useEntries(tournament?.id)
   const { data: catches = [] } = useCatches(tournament?.id)
   const { data: miniTours = [] } = useMiniTours(tournament?.id)
-  const { data: segments = [] } = useSegments(tournament?.id)
+  const { data: segments = [], isSuccess: segmentsReady } = useSegments(tournament?.id)
   useTournamentRealtime(tournament?.id)
 
-  if (isLoading) {
+  if (isLoading || (tournament && !segmentsReady)) {
     return (
       <div className="pc-page">
         <Text c="dimmed">Загрузка…</Text>

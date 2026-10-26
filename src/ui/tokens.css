@@ -133,6 +133,22 @@ body {
   animation: pc-live-pulse 0.7s ease-in-out 4;
 }
 
+.pc-peg-wait {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pc-peg-wait 1.4s ease-in-out infinite;
+}
+
+@keyframes pc-peg-wait {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 @keyframes pc-catch-ring {
   0% {
     transform: scale(0.65);
@@ -159,6 +175,11 @@ body {
 
   .pc-nav-live {
     animation: none;
+  }
+
+  .pc-peg-wait {
+    animation: none;
+    opacity: 0.85;
   }
 }
 
@@ -329,4 +350,39 @@ body {
 .pc-judge-key-muted {
   font-size: 1.1rem;
   color: var(--pc-muted);
+}
+
+.pc-protocol {
+  display: none;
+}
+
+.pc-protocol-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.pc-protocol-table th,
+.pc-protocol-table td {
+  border: 1px solid #222;
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+
+@media print {
+  .pc-protocol {
+    display: block;
+  }
+
+  .pc-print-hide,
+  .mantine-AppShell-header,
+  .mantine-AppShell-navbar,
+  .mantine-AppShell-footer {
+    display: none !important;
+  }
+
+  .mantine-AppShell-main {
+    padding: 0 !important;
+  }
 }

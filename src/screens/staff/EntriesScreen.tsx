@@ -4,11 +4,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createEntryFromTeam, deleteEntry, lockAllRosters } from '../../features/tournament/api'
 import { tournamentKeys, useEntries, useTeamsCatalog } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
+import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { entryTeamName, type TeamQuota } from '../../features/tournament/types'
-import { EmptyState, PageHero, Panel, SectionTitle } from '../../ui'
+import { ClosedDayNotice, EmptyState, PageHero, Panel, SectionTitle } from '../../ui'
 
 export function EntriesScreen() {
   const { selected: tournament } = useStaffTournament()
+  const closed = useTournamentDayClosed()
   const { data: teams = [] } = useTeamsCatalog()
   const { data: entries = [] } = useEntries(tournament?.id)
   const queryClient = useQueryClient()
@@ -93,6 +95,8 @@ export function EntriesScreen() {
         subtitle="Можно выбрать несколько команд сразу. У каждой должен быть текущий состав из 2 рыбаков — он копируется в снимок турнира."
       />
 
+      {closed && <ClosedDayNotice />}
+
       <Panel>
         <Stack gap="md">
           <MultiSelect
@@ -104,6 +108,7 @@ export function EntriesScreen() {
             clearable
             placeholder="Выберите одну или несколько команд"
             nothingFoundMessage="Нет доступных команд"
+            disabled={closed}
           />
           <Select
             label="Квота (для всех выбранных)"
@@ -114,15 +119,17 @@ export function EntriesScreen() {
             ]}
             value={quota}
             onChange={(v) => setQuota((v as TeamQuota) ?? 'open')}
+            disabled={closed}
           />
           <TextInput
             label="Телефон на заявке (опционально, для всех)"
             value={phone}
             onChange={(e) => setPhone(e.currentTarget.value)}
+            disabled={closed}
           />
           <Button
             color="signal"
-            disabled={teamIds.length === 0}
+            disabled={closed || teamIds.length === 0}
             loading={addMutation.isPending}
             onClick={() => {
               setBatchMessage(null)
@@ -149,6 +156,7 @@ export function EntriesScreen() {
           <Button
             variant="outline"
             color="orange"
+            disabled={closed}
             loading={lockMutation.isPending}
             onClick={() => lockMutation.mutate()}
           >
@@ -197,6 +205,7 @@ export function EntriesScreen() {
                 size="compact-xs"
                 color="red"
                 variant="subtle"
+                disabled={closed}
                 loading={deleteMutation.isPending && deleteMutation.variables === e.id}
                 onClick={() => {
                   const name = entryTeamName(e)

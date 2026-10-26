@@ -7,6 +7,7 @@ import { canManageTournament } from '../../features/auth/permissions'
 import { addCatch, deleteCatch } from '../../features/tournament/api'
 import { tournamentKeys, useCatchAuthors, useCatches, useEntries, useMiniTours, useSegments, useTournamentRealtime, useZoneJudges } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
+import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import {
     getCurrentPhase,
     physicalZone,
@@ -170,6 +171,7 @@ export function ConsoleScreen() {
     const { user, role } = useAuth()
     const isOrg = canManageTournament(role)
     const { selected: tournament } = useStaffTournament()
+    const closed = useTournamentDayClosed()
     const tournamentId = tournament?.id
     const now = useNow()
 
@@ -202,6 +204,8 @@ export function ConsoleScreen() {
     const [panel, setPanel] = useState<Panel>('console')
     const [search, setSearch] = useState('')
     const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
+    const [failedSave, setFailedSave] = useState<{ grams: number; entryId: string; miniTourId: string } | null>(null)
+    const [savedNote, setSavedNote] = useState(false)
     const swipeLocked = Boolean(editingEntryId)
 
     const zoneEntries = useMemo(() => {
@@ -277,12 +281,12 @@ export function ConsoleScreen() {
     }, [queryClient, tournamentId])
 
     const saveMutation = useMutation({
-        mutationFn: (grams: number) => {
-            if (!weighMiniId) throw new Error('Сейчас некуда записать улов')
+        mutationFn: (input: { grams: number; entryId: string; miniTourId: string }) => {
+            if (closed) throw new Error('Турнир завершён')
             return addCatch({
-                entryId: editingEntryId!,
-                miniTourId: weighMiniId,
-                weightGrams: grams,
+                entryId: input.entryId,
+                miniTourId: input.miniTourId,
+                weightGrams: input.grams,
                 userId: user!.id,
             })
         },
@@ -298,9 +302,21 @@ export function ConsoleScreen() {
                     return [row, ...list]
                 })
             }
+            setFailedSave(null)
+            setSavedNote(true)
             setEditingEntryId(null)
         },
+        onError: (_error, input) => {
+            setSavedNote(false)
+            setFailedSave(input)
+        },
     })
+
+    useEffect(() => {
+        if (!savedNote) return
+        const timer = window.setTimeout(() => setSavedNote(false), 2500)
+        return () => window.clearTimeout(timer)
+    }, [savedNote])
 
     const deleteMutation = useMutation({
         mutationFn: (catchId: string) => deleteCatch(catchId),
@@ -339,6 +355,31 @@ export function ConsoleScreen() {
     return (
         <div className={`pc-judge-console ${swipeLocked ? 'pc-judge-console--locked' : ''}`}>
             <Stack gap="sm" className="pc-judge-console-header">
+                {closed && (
+                    <Text size="sm" c="dimmed">
+                        Турнир завершён. Взвешивание закрыто до перезапуска.
+                    </Text>
+                )}
+                {failedSave && !editingEntryId && (
+                    <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
+                        <Text size="sm" c="red">
+                            Не записано {failedSave.grams.toLocaleString('ru-RU')} г
+                        </Text>
+                        <Button
+                            size="compact-xs"
+                            color="signal"
+                            loading={saveMutation.isPending}
+                            onClick={() => saveMutation.mutate(failedSave)}
+                        >
+                            Повторить
+                        </Button>
+                    </Group>
+                )}
+                {savedNote && !failedSave && (
+                    <Text size="sm" c="dimmed">
+                        Записано
+                    </Text>
+                )}
                 <Group justify="space-between" align="center" wrap="wrap" gap="xs">
                     <Group gap="xs">
                         <Badge color={zone === 'A' ? 'zoneA' : 'zoneB'} size="lg" variant="filled">
@@ -442,7 +483,9 @@ export function ConsoleScreen() {
                                         <UnstyledButton
                                             key={entry.id}
                                             className={`pc-judge-team-btn ${w > 0 ? 'pc-judge-team-btn--done' : ''}`}
-                                            onClick={() => setEditingEntryId(entry.id)}
+                                            onClick={() => {
+                                                if (!closed) setEditingEntryId(entry.id)
+                                            }}
                                         >
                                             <Text fw={800} size="md" lineClamp={2} ta="center">
                                                 {entryTeamName(entry)}
@@ -480,6 +523,7 @@ export function ConsoleScreen() {
                                             <UnstyledButton
                                                 style={{ minWidth: 0, flex: 1, textAlign: 'left' }}
                                                 onClick={() => {
+                                                    if (closed) return
                                                     goToPanel('console')
                                                     setEditingEntryId(entry.id)
                                                 }}
@@ -513,6 +557,7 @@ export function ConsoleScreen() {
                                                         size="compact-sm"
                                                         color="red"
                                                         variant="subtle"
+                                                        disabled={closed}
                                                         loading={deleteMutation.isPending && deleteMutation.variables === row.id}
                                                         onClick={() => {
                                                             if (
@@ -546,7 +591,10 @@ export function ConsoleScreen() {
                     targetLabel={weighLabel}
                     saving={saveMutation.isPending}
                     error={saveMutation.isError ? (saveMutation.error as Error).message : null}
-                    onSave={(grams) => saveMutation.mutate(grams)}
+                    onSave={(grams) => {
+                        if (!editingEntryId || !weighMiniId) return
+                        saveMutation.mutate({ grams, entryId: editingEntryId, miniTourId: weighMiniId })
+                    }}
                     onClose={() => {
                         saveMutation.reset()
                         setEditingEntryId(null)

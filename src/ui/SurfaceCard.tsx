@@ -1,8 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { Box, Group, Stack, Text, UnstyledButton } from '@mantine/core'
 import { Link } from 'react-router-dom'
+import type { CompetitionStage } from '../features/tournament/schedule'
 import type { TournamentStatus } from '../features/tournament/types'
-import { StatusBadge } from './StatusBadge'
+import { StageBadge, StatusBadge } from './StatusBadge'
 
 const stripeColor: Record<TournamentStatus, string> = {
   draft: 'var(--mantine-color-gray-6)',
@@ -11,11 +12,19 @@ const stripeColor: Record<TournamentStatus, string> = {
   finished: 'var(--mantine-color-gray-6)',
 }
 
+const stageStripe: Record<CompetitionStage, string> = {
+  registration: 'var(--pc-muted)',
+  live: 'var(--pc-signal)',
+  completed: 'var(--mantine-color-gray-6)',
+}
+
 export function SurfaceCard({
   to,
   title,
   lines,
   status,
+  stage,
+  featured = false,
   right,
   style,
 }: {
@@ -23,9 +32,12 @@ export function SurfaceCard({
   title: string
   lines?: ReactNode[]
   status?: TournamentStatus
+  stage?: CompetitionStage
+  featured?: boolean
   right?: ReactNode
   style?: CSSProperties
 }) {
+  const stripe = featured ? 'var(--pc-signal)' : stage ? stageStripe[stage] : status ? stripeColor[status] : undefined
   return (
     <UnstyledButton
       component={Link}
@@ -34,8 +46,8 @@ export function SurfaceCard({
         display: 'block',
         position: 'relative',
         overflow: 'hidden',
-        background: 'var(--pc-panel)',
-        border: '1px solid var(--pc-line)',
+        background: featured ? 'color-mix(in srgb, var(--pc-signal) 12%, var(--pc-panel))' : 'var(--pc-panel)',
+        border: featured ? '1px solid var(--pc-signal)' : '1px solid var(--pc-line)',
         borderRadius: 'var(--pc-radius)',
         padding: '0.75rem 0.75rem 0.75rem 1rem',
         textDecoration: 'none',
@@ -44,7 +56,7 @@ export function SurfaceCard({
         ...style,
       }}
     >
-      {status && (
+      {stripe && (
         <Box
           style={{
             position: 'absolute',
@@ -52,7 +64,7 @@ export function SurfaceCard({
             top: 0,
             bottom: 0,
             width: 4,
-            background: stripeColor[status],
+            background: stripe,
           }}
         />
       )}
@@ -73,7 +85,7 @@ export function SurfaceCard({
         </div>
         <Stack gap={6} align="flex-end" style={{ flexShrink: 0 }}>
           {right}
-          {status && <StatusBadge status={status} size="sm" />}
+          {stage ? <StageBadge stage={stage} size="sm" /> : status ? <StatusBadge status={status} size="sm" /> : null}
         </Stack>
       </Group>
     </UnstyledButton>

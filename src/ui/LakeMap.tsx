@@ -1,7 +1,7 @@
 import { Box, Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ISLAND_PATH, LAKE_FRAME, LAKE_LABELS, LAKE_READING, LAKE_VIEW, WATER_PATH, markerPosition, outward, sectorPoints } from '../features/tournament/lake'
+import { ISLAND_PATH, LAKE_FRAME, LAKE_LABELS, LAKE_READING, LAKE_VIEW, WATER_PATH, markerPosition, outward, sectorPoint, sectorPoints } from '../features/tournament/lake'
 import { resolveMapWindow, teamMarkers, type MapWindow, type TeamMarker } from '../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../features/tournament/scoring'
 import { formatSlipCode } from '../features/tournament/slips'
@@ -114,7 +114,25 @@ function pegRadius(scale: number, zoom: number): number {
     return screenPx(3.2, zoom, 2.4, 4.5) / scale
 }
 
-function SectorPegs({ zone, occupied, scale, zoom }: { zone: ZoneCode; occupied: Set<number>; scale: number; zoom: number }) {
+function SectorPegs({
+    zone,
+    occupied,
+    scale,
+    zoom,
+    heat,
+    heatMax,
+    pulse,
+    onSector,
+}: {
+    zone: ZoneCode
+    occupied: Set<number>
+    scale: number
+    zoom: number
+    heat?: Map<string, number>
+    heatMax?: number
+    pulse?: Set<string>
+    onSector?: (zone: ZoneCode, sector: number) => void
+}) {
     const radius = pegRadius(scale, zoom)
     const font = screenPx(9, zoom, 7, 12) / scale
     const ring = radius + screenPx(11, zoom, 9, 14) / scale
@@ -122,10 +140,34 @@ function SectorPegs({ zone, occupied, scale, zoom }: { zone: ZoneCode; occupied:
     return sectorPoints(zone).map((point, index) => {
         const sector = index + 1
         const taken = occupied.has(sector)
+        const grams = heat?.get(`${zone}:${sector}`)
+        const weighed = grams != null
+        const waiting = Boolean(pulse?.has(`${zone}:${sector}`) && !weighed)
         const label = outward(point, -ring)
+        const heatMix = weighed ? Math.round(22 + ((grams ?? 0) / Math.max(heatMax ?? 1, 1)) * 70) : 0
+        const fill = weighed ? `color-mix(in srgb, var(--pc-signal) ${heatMix}%, ${zoneColor(zone)})` : zoneColor(zone)
         return (
-            <g key={`${zone}-${sector}`}>
-                <circle cx={point.x} cy={point.y} r={radius} fill={zoneColor(zone)} opacity={taken ? 1 : 0.85} />
+            <g
+                key={`${zone}-${sector}`}
+                data-sector={onSector ? `${zone}-${sector}` : undefined}
+                style={{ cursor: onSector ? 'pointer' : undefined }}
+                onClick={
+                    onSector
+                        ? (event) => {
+                              event.stopPropagation()
+                              onSector(zone, sector)
+                          }
+                        : undefined
+                }
+            >
+                <circle
+                    className={waiting ? 'pc-peg-wait' : undefined}
+                    cx={point.x}
+                    cy={point.y}
+                    r={radius}
+                    fill={fill}
+                    opacity={weighed || taken ? 1 : 0.85}
+                />
                 <text
                     x={label.x}
                     y={label.y}
@@ -403,6 +445,13 @@ export function LakeMap({
     note,
     tournamentId,
     soloEntryId,
+    cameraFollow,
+    onCameraFollowChange,
+    heat,
+    onSector,
+    routePoints,
+    pulseSectors,
+    focusSector,
 }: {
     title: string
     markers: TeamMarker[]
@@ -414,6 +463,13 @@ export function LakeMap({
     note?: string
     tournamentId: string
     soloEntryId?: string
+    cameraFollow?: 'latest' | 'cheer'
+    onCameraFollowChange?: (mode: 'latest' | 'cheer') => void
+    heat?: { zone: ZoneCode; sector: number; grams: number }[]
+    onSector?: (zone: ZoneCode, sector: number) => void
+    routePoints?: { zone: ZoneCode; sector: number }[]
+    pulseSectors?: { zone: ZoneCode; sector: number }[]
+    focusSector?: { zone: ZoneCode; sector: number } | null
 }) {
     const frameRef = useRef<HTMLDivElement>(null)
     const stageRef = useRef<HTMLDivElement>(null)
@@ -448,7 +504,9 @@ export function LakeMap({
     const phase = spotlight ? 'spot' : 'rest'
     if (arrival && arrival.id !== seenArrivalId) {
         setSeenArrivalId(arrival.id)
-        if (spotlight && cheerId && spotlight.entryId === cheerId && arrival.entryId !== cheerId) {
+        if (cameraFollow === 'cheer') {
+            setQueued(null)
+        } else if (spotlight && cameraFollow !== 'latest' && cheerId && spotlight.entryId === cheerId && arrival.entryId !== cheerId) {
             setQueued(arrival)
         } else {
             setQueued(null)
@@ -458,6 +516,13 @@ export function LakeMap({
     }
 
     const byId = useMemo(() => new Map(spectators.map((row) => [row.entryId, row])), [spectators])
+    const heatMap = useMemo(() => {
+        const map = new Map<string, number>()
+        for (const cell of heat ?? []) map.set(`${cell.zone}:${cell.sector}`, cell.grams)
+        return map
+    }, [heat])
+    const heatMax = useMemo(() => Math.max(1, ...(heat ?? []).map((cell) => cell.grams), 1), [heat])
+    const pulseSet = useMemo(() => new Set((pulseSectors ?? []).map((cell) => `${cell.zone}:${cell.sector}`)), [pulseSectors])
     const visibleMarkers = markers.filter((marker) => zoneFilter === 'all' || marker.zone === zoneFilter)
     const selectedMarker = markers.find((marker) => marker.entryId === selectedId) ?? null
     const selected = selectedId ? (byId.get(selectedId) ?? null) : null
@@ -720,26 +785,49 @@ export function LakeMap({
 
     useEffect(() => {
         if (soloEntryId || drive !== 'auto' || selectedId) return
+        if (cameraFollow === 'cheer') {
+            if (cheerId) {
+                const target = markerFrame(cheerId, FOCUS_ZOOM)
+                if (target) glideTo(target)
+            }
+            return
+        }
         if (spotlight) {
             const target = markerFrame(spotlight.entryId, CATCH_ZOOM)
             if (target) glideTo(target)
             return
         }
         if (heldId) return
-        if (cheerId) {
+        if (cameraFollow !== 'latest' && cheerId) {
             const target = markerFrame(cheerId, FOCUS_ZOOM)
             if (target) glideTo(target)
             return
         }
-        glideTo(readableCamera())
-    }, [spotlight, drive, selectedId, cheerId, soloEntryId, heldId])
+        if (cameraFollow == null) glideTo(readableCamera())
+    }, [spotlight, drive, selectedId, cheerId, soloEntryId, heldId, cameraFollow])
+
+    const focusKey = focusSector ? `${focusSector.zone}:${focusSector.sector}` : ''
+    useEffect(() => {
+        if (!focusKey || !focusSector) return
+        const point = sectorPoint(focusSector.zone, focusSector.sector)
+        if (!point) return
+        glideTo({ cx: point.x, cy: point.y, zoom: FOCUS_ZOOM })
+    }, [focusKey])
 
     useEffect(() => {
         if (glidingRef.current) return
         if (!soloEntryId && drive === 'auto' && phase === 'spot') return
         const directed = !soloEntryId && drive === 'auto' && phase === 'rest' && !selectedId ? heldId : null
-        const followCheer = !directed && !soloEntryId && drive === 'auto' && phase === 'rest' && !selectedId ? cheerId : null
-        const followId = soloEntryId ?? directed ?? followCheer ?? (tracking ? cheerId : null)
+        const followCheer =
+            cameraFollow === 'latest'
+                ? null
+                : cameraFollow === 'cheer'
+                  ? cheerId
+                  : !directed && !soloEntryId && drive === 'auto' && phase === 'rest' && !selectedId
+                    ? cheerId
+                    : null
+        const tracked = cameraFollow === 'latest' ? null : tracking ? cheerId : null
+        const followId = soloEntryId ?? directed ?? followCheer ?? tracked
         if (!followId) return
         const marker = markers.find((item) => item.entryId === followId)
         const at = marker ? markerPosition(marker) : null
@@ -747,7 +835,7 @@ export function LakeMap({
         const cam = cameraRef.current
         if (Math.abs(cam.cx - at.x) < 0.5 && Math.abs(cam.cy - at.y) < 0.5) return
         commit(clampCamera({ ...cam, cx: at.x, cy: at.y }, sizeRef.current.w, sizeRef.current.h))
-    }, [soloEntryId, tracking, cheerId, markers, drive, phase, selectedId, heldId])
+    }, [soloEntryId, tracking, cheerId, markers, drive, phase, selectedId, heldId, cameraFollow])
 
     const leaderId = leaders[0]?.entryId
     const labelSlots = new Map<string, number>()
@@ -838,7 +926,33 @@ export function LakeMap({
                                 {showTags ? 'Скрыть теги' : 'Теги'}
                             </Button>
                         )}
-                        {followCatches && !soloEntryId ? (
+                        {cameraFollow && onCameraFollowChange ? (
+                            <>
+                                <Button
+                                    size="xs"
+                                    variant={cameraFollow === 'latest' ? 'filled' : 'default'}
+                                    onClick={() => {
+                                        setDrive('auto')
+                                        onCameraFollowChange('latest')
+                                    }}
+                                >
+                                    Свежий улов
+                                </Button>
+                                <Button
+                                    size="xs"
+                                    variant={cameraFollow === 'cheer' ? 'filled' : 'default'}
+                                    color={cameraFollow === 'cheer' ? 'signal' : undefined}
+                                    onClick={() => {
+                                        setDrive('auto')
+                                        setSpotlight(null)
+                                        setQueued(null)
+                                        onCameraFollowChange('cheer')
+                                    }}
+                                >
+                                    Моя команда
+                                </Button>
+                            </>
+                        ) : followCatches && !soloEntryId ? (
                             <>
                                 <Button size="xs" variant={drive === 'auto' ? 'filled' : 'default'} onClick={() => setDrive('auto')}>
                                     Авто
@@ -992,12 +1106,12 @@ export function LakeMap({
                         }}
                         onClick={(event) => {
                             if (movedRef.current) return
-                            if ((event.target as Element).closest('[data-entry], [data-card], [data-camera-ui]')) return
+                            if ((event.target as Element).closest('[data-entry], [data-card], [data-camera-ui], [data-sector]')) return
                             if (!soloEntryId) setTracking(false)
                             setSelectedId(null)
                         }}
                         onPointerDown={(event) => {
-                            if ((event.target as Element).closest('[data-entry], [data-card], [data-camera-ui]')) return
+                            if ((event.target as Element).closest('[data-entry], [data-card], [data-camera-ui], [data-sector]')) return
                             movedRef.current = false
                             pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
                             if (pointersRef.current.size === 1) {
@@ -1113,8 +1227,24 @@ export function LakeMap({
                             >
                                 дорога
                             </text>
-                            <SectorPegs zone="A" occupied={occupied.A} scale={scale} zoom={camera.zoom} />
-                            <SectorPegs zone="B" occupied={occupied.B} scale={scale} zoom={camera.zoom} />
+                            {routePoints && routePoints.length > 1 ? (
+                                <polyline
+                                    points={routePoints
+                                        .map((item) => {
+                                            const point = sectorPoint(item.zone, item.sector)
+                                            return point ? `${point.x},${point.y}` : ''
+                                        })
+                                        .filter(Boolean)
+                                        .join(' ')}
+                                    fill="none"
+                                    stroke="var(--pc-signal)"
+                                    strokeWidth={screenPx(2.2, camera.zoom, 1.4, 3) / scale}
+                                    strokeDasharray={`${screenPx(6, camera.zoom, 4, 8) / scale} ${screenPx(4, camera.zoom, 3, 6) / scale}`}
+                                    pointerEvents="none"
+                                />
+                            ) : null}
+                            <SectorPegs zone="A" occupied={occupied.A} scale={scale} zoom={camera.zoom} heat={heatMap} heatMax={heatMax} pulse={pulseSet} onSector={onSector} />
+                            <SectorPegs zone="B" occupied={occupied.B} scale={scale} zoom={camera.zoom} heat={heatMap} heatMax={heatMax} pulse={pulseSet} onSector={onSector} />
                             {visibleMarkers.map((marker) => (
                                 <TeamMark
                                     key={marker.entryId}
@@ -1177,7 +1307,11 @@ export function LakeMap({
                     ) : null}
                 </Box>
                 <Text size="xs" c="dimmed">
-                    {soloEntryId
+                    {cameraFollow
+                        ? cameraFollow === 'latest'
+                            ? 'Свежий улов: камера едет к новому взвешиванию.'
+                            : 'Моя команда: камера держит ту, за которую вы болеете на этом устройстве.'
+                        : soloEntryId
                         ? (note ?? 'На схеме только эта команда. Сдвиг и щипок двигают камеру.')
                         : followCatches
                           ? `${note ? `${note}. ` : ''}${
@@ -1225,6 +1359,13 @@ export function LakeBoard({
     miniTours,
     onlyEntryId,
     followCatches = false,
+    cameraFollow,
+    onCameraFollowChange,
+    heat,
+    onSector,
+    routePoints,
+    pulseSectors,
+    focusSector,
 }: {
     tournament: Tournament
     segments: ScheduleSegment[]
@@ -1233,6 +1374,13 @@ export function LakeBoard({
     miniTours: MiniTour[]
     onlyEntryId?: string
     followCatches?: boolean
+    cameraFollow?: 'latest' | 'cheer'
+    onCameraFollowChange?: (mode: 'latest' | 'cheer') => void
+    heat?: { zone: ZoneCode; sector: number; grams: number }[]
+    onSector?: (zone: ZoneCode, sector: number) => void
+    routePoints?: { zone: ZoneCode; sector: number }[]
+    pulseSectors?: { zone: ZoneCode; sector: number }[]
+    focusSector?: { zone: ZoneCode; sector: number } | null
 }) {
     const now = useNow(1_000)
     const mapWindow = resolveMapWindow(tournament, segments, now)
@@ -1301,6 +1449,13 @@ export function LakeBoard({
             note={note}
             tournamentId={tournament.id}
             soloEntryId={onlyEntryId}
+            cameraFollow={cameraFollow}
+            onCameraFollowChange={onCameraFollowChange}
+            heat={heat}
+            onSector={onSector}
+            routePoints={routePoints}
+            pulseSectors={pulseSectors}
+            focusSector={focusSector}
         />
     )
 }

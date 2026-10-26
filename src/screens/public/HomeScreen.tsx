@@ -12,7 +12,7 @@ import {
   useSegments,
   useTournamentRealtime,
 } from '../../features/tournament/hooks'
-import { getCurrentPhase, tourNumberFromPhase, type CurrentPhase } from '../../features/tournament/schedule'
+import { getCompetitionStage, getCurrentPhase, tourNumberFromPhase, type CurrentPhase } from '../../features/tournament/schedule'
 import { useNow } from '../../features/tournament/useNow'
 import type { CatchRow, MiniTour, TournamentEntry } from '../../features/tournament/types'
 import { BrandMark, EmptyState } from '../../ui'
@@ -37,7 +37,7 @@ function liveAnnounceLine(phase: CurrentPhase | null, paused: boolean) {
       ? (phase.nextSegment?.title ?? 'До старта')
       : phase.kind === 'active'
         ? (phase.segment?.title ?? 'Этап')
-        : 'Финиш дня'
+        : 'Завершено'
   const msLeft =
     phase.endsAtEffective != null && (phase.kind === 'active' || phase.kind === 'gap')
       ? Math.max(0, phase.endsAtEffective.getTime() - phase.effectiveNow.getTime())
@@ -56,19 +56,17 @@ function formatHomeDateLine(now: Date) {
 
 export function HomeScreen() {
   const { role } = useAuth()
-  const now = useNow(60_000)
+  const now = useNow(5_000)
   const { data: tournament, isLoading } = useActiveTournament()
   const id = tournament?.id
   const { data: entries = [] } = useEntries(id)
   const { data: catches = [] } = useCatches(id)
   const { data: miniTours = [] } = useMiniTours(id)
-  const { data: segments = [] } = useSegments(id)
+  const { data: segments = [], isSuccess: segmentsReady } = useSegments(id)
   useTournamentRealtime(id)
 
-  const phase =
-    tournament && tournament.status !== 'finished'
-      ? getCurrentPhase(tournament, segments, now)
-      : null
+  const stage = tournament && segmentsReady ? getCompetitionStage(tournament, segments, now) : null
+  const phase = tournament && stage !== 'completed' ? getCurrentPhase(tournament, segments, now) : null
 
   const weighedProgress = useMemo(() => {
     if (!tournament) return null
@@ -80,7 +78,7 @@ export function HomeScreen() {
     return { weighed, total: assigned.length || entries.length }
   }, [tournament, entries, catches, miniTours, phase])
 
-  if (isLoading) {
+  if (isLoading || (id && !segmentsReady)) {
     return (
       <div className="pc-page">
         <Text c="dimmed">Загрузка…</Text>
@@ -107,7 +105,7 @@ export function HomeScreen() {
     )
   }
 
-  const live = tournament.status === 'live'
+  const live = stage === 'live'
   const showWeighed = !live && weighedProgress && weighedProgress.total > 0
   const showStaff = isStaff(role)
   const showAdmin = canManageRoles(role)

@@ -38,9 +38,11 @@ function kindLabel(kind: ScheduleDraft['rows'][number]['kind']): string {
 export function ScheduleEditor({
   tournamentId,
   segments,
+  disabled = false,
 }: {
   tournamentId: string
   segments: ScheduleSegment[]
+  disabled?: boolean
 }) {
   const queryClient = useQueryClient()
   const signature = segmentSignature(segments)
@@ -74,6 +76,7 @@ export function ScheduleEditor({
             type="datetime-local"
             label="Старт дня"
             value={toMinskInput(draft.anchor)}
+            disabled={disabled}
             onChange={(event) => {
               const next = fromMinskInput(event.currentTarget.value)
               if (next) setDraft((current) => setAnchor(current, next))
@@ -82,11 +85,12 @@ export function ScheduleEditor({
           />
           <Button
             variant="default"
+            disabled={disabled}
             onClick={() => setDraft((current) => setAnchor(current, fromMinskInput(toMinskInput(new Date())) ?? new Date()))}
           >
             Поставить на сейчас
           </Button>
-          <Button variant="default" onClick={() => setDraft((current) => insertStage(current, -1))}>
+          <Button variant="default" disabled={disabled} onClick={() => setDraft((current) => insertStage(current, -1))}>
             Этап в начало
           </Button>
         </Group>
@@ -101,6 +105,7 @@ export function ScheduleEditor({
                 <TextInput
                   aria-label="Название окна"
                   value={row.title}
+                  disabled={disabled}
                   onChange={(event) => {
                     const title = event.currentTarget.value
                     setDraft((current) => setRowTitle(current, index, title))
@@ -111,23 +116,24 @@ export function ScheduleEditor({
                   aria-label="Длительность, минуты"
                   min={1}
                   value={row.minutes}
+                  disabled={disabled}
                   onChange={(value) => setDraft((current) => setRowMinutes(current, index, Number(value) || 1))}
                   w={100}
                   suffix=" мин"
                 />
                 {row.lockedFishing ? null : (
-                  <Button size="xs" variant="subtle" color="gray" onClick={() => setDraft((current) => removeRow(current, index))}>
+                  <Button size="xs" variant="subtle" color="gray" disabled={disabled} onClick={() => setDraft((current) => removeRow(current, index))}>
                     Убрать
                   </Button>
                 )}
-                <Button size="xs" variant="default" onClick={() => setDraft((current) => insertStage(current, index))}>
+                <Button size="xs" variant="default" disabled={disabled} onClick={() => setDraft((current) => insertStage(current, index))}>
                   Этап ниже
                 </Button>
               </Group>
             </Stack>
           ))}
         </Stack>
-        <Button color="signal" loading={mutation.isPending} onClick={() => mutation.mutate()}>
+        <Button color="signal" disabled={disabled} loading={mutation.isPending} onClick={() => mutation.mutate()}>
           Записать расписание
         </Button>
         {mutation.isError ? (

@@ -2,6 +2,7 @@ import { supabase } from '../../lib/supabase'
 import { FISHING_KEYS, type ScheduleWriteRow } from './scheduleEdit'
 import {
   type Athlete,
+  type CatchRevision,
   type CatchRow,
   type DrawSlip,
   type JudgeCandidate,
@@ -177,6 +178,17 @@ export async function fetchSegments(tournamentId: string): Promise<ScheduleSegme
     .from('schedule_segments')
     .select('*')
     .eq('tournament_id', tournamentId)
+    .order('sort_order')
+  if (error) throw error
+  return (data ?? []) as ScheduleSegment[]
+}
+
+export async function fetchSegmentsForTournaments(tournamentIds: string[]): Promise<ScheduleSegment[]> {
+  if (tournamentIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('schedule_segments')
+    .select('*')
+    .in('tournament_id', tournamentIds)
     .order('sort_order')
   if (error) throw error
   return (data ?? []) as ScheduleSegment[]
@@ -697,6 +709,8 @@ export async function restartTournament(tournamentId: string, eventDate: string)
   if (entryError) throw entryError
   const entryIds = (entries ?? []).map((entry) => entry.id as string)
   if (entryIds.length > 0) {
+    const { error: revisionError } = await supabase.from('catch_revisions').delete().in('entry_id', entryIds)
+    if (revisionError) throw revisionError
     const { error: catchError } = await supabase.from('catches').delete().in('entry_id', entryIds)
     if (catchError) throw catchError
   }
@@ -709,6 +723,7 @@ export async function restartTournament(tournamentId: string, eventDate: string)
       schedule_delay_minutes: 0,
       schedule_paused_at: null,
       live_phase_override: null,
+      rules_locked_at: null,
     })
     .eq('id', tournamentId)
   if (error) throw error
@@ -807,6 +822,23 @@ export async function saveScheduleDraft(tournamentId: string, rows: ScheduleWrit
   if (error) throw error
 }
 
+async function writeCatchRevision(row: {
+  catchId: string | null
+  entryId: string
+  miniTourId: string
+  weightGrams: number
+  action: 'insert' | 'update' | 'delete'
+}): Promise<void> {
+  const { error } = await supabase.from('catch_revisions').insert({
+    catch_id: row.catchId,
+    entry_id: row.entryId,
+    mini_tour_id: row.miniTourId,
+    weight_grams: row.weightGrams,
+    action: row.action,
+  })
+  if (error) throw error
+}
+
 export async function addCatch(input: {
   entryId: string
   miniTourId: string
@@ -824,20 +856,77 @@ export async function addCatch(input: {
     .select('*')
     .single()
   if (error) throw error
-  return data as CatchRow
+  const created = data as CatchRow
+  try {
+    await writeCatchRevision({
+      catchId: created.id,
+      entryId: created.entry_id,
+      miniTourId: created.mini_tour_id,
+      weightGrams: created.weight_grams,
+      action: 'insert',
+    })
+  } catch (revisionError) {
+    await supabase.from('catches').delete().eq('id', created.id)
+    throw revisionError
+  }
+  return created
 }
 
 export async function deleteCatch(catchId: string): Promise<void> {
+  const { data, error: readError } = await supabase
+    .from('catches')
+    .select('id, entry_id, mini_tour_id, weight_grams')
+    .eq('id', catchId)
+    .maybeSingle()
+  if (readError) throw readError
+  if (!data) throw new Error('Улов уже удалён')
+  await writeCatchRevision({
+    catchId: data.id,
+    entryId: data.entry_id,
+    miniTourId: data.mini_tour_id,
+    weightGrams: data.weight_grams,
+    action: 'delete',
+  })
   const { error } = await supabase.from('catches').delete().eq('id', catchId)
   if (error) throw error
 }
 
 export async function updateCatchWeight(catchId: string, weightGrams: number): Promise<void> {
+  const { data, error: readError } = await supabase
+    .from('catches')
+    .select('entry_id, mini_tour_id, weight_grams')
+    .eq('id', catchId)
+    .single()
+  if (readError) throw readError
+  if (data.weight_grams === weightGrams) return
   const { error } = await supabase
     .from('catches')
     .update({ weight_grams: weightGrams })
     .eq('id', catchId)
   if (error) throw error
+  try {
+    await writeCatchRevision({
+      catchId,
+      entryId: data.entry_id,
+      miniTourId: data.mini_tour_id,
+      weightGrams: data.weight_grams,
+      action: 'update',
+    })
+  } catch (revisionError) {
+    await supabase.from('catches').update({ weight_grams: data.weight_grams }).eq('id', catchId)
+    throw revisionError
+  }
+}
+
+export async function fetchCatchRevisions(entryIds: string[]): Promise<CatchRevision[]> {
+  if (entryIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('catch_revisions')
+    .select('*')
+    .in('entry_id', entryIds)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as CatchRevision[]
 }
 
 export async function fetchJudgeCandidates(): Promise<JudgeCandidate[]> {
