@@ -62,7 +62,8 @@ import {
   windowPlaceSeries,
   zoneSectorBars,
 } from '../../features/tournament/review'
-import { pairKey, rivalsForNames, type SeasonBundle } from '../../features/tournament/spectator'
+import { ISLAND_PATH, LAKE_FRAME, LAKE_LABELS, WATER_PATH, outward, sectorPoints } from '../../features/tournament/lake'
+import { pairKey, rivalsForNames, sectorHistory, type SeasonBundle } from '../../features/tournament/spectator'
 import { useNow } from '../../features/tournament/useNow'
 import { EmptyState, Panel } from '../../ui'
 import { useV2Tournament } from './context'
@@ -508,6 +509,75 @@ function ShoresPane({ weighed, onTeam }: { weighed: boolean; onTeam: (id: string
   )
 }
 
+function ShoreHeat({
+  heat,
+  picked,
+  history,
+  onPick,
+}: {
+  heat: { zone: Zone; sector: number; grams: number }[]
+  picked: { zone: Zone; sector: number } | null
+  history: { tour: 1 | 2; mini: number; entryId: string; teamName: string; grams: number | null }[]
+  onPick: (pick: { zone: Zone; sector: number }) => void
+}) {
+  const gramsOf = new Map(heat.map((cell) => [`${cell.zone}:${cell.sector}`, cell.grams]))
+  const hottest = Math.max(1, ...heat.map((cell) => cell.grams))
+  const shoreGrams = { A: 0, B: 0 }
+  for (const cell of heat) shoreGrams[cell.zone] += cell.grams
+  const pickedGrams = picked ? gramsOf.get(`${picked.zone}:${picked.sector}`) : null
+  return (
+    <Panel p="sm">
+      <Text size="xs" c="dimmed" tt="uppercase">Где стояла рыба</Text>
+      <Text size="sm" c="dimmed" mt={4}>
+        Ярче сектор — больше грамм за день на этом месте берега. Зона A {shoreGrams.A.toLocaleString('ru-RU')} г, зона B {shoreGrams.B.toLocaleString('ru-RU')} г.
+      </Text>
+      <div style={{ width: '100%', maxWidth: 680, margin: '12px auto 0', aspectRatio: `${LAKE_FRAME.width} / ${LAKE_FRAME.height}` }}>
+        <svg viewBox={`${LAKE_FRAME.x} ${LAKE_FRAME.y} ${LAKE_FRAME.width} ${LAKE_FRAME.height}`} width="100%" height="100%" role="img" aria-label="Тепловая карта дня">
+          <path d={WATER_PATH} fill="color-mix(in srgb, #2f6f9f 42%, var(--pc-panel))" stroke="color-mix(in srgb, var(--pc-text) 28%, #2f6f9f)" strokeWidth={2} />
+          <path d={ISLAND_PATH} fill="color-mix(in srgb, #6b8f71 45%, var(--pc-panel))" stroke="var(--pc-line)" strokeWidth={1.2} />
+          <text x={LAKE_LABELS.zoneA.x} y={LAKE_LABELS.zoneA.y} fill="var(--pc-zone-a)" fontSize={16} fontWeight={700} style={{ fontFamily: 'var(--pc-font-display)' }}>Зона A</text>
+          <text x={LAKE_LABELS.zoneB.x} y={LAKE_LABELS.zoneB.y} fill="var(--pc-zone-b)" fontSize={16} fontWeight={700} style={{ fontFamily: 'var(--pc-font-display)' }}>Зона B</text>
+          {(['A', 'B'] as const).map((zone) =>
+            sectorPoints(zone).map((point, index) => {
+              const sector = index + 1
+              const grams = gramsOf.get(`${zone}:${sector}`)
+              const weighed = grams != null
+              const mix = weighed ? Math.round(28 + (grams / hottest) * 72) : 0
+              const fill = weighed ? `color-mix(in srgb, var(--pc-signal) ${mix}%, ${zone === 'A' ? 'var(--pc-zone-a)' : 'var(--pc-zone-b)'})` : zone === 'A' ? 'var(--pc-zone-a)' : 'var(--pc-zone-b)'
+              const label = outward(point, -14)
+              const selected = picked?.zone === zone && picked.sector === sector
+              const radius = weighed ? 4.5 + (grams / hottest) * 8 : 3.2
+              return (
+                <g key={`${zone}-${sector}`} style={{ cursor: 'pointer' }} onClick={() => onPick({ zone, sector })}>
+                  <title>{`Зона ${zone} · сектор ${sector}${weighed ? ` · ${grams.toLocaleString('ru-RU')} г` : ''}`}</title>
+                  <circle cx={point.x} cy={point.y} r={selected ? radius + 2 : radius} fill={fill} opacity={weighed ? 1 : 0.35} stroke={selected ? 'var(--pc-text)' : 'none'} strokeWidth={1.5} />
+                  <text x={label.x} y={label.y} textAnchor="middle" dominantBaseline="middle" fill="var(--pc-text)" stroke="var(--pc-panel)" strokeWidth={2} paintOrder="stroke" fontSize={8} style={{ fontFamily: 'var(--pc-font-body)', pointerEvents: 'none' }}>
+                    {sector}
+                  </text>
+                </g>
+              )
+            }),
+          )}
+        </svg>
+      </div>
+      {picked ? (
+        <Stack gap={2} mt="sm">
+          <Text fw={700}>
+            Зона {picked.zone} · сектор {picked.sector}
+            {pickedGrams != null ? ` · ${pickedGrams.toLocaleString('ru-RU')} г` : ' · взвешиваний нет'}
+          </Text>
+          {history.map((row) => (
+            <Text key={`${row.tour}.${row.mini}.${row.entryId}`} size="sm" c="dimmed">
+              {row.tour}.{row.mini} {row.teamName}
+              {row.grams != null ? ` · ${row.grams.toLocaleString('ru-RU')} г` : ''}
+            </Text>
+          ))}
+        </Stack>
+      ) : null}
+    </Panel>
+  )
+}
+
 function SectorsPane({
   weighed,
   entryId,
@@ -525,7 +595,8 @@ function SectorsPane({
   onSlot: (slot: string) => void
   onTeam: (id: string) => void
 }) {
-  const { story } = useV2Tournament()
+  const { story, entries, catches, miniTours } = useV2Tournament()
+  const [shorePick, setShorePick] = useState<{ zone: Zone; sector: number } | null>(null)
   if (!weighed) return <EmptyState title="Весов ещё нет" />
   const averages = sectorAverages(story)
   const route = entryId ? slipPoints(story, entryId) : []
@@ -537,12 +608,18 @@ function SectorsPane({
   if (averages.length === 0) {
     return (
       <Panel p="sm">
-        <Text size="sm" c="dimmed">В бумажках этого турнира нет номеров секторов, поэтому удача номера и соседи не из чего сложиться.</Text>
+        <Text size="sm" c="dimmed">В бумажках этого турнира нет номеров секторов, поэтому карта берега, удача номера и соседи не из чего сложиться.</Text>
       </Panel>
     )
   }
   return (
     <Stack gap="sm">
+      <ShoreHeat
+        heat={story.heatDay}
+        picked={shorePick}
+        history={shorePick ? sectorHistory(entries, catches, miniTours, story.slots, shorePick.zone, shorePick.sector) : []}
+        onPick={setShorePick}
+      />
       <Frame title="Средний вес номера сектора">
         <BarChart data={averages}>
           <CartesianGrid stroke="var(--pc-line)" />
