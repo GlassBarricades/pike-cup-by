@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react'
 import { Anchor, Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
-import { setPrimaryCheer, toggleCheer, useCheer } from '../../features/tournament/cheer'
+import { setPrimaryCheer, toggleCheer, useCheer, useCheerCounts } from '../../features/tournament/cheer'
 import { physicalZone } from '../../features/tournament/schedule'
 import { slipSector } from '../../features/tournament/slips'
-import { EmptyState } from '../../ui'
+import { EmptyState, FanLikes } from '../../ui'
 import { useV2Tournament } from './context'
 
 export function V2Teams() {
   const { tournament, entries, story } = useV2Tournament()
   const [query, setQuery] = useState('')
   const cheer = useCheer(tournament.id)
+  const { data: fanCounts } = useCheerCounts(tournament.id)
   const slot = story.clock
   const rows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('ru')
@@ -21,11 +22,12 @@ export function V2Teams() {
       if (needle && !haystack.includes(needle)) return []
       const zone = slot ? physicalZone(entry.start_zone ?? entry.draw_slip?.start_zone, slot.tour) : null
       const sector = slot ? slipSector(entry.draw_slip, slot.tour, slot.mini) : null
-      return [{ row, zone, sector }]
+      const fans = fanCounts?.get(row.entryId) ?? 0
+      return [{ row, zone, sector, fans }]
     })
-    list.sort((a, b) => a.row.teamName.localeCompare(b.row.teamName, 'ru'))
+    list.sort((a, b) => b.fans - a.fans || a.row.teamName.localeCompare(b.row.teamName, 'ru'))
     return list
-  }, [story.standings, entries, slot, query])
+  }, [story.standings, entries, slot, query, fanCounts])
 
   if (story.standings.length === 0) return <EmptyState title="Заявок нет" />
 
@@ -39,40 +41,41 @@ export function V2Teams() {
       {rows.length === 0 ? (
         <EmptyState title="Никого не нашли" />
       ) : (
-        rows.map(({ row, zone, sector }) => (
-          <Group key={row.entryId} justify="space-between" align="flex-start" wrap="nowrap" py={6} style={{ borderBottom: '1px solid var(--pc-line)' }}>
-            <div>
-              <Anchor component={Link} to={`/live/t/${tournament.id}/team/${row.entryId}`} fw={700} c="inherit" underline="never">
-                {row.teamName}
-              </Anchor>
-              <Text size="xs" c="dimmed">
-                {row.rosterNames.join(' · ')}
-              </Text>
-              <Text size="sm" mt={2}>
-                {zone && sector != null ? `Зона ${zone} · сектор ${sector}` : 'Сектор ещё не открыт'}
-              </Text>
-            </div>
-            <Group gap={4}>
-              <Button
-                size="compact-xs"
-                variant={cheer.entryIds.includes(row.entryId) ? 'filled' : 'light'}
-                color={cheer.entryIds.includes(row.entryId) ? 'signal' : undefined}
-                onClick={() => toggleCheer(tournament.id, row.entryId)}
-              >
-                {cheer.entryIds.includes(row.entryId) ? 'Болею' : 'Болею за них'}
-              </Button>
+        rows.map(({ row, zone, sector, fans }) => {
+          const mine = cheer.entryIds.includes(row.entryId)
+          return (
+            <Group key={row.entryId} justify="space-between" align="flex-start" wrap="nowrap" py={6} style={{ borderBottom: '1px solid var(--pc-line)' }}>
+              <div style={{ minWidth: 0 }}>
+                <Group gap={8} wrap="nowrap" align="center">
+                  <Anchor component={Link} to={`/live/t/${tournament.id}/team/${row.entryId}`} fw={700} c="inherit" underline="never">
+                    {row.teamName}
+                  </Anchor>
+                  <FanLikes
+                    count={fans}
+                    active={mine}
+                    size="xs"
+                    onToggle={() => toggleCheer(tournament.id, row.entryId)}
+                  />
+                </Group>
+                <Text size="xs" c="dimmed">
+                  {row.rosterNames.join(' · ')}
+                </Text>
+                <Text size="sm" mt={2}>
+                  {zone && sector != null ? `Зона ${zone} · сектор ${sector}` : 'Сектор ещё не открыт'}
+                </Text>
+              </div>
               {cheer.primaryId === row.entryId ? (
-                <Text size="xs" c="var(--pc-signal)">
+                <Text size="xs" c="var(--pc-signal)" style={{ flexShrink: 0 }}>
                   Главная
                 </Text>
-              ) : cheer.entryIds.includes(row.entryId) ? (
+              ) : mine ? (
                 <Button size="compact-xs" variant="default" onClick={() => setPrimaryCheer(tournament.id, row.entryId)}>
                   Главная
                 </Button>
               ) : null}
             </Group>
-          </Group>
-        ))
+          )
+        })
       )}
     </Stack>
   )

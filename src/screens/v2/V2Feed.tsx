@@ -1,6 +1,7 @@
 import { Anchor, Group, Stack, Text } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { formatCatchClock } from '../../features/tournament/catchLog'
+import { useRefreshTournament } from '../../features/tournament/hooks'
 import { slotTitle } from '../../features/tournament/schedule'
 import { formatPlaceShift, gramsLabel } from '../../features/tournament/spectator'
 import { useCheer } from '../../features/tournament/cheer'
@@ -10,6 +11,8 @@ import { useV2Tournament } from './context'
 export function V2Feed() {
   const { tournament, story } = useV2Tournament()
   const cheer = useCheer(tournament.id)
+  const { newCatchIds, hasRefreshed } = useRefreshTournament(tournament.id)
+  const newIds = hasRefreshed && newCatchIds.length > 0 ? new Set(newCatchIds) : null
   if (story.moments.length === 0) {
     return <EmptyState title="Лента пустая" description="Строка появится с первым взвешиванием." />
   }
@@ -20,6 +23,7 @@ export function V2Feed() {
         const sumShift = moment.sumBefore != null && moment.sumAfter != null ? formatPlaceShift(moment.sumBefore, moment.sumAfter) : null
         const sectorQuery = moment.zone && moment.sector != null ? `?zone=${moment.zone}&sector=${moment.sector}` : ''
         const mine = cheer.entryIds.includes(moment.entryId)
+        const isNew = Boolean(newIds?.has(moment.id))
         return (
           <Group
             key={moment.id}
@@ -29,7 +33,13 @@ export function V2Feed() {
             py="xs"
             style={{
               borderBottom: '1px solid var(--pc-line)',
-              background: mine ? 'color-mix(in srgb, var(--pc-signal) 16%, transparent)' : undefined,
+              borderLeft: isNew ? '2px solid color-mix(in srgb, var(--pc-signal) 55%, transparent)' : undefined,
+              paddingLeft: isNew ? 10 : undefined,
+              background: isNew
+                ? 'color-mix(in srgb, var(--pc-signal) 8%, transparent)'
+                : mine
+                  ? 'color-mix(in srgb, var(--pc-signal) 10%, transparent)'
+                  : undefined,
             }}
           >
             <div>

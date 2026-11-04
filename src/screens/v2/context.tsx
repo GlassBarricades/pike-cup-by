@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { Text } from '@mantine/core'
 import { Outlet, useParams } from 'react-router-dom'
+import { useCheerSync } from '../../features/tournament/cheer'
 import {
   useCatches,
   useEntries,
@@ -38,6 +39,7 @@ export function V2TournamentProvider({ children }: { children: ReactNode }) {
   const catchesQuery = useCatches(id)
   const miniQuery = useMiniTours(id)
   const segmentsQuery = useSegments(id)
+  useCheerSync(id)
   const now = useNow(5_000)
   const tournament = tournamentQuery.data
   const entries = entriesQuery.data ?? []

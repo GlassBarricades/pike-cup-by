@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Anchor, Group, SimpleGrid, Stack, Text } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { formatCatchClock } from '../../features/tournament/catchLog'
+import { useRefreshTournament } from '../../features/tournament/hooks'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone, slotTitle } from '../../features/tournament/schedule'
 import { formatPlaceShift, gramsLabel, shoreLeaders, sumGap, zoneGap, gapLine } from '../../features/tournament/spectator'
@@ -15,9 +16,14 @@ import { RulesComic } from './RulesComic'
 export function V2Now() {
   const { tournament, entries, story } = useV2Tournament()
   const cheer = useCheer(tournament.id)
+  const { newCatchIds, hasRefreshed } = useRefreshTournament(tournament.id)
   const seen = useRulesSeen()
   const [comic, setComic] = useState(!seen)
-  const latest = story.moments[0] ?? null
+  const delta = useMemo(() => {
+    if (newCatchIds.length === 0) return []
+    const ids = new Set(newCatchIds)
+    return story.moments.filter((moment) => ids.has(moment.id))
+  }, [story.moments, newCatchIds])
   const tour = story.clock?.tour ?? (story.mapWindow.state === 'moving' ? story.mapWindow.tour : 1)
   const closesMs = story.progress?.closesAt ? story.progress.closesAt.getTime() - story.phase.effectiveNow.getTime() : null
   const closesMin = closesMs == null ? null : Math.max(0, Math.ceil(closesMs / 60_000))
@@ -42,30 +48,38 @@ export function V2Now() {
 
       <Panel p="sm">
         <Text size="xs" c="dimmed" tt="uppercase">
-          Последнее взвешивание
+          {hasRefreshed ? 'С прошлого обновления' : 'Новые взвешивания'}
         </Text>
-        {latest ? (
-          <Group justify="space-between" align="flex-start" wrap="nowrap">
-            <div>
-              <Anchor component={Link} to={`/live/t/${tournament.id}/team/${latest.entryId}`} fw={700} c="inherit" underline="never">
-                {latest.teamName}
-              </Anchor>
-              <Text size="sm" c="dimmed">
-                {formatCatchClock(latest.createdAt)}
-                {latest.zone ? ` · зона ${latest.zone}` : ''}
-                {latest.sector != null ? ` · сектор ${latest.sector}` : ''}
-                {latest.tour && latest.mini ? ` · ${slotTitle({ tour: latest.tour, mini: latest.mini })}` : ''}
-              </Text>
-              <Text size="sm">{formatPlaceShift(latest.zonePlaceBefore, latest.zonePlaceAfter)}</Text>
-            </div>
-            <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.8rem' }}>
-              {gramsLabel(latest.grams)}
-            </Text>
-          </Group>
-        ) : (
+        {!hasRefreshed ? (
           <Text size="sm" c="dimmed">
-            Взвешиваний ещё не было
+            Нажмите «Обновить» — здесь появятся уловы с прошлой проверки.
           </Text>
+        ) : delta.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            Новых взвешиваний нет
+          </Text>
+        ) : (
+          <Stack gap={8} mt={4}>
+            {delta.map((moment) => (
+              <Group key={moment.id} justify="space-between" align="flex-start" wrap="nowrap">
+                <div>
+                  <Anchor component={Link} to={`/live/t/${tournament.id}/team/${moment.entryId}`} fw={700} c="inherit" underline="never">
+                    {moment.teamName}
+                  </Anchor>
+                  <Text size="sm" c="dimmed">
+                    {formatCatchClock(moment.createdAt)}
+                    {moment.zone ? ` · зона ${moment.zone}` : ''}
+                    {moment.sector != null ? ` · сектор ${moment.sector}` : ''}
+                    {moment.tour && moment.mini ? ` · ${slotTitle({ tour: moment.tour, mini: moment.mini })}` : ''}
+                  </Text>
+                  <Text size="sm">{formatPlaceShift(moment.zonePlaceBefore, moment.zonePlaceAfter)}</Text>
+                </div>
+                <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.5rem' }}>
+                  {gramsLabel(moment.grams)}
+                </Text>
+              </Group>
+            ))}
+          </Stack>
         )}
       </Panel>
 

@@ -1,5 +1,5 @@
-import { useCallback, useMemo } from 'react'
-import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMemo } from 'react'
+import { useQuery, type QueryClient } from '@tanstack/react-query'
 import {
   fetchActiveTournament,
   fetchActiveMemberships,
@@ -42,6 +42,7 @@ export const tournamentKeys = {
   miniTours: (id: string) => ['tournament', id, 'miniTours'] as const,
   entries: (id: string) => ['tournament', id, 'entries'] as const,
   catches: (id: string) => ['tournament', id, 'catches'] as const,
+  cheerCounts: (id: string) => ['tournament', id, 'cheerCounts'] as const,
   revisions: (id: string) => ['tournament', id, 'revisions'] as const,
   zoneJudges: (id: string) => ['tournament', id, 'zoneJudges'] as const,
   drawSlips: ['drawSlips'] as const,
@@ -50,10 +51,22 @@ export const tournamentKeys = {
   athletes: ['athletes'] as const,
 }
 
+/**
+ * Почти статичные данные: не протухают по времени.
+ * Invalidate только из staff/judge мутаций (или F5).
+ */
+const STALE_UNTIL_MUTATION = Number.POSITIVE_INFINITY
+
+/** byId = ['tournament', id] — без exact матчит ещё catches/entries/segments/... */
+export function invalidateTournamentCard(queryClient: QueryClient, tournamentId: string) {
+  return queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournamentId), exact: true })
+}
+
 export function useTournaments() {
   return useQuery({
     queryKey: tournamentKeys.list,
     queryFn: fetchTournaments,
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -62,6 +75,7 @@ export function useTournament(tournamentId: string | undefined) {
     queryKey: tournamentKeys.byId(tournamentId ?? ''),
     queryFn: () => fetchTournamentById(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -70,6 +84,7 @@ export function useTournamentRules(tournamentId: string | undefined) {
     queryKey: tournamentKeys.rules(tournamentId ?? ''),
     queryFn: () => fetchTournamentRulesContent(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -77,6 +92,7 @@ export function useActiveTournament() {
   return useQuery({
     queryKey: tournamentKeys.active,
     queryFn: fetchActiveTournament,
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -98,6 +114,7 @@ export function useSegments(tournamentId: string | undefined) {
     queryKey: tournamentKeys.segments(tournamentId ?? ''),
     queryFn: () => fetchSegments(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -107,6 +124,7 @@ export function useSegmentsForTournaments(tournamentIds: string[]) {
     queryKey: [...tournamentKeys.list, 'segments', ids] as const,
     queryFn: () => fetchSegmentsForTournaments(ids),
     enabled: ids.length > 0,
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -135,6 +153,7 @@ export function useMiniTours(tournamentId: string | undefined) {
     queryKey: tournamentKeys.miniTours(tournamentId ?? ''),
     queryFn: () => fetchMiniTours(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -143,6 +162,7 @@ export function useEntries(tournamentId: string | undefined) {
     queryKey: tournamentKeys.entries(tournamentId ?? ''),
     queryFn: () => fetchEntries(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -151,6 +171,7 @@ export function useCatches(tournamentId: string | undefined) {
     queryKey: tournamentKeys.catches(tournamentId ?? ''),
     queryFn: () => fetchCatches(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: 0,
   })
 }
 
@@ -277,6 +298,7 @@ export function useDrawSlips() {
   return useQuery({
     queryKey: tournamentKeys.drawSlips,
     queryFn: fetchDrawSlips,
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -285,6 +307,7 @@ export function useZoneJudges(tournamentId: string | undefined) {
     queryKey: tournamentKeys.zoneJudges(tournamentId ?? ''),
     queryFn: () => fetchZoneJudges(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
@@ -317,31 +340,5 @@ export function useCatchAuthors(catches: { created_by: string | null }[]) {
   })
 }
 
-/** Ручное обновление данных турнира (без Realtime). */
-export function useRefreshTournament(tournamentId: string | undefined) {
-  const queryClient = useQueryClient()
-  const fetching = useIsFetching({
-    predicate: (query) => {
-      if (!tournamentId) return false
-      const key = query.queryKey
-      if (!Array.isArray(key) || key[0] !== 'tournament') return false
-      if (key[1] === 'active') return true
-      return key[1] === tournamentId
-    },
-  })
-
-  const refresh = useCallback(async () => {
-    if (!tournamentId) return
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournamentId) }),
-      queryClient.invalidateQueries({ queryKey: tournamentKeys.catches(tournamentId) }),
-      queryClient.invalidateQueries({ queryKey: tournamentKeys.entries(tournamentId) }),
-      queryClient.invalidateQueries({ queryKey: tournamentKeys.segments(tournamentId) }),
-      queryClient.invalidateQueries({ queryKey: tournamentKeys.miniTours(tournamentId) }),
-      queryClient.invalidateQueries({ queryKey: tournamentKeys.zoneJudges(tournamentId) }),
-      queryClient.invalidateQueries({ queryKey: tournamentKeys.active }),
-    ])
-  }, [queryClient, tournamentId])
-
-  return { refresh, isFetching: fetching > 0 }
-}
+/** Ручное обновление зрителей/пульта: уловы + карточка; дельта новых уловов с прошлого refresh. */
+export { useCatchRefresh as useRefreshTournament } from './catchRefresh'

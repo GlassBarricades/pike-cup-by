@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button, Stack, Text, Textarea } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { lockTournamentRules, updateTournamentRules } from '../../features/tournament/api'
-import { tournamentKeys, useTournamentRules } from '../../features/tournament/hooks'
+import { invalidateTournamentCard, tournamentKeys, useTournamentRules } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { EmptyState, PageHero, Panel } from '../../ui'
@@ -22,7 +22,7 @@ export function RulesEditScreen({ embedded = false }: { embedded?: boolean }) {
     await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
     await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
     if (tournament) {
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournament.id) })
+      await invalidateTournamentCard(queryClient, tournament.id)
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.rules(tournament.id) })
     }
   }

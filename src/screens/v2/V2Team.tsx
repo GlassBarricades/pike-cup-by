@@ -1,20 +1,22 @@
 import { Button, Group, Stack, Text, Title } from '@mantine/core'
 import { Link, useParams } from 'react-router-dom'
-import { setPrimaryCheer, toggleCheer, useCheer } from '../../features/tournament/cheer'
+import { setPrimaryCheer, toggleCheer, useCheer, useCheerCounts } from '../../features/tournament/cheer'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone, slotTitle } from '../../features/tournament/schedule'
 import { bestWorstSlot, gapLine, gramsLabel, sumGap, zoneGap } from '../../features/tournament/spectator'
 import { entryTeamName } from '../../features/tournament/types'
-import { Panel } from '../../ui'
+import { FanLikes, Panel } from '../../ui'
 import { useV2Tournament } from './context'
 
 export function V2Team() {
   const { entryId } = useParams()
   const { tournament, entries, story } = useV2Tournament()
   const cheer = useCheer(tournament.id)
+  const { data: fanCounts } = useCheerCounts(tournament.id)
   const entry = entries.find((item) => item.id === entryId)
   const cheerOn = Boolean(entry && cheer.entryIds.includes(entry.id))
   const primary = Boolean(entry && cheer.primaryId === entry.id)
+  const fans = entry ? (fanCounts?.get(entry.id) ?? 0) : 0
   const standing = story.standings.find((row) => row.entryId === entryId)
   const matrix = story.matrix.find((row) => row.entryId === entryId)
   const ends = bestWorstSlot(matrix)
@@ -28,20 +30,20 @@ export function V2Team() {
   return (
     <Stack gap="md">
       <div>
-        <Title order={3}>{entryTeamName(entry)}</Title>
+        <Group gap={8} wrap="nowrap" align="center">
+          <Title order={3}>{entryTeamName(entry)}</Title>
+          <FanLikes
+            count={fans}
+            active={cheerOn}
+            size="xs"
+            onToggle={() => toggleCheer(tournament.id, entry.id)}
+          />
+        </Group>
         <Text size="sm" c="dimmed">
           {(entry.roster ?? []).map((member) => member.full_name_snapshot).join(' · ') || 'Состав не указан'}
         </Text>
       </div>
-      <Group gap={6} wrap="wrap">
-        <Button
-          size="xs"
-          variant={cheerOn ? 'filled' : 'light'}
-          color={cheerOn ? 'signal' : undefined}
-          onClick={() => toggleCheer(tournament.id, entry.id)}
-        >
-          {cheerOn ? 'Хватит болеть' : 'Болею за них'}
-        </Button>
+      <Group gap={8} wrap="wrap" align="center">
         {cheerOn && !primary ? (
           <Button size="xs" variant="default" onClick={() => setPrimaryCheer(tournament.id, entry.id)}>
             Сделать главной

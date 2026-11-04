@@ -2,7 +2,7 @@ import { Button, Group, NumberInput, Stack, Text, TextInput } from '@mantine/cor
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { saveScheduleDraft } from '../../features/tournament/api'
-import { tournamentKeys } from '../../features/tournament/hooks'
+import { invalidateTournamentCard, tournamentKeys } from '../../features/tournament/hooks'
 import { formatTime } from '../../features/tournament/schedule'
 import {
   draftFromSegments,
@@ -58,7 +58,7 @@ export function ScheduleEditor({
     mutationFn: () => saveScheduleDraft(tournamentId, toWriteRows(draft)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.segments(tournamentId) })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournamentId) })
+      await invalidateTournamentCard(queryClient, tournamentId)
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
     },

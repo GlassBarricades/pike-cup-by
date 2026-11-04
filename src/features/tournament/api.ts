@@ -1047,4 +1047,42 @@ export async function fetchProfilesByIds(
   return map
 }
 
+export async function cheerSet(
+  tournamentId: string,
+  entryId: string,
+  spectatorKey: string,
+  on: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc('cheer_set', {
+    p_tournament_id: tournamentId,
+    p_entry_id: entryId,
+    p_spectator_key: spectatorKey,
+    p_on: on,
+  })
+  if (error) throw error
+}
+
+export async function cheerCounts(tournamentId: string): Promise<Map<string, number>> {
+  const { data, error } = await supabase.rpc('cheer_counts', { p_tournament_id: tournamentId })
+  if (error) throw error
+  const map = new Map<string, number>()
+  for (const row of data ?? []) {
+    const entryId = (row as { entry_id?: string }).entry_id
+    const fans = (row as { fans?: number }).fans
+    if (typeof entryId === 'string' && typeof fans === 'number') map.set(entryId, fans)
+  }
+  return map
+}
+
+export async function cheerMine(tournamentId: string, spectatorKey: string): Promise<string[]> {
+  const { data, error } = await supabase.rpc('cheer_mine', {
+    p_tournament_id: tournamentId,
+    p_spectator_key: spectatorKey,
+  })
+  if (error) throw error
+  return (data ?? [])
+    .map((row) => (row as { entry_id?: string }).entry_id)
+    .filter((id): id is string => typeof id === 'string')
+}
+
 export type { TournamentRosterMember }

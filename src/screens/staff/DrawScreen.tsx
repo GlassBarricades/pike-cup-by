@@ -15,7 +15,12 @@ import { setEntryDrawSlip } from '../../features/tournament/api'
 import { tournamentKeys, useDrawSlips, useEntries } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
-import { formatSlipCode, slipOptionLabel, slipSector } from '../../features/tournament/slips'
+import {
+  formatSlipCode,
+  slipFirstTourSector,
+  slipOptionLabel,
+  slipSector,
+} from '../../features/tournament/slips'
 import {
   entryTeamName,
   type DrawSlip,
@@ -57,12 +62,17 @@ function ZoneColumn({
         </Text>
       ) : (
         <Stack gap={4}>
-          {entries.map((entry) => (
-            <Text key={entry.id} size="sm" fw={600}>
-              {entryTeamName(entry)}
-              {entry.draw_slip ? ` · ${formatSlipCode(entry.draw_slip.code)}` : ''}
-            </Text>
-          ))}
+          {entries.map((entry) => {
+            const first = entry.draw_slip ? slipFirstTourSector(entry.draw_slip) : null
+            return (
+              <Text key={entry.id} size="sm" fw={600}>
+                {entryTeamName(entry)}
+                {entry.draw_slip
+                  ? ` · ${formatSlipCode(entry.draw_slip.code)}${first != null ? ` · I-${first}` : ''}`
+                  : ''}
+              </Text>
+            )
+          })}
         </Stack>
       )}
     </Panel>
@@ -100,7 +110,14 @@ function SlipCatalog({
       if (zone !== 'all' && slip.start_zone !== zone) return false
       if (!query) return true
       const owner = ownerBySlip.get(slip.id)?.toLowerCase() ?? ''
-      return slip.code.toLowerCase().includes(query) || owner.includes(query)
+      const first = slipFirstTourSector(slip)
+      const firstLabel = first != null ? String(first) : ''
+      return (
+        slip.code.toLowerCase().includes(query) ||
+        owner.includes(query) ||
+        firstLabel === query ||
+        `сектор ${firstLabel}`.includes(query)
+      )
     })
   }, [slips, zone, search, ownerBySlip])
 
@@ -121,7 +138,7 @@ function SlipCatalog({
             <TextInput
               value={search}
               onChange={(event) => setSearch(event.currentTarget.value)}
-              placeholder="Номер бумажки или команда"
+              placeholder="Номер, сектор I тура или команда"
               leftSection={<IconSearch size={16} />}
             />
             <SegmentedControl
@@ -163,7 +180,12 @@ function SlipCatalog({
                         w="100%"
                       >
                         <Group justify="space-between" gap="xs" wrap="nowrap">
-                          <Text fw={800}>{formatSlipCode(slip.code)}</Text>
+                          <div style={{ minWidth: 0 }}>
+                            <Text fw={800}>{formatSlipCode(slip.code)}</Text>
+                            <Text size="xs" c="dimmed" className="pc-tabular">
+                              I тур сектор {slipFirstTourSector(slip) ?? '—'}
+                            </Text>
+                          </div>
                           <Text size="xs" c="dimmed" style={{ flex: 1 }} truncate>
                             {owner ?? 'Свободна'}
                           </Text>
@@ -233,7 +255,13 @@ export function DrawScreen() {
     if (assignFilter === 'B' && entry.start_zone !== 'B') return false
     if (!teamQuery) return true
     const code = entry.draw_slip?.code.toLowerCase() ?? ''
-    return entryTeamName(entry).toLowerCase().includes(teamQuery) || code.includes(teamQuery)
+    const first = entry.draw_slip ? slipFirstTourSector(entry.draw_slip) : null
+    const firstLabel = first != null ? String(first) : ''
+    return (
+      entryTeamName(entry).toLowerCase().includes(teamQuery) ||
+      code.includes(teamQuery) ||
+      firstLabel === teamQuery
+    )
   })
 
   if (!tournament) {
@@ -249,7 +277,7 @@ export function DrawScreen() {
     <Stack gap="lg">
       <PageHero
         title="Жеребьёвка"
-        subtitle="Прикрепите бумажку к команде. Стартовая зона I тура записывается с карточки, II тур — противоположная зона."
+        subtitle="Прикрепите бумажку к команде. В списке виден сектор I тура (МТ1) — по нему можно узнать карточку без напечатанного номера. Зона I тура берётся с бумажки, II тур — противоположная."
       />
 
       {closed && <ClosedDayNotice />}
@@ -266,7 +294,7 @@ export function DrawScreen() {
               <TextInput
                 value={teamSearch}
                 onChange={(event) => setTeamSearch(event.currentTarget.value)}
-                placeholder="Команда или номер бумажки"
+                placeholder="Команда, номер или сектор I тура"
                 leftSection={<IconSearch size={16} />}
               />
               <SegmentedControl

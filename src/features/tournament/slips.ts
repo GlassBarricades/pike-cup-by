@@ -13,6 +13,13 @@ export function slipSector(
   return row?.sector_number ?? null
 }
 
-export function slipOptionLabel(slip: Pick<DrawSlip, 'code' | 'start_zone'>): string {
-  return `${formatSlipCode(slip.code)} · старт ${slip.start_zone}`
+/** Стартовый сектор I тура (мини-тур 1) — удобно узнавать бумажку без напечатанного номера. */
+export function slipFirstTourSector(slip: Pick<DrawSlip, 'sectors'> | null | undefined): number | null {
+  return slipSector(slip, 1, 1)
+}
+
+export function slipOptionLabel(slip: Pick<DrawSlip, 'code' | 'start_zone' | 'sectors'>): string {
+  const first = slipFirstTourSector(slip)
+  const firstPart = first != null ? ` · I тур сектор ${first}` : ''
+  return `${formatSlipCode(slip.code)} · старт ${slip.start_zone}${firstPart}`
 }

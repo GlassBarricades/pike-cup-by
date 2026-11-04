@@ -135,8 +135,9 @@ export const router = createBrowserRouter([
               {
                 element: <V2TournamentFrame />,
                 children: [
-                  { index: true, element: <V2Now /> },
+                  { index: true, element: <Navigate to="feed" replace /> },
                   { path: 'feed', element: <V2Feed /> },
+                  { path: 'now', element: <V2Now /> },
                   { path: 'map', element: <V2Map /> },
                   { path: 'table', element: <V2Table /> },
                   { path: 'matrix', element: <V2Matrix /> },

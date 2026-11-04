@@ -133,7 +133,7 @@ export function V2Review() {
   const lineIds = onlyMine ? cheer.entryIds.filter((id) => names.has(id)) : topIds(story)
   const weighed = hasWeights(story)
 
-  if (stage !== 'completed') return <Navigate to={`/live/t/${tournament.id}`} replace />
+  if (stage !== 'completed') return <Navigate to={`/live/t/${tournament.id}/feed`} replace />
 
   return (
     <Stack gap="md">

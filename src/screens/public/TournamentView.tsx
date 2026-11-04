@@ -1,8 +1,9 @@
 import { Anchor, Box, Button, Group, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { Link } from 'react-router-dom'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { formatTournamentDate } from '../../features/tournament/date'
 import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
+import { useRefreshTournament } from '../../features/tournament/hooks'
 import { getCompetitionStage, getCurrentPhase, slotTitle } from '../../features/tournament/schedule'
 import {
   entryTeamName,
@@ -12,7 +13,6 @@ import {
   type Tournament,
   type TournamentEntry,
 } from '../../features/tournament/types'
-import { useRefreshTournament } from '../../features/tournament/hooks'
 import { useNow } from '../../features/tournament/useNow'
 import {
   EmptyState,
@@ -20,6 +20,7 @@ import {
   PageHero,
   Panel,
   PhaseClock,
+  SpectatorRefreshBar,
   StageBadge,
   TabsBar,
   Timeline,
@@ -41,51 +42,70 @@ function LatestWeighing({
   miniTours: MiniTour[]
   live: boolean
 }) {
-  const latest = useMemo(() => buildCatchLog(entries, catches, miniTours)[0] ?? null, [entries, catches, miniTours])
-  const known = useRef<Set<string>>(new Set())
-  const [flash, setFlash] = useState(false)
+  const { newCatchIds, hasRefreshed } = useRefreshTournament(tournamentId)
+  const log = useMemo(() => buildCatchLog(entries, catches, miniTours), [entries, catches, miniTours])
+  const delta = useMemo(() => {
+    if (newCatchIds.length === 0) return []
+    const ids = new Set(newCatchIds)
+    return log.filter((row) => ids.has(row.id))
+  }, [log, newCatchIds])
 
-  useEffect(() => {
-    const ids = new Set(catches.map((row) => row.id))
-    const seen = known.current
-    if (seen.size > 0 && catches.some((row) => !seen.has(row.id))) {
-      known.current = ids
-      setFlash(true)
-      const timer = window.setTimeout(() => setFlash(false), 1600)
-      return () => window.clearTimeout(timer)
-    }
-    known.current = ids
-  }, [catches])
+  if (!live && !hasRefreshed && log.length === 0) return null
 
-  if (!latest) {
+  if (!hasRefreshed) {
     if (!live) return null
     return (
-      <Text size="sm" c="dimmed">
-        Взвешиваний ещё не было
-      </Text>
+      <Panel p="sm">
+        <Text size="xs" c="dimmed" tt="uppercase">
+          Новые взвешивания
+        </Text>
+        <Text size="sm" c="dimmed">
+          Нажмите «Обновить» — здесь появятся уловы с прошлой проверки.
+        </Text>
+      </Panel>
+    )
+  }
+
+  if (delta.length === 0) {
+    return (
+      <Panel p="sm">
+        <Text size="xs" c="dimmed" tt="uppercase">
+          С прошлого обновления
+        </Text>
+        <Text size="sm" c="dimmed">
+          Новых взвешиваний нет
+        </Text>
+      </Panel>
     )
   }
 
   return (
-    <Panel p="sm" className={flash ? 'pc-peg-flash' : undefined}>
-      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
-        <div style={{ minWidth: 0 }}>
-          <Text size="xs" c="dimmed" tt="uppercase">
-            Последнее взвешивание · {formatCatchClock(latest.createdAt)}
-          </Text>
-          <Anchor component={Link} to={`/tournament/${tournamentId}/team/${latest.entryId}`} fw={700} c="inherit" underline="never">
-            {latest.teamName}
-          </Anchor>
-          <Text size="sm" c="dimmed">
-            {latest.tour && latest.mini ? slotTitle({ tour: latest.tour, mini: latest.mini }) : 'Мини-тур'}
-            {latest.zone ? ` · зона ${latest.zone}` : ''}
-            {latest.sector != null ? ` · сектор ${latest.sector}` : ''}
-          </Text>
-        </div>
-        <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.6rem', flexShrink: 0 }}>
-          {latest.grams.toLocaleString('ru-RU')} г
-        </Text>
-      </Group>
+    <Panel p="sm">
+      <Text size="xs" c="dimmed" tt="uppercase" mb={6}>
+        С прошлого обновления · {delta.length}
+      </Text>
+      <Stack gap={8}>
+        {delta.map((row) => (
+          <Group key={row.id} justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
+            <div style={{ minWidth: 0 }}>
+              <Text size="xs" c="dimmed">
+                {formatCatchClock(row.createdAt)}
+              </Text>
+              <Anchor component={Link} to={`/tournament/${tournamentId}/team/${row.entryId}`} fw={700} c="inherit" underline="never">
+                {row.teamName}
+              </Anchor>
+              <Text size="sm" c="dimmed">
+                {row.tour && row.mini ? slotTitle({ tour: row.tour, mini: row.mini }) : 'Мини-тур'}
+                {row.zone ? ` · зона ${row.zone}` : ''}
+                {row.sector != null ? ` · сектор ${row.sector}` : ''}
+              </Text>
+            </div>
+            <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.4rem', flexShrink: 0 }}>
+              {row.grams.toLocaleString('ru-RU')} г
+            </Text>
+          </Group>
+        ))}
+      </Stack>
     </Panel>
   )
 }
@@ -109,7 +129,6 @@ export function TournamentView({
   spectator?: boolean
 }) {
   const now = useNow(5_000)
-  const { refresh, isFetching } = useRefreshTournament(tournament.id)
   const stage = getCompetitionStage(tournament, segments, now)
   const isOver = stage === 'completed'
   const phase = isOver ? null : getCurrentPhase(tournament, segments, now)
@@ -129,12 +148,6 @@ export function TournamentView({
     { value: 'rules', label: 'Регламент' },
   ]
 
-  const refreshButton = (
-    <Button size="compact-sm" variant="light" color="signal" loading={isFetching} onClick={() => void refresh()}>
-      Обновить
-    </Button>
-  )
-
   const headerMobile = (
     <Box hiddenFrom="sm">
       <Stack gap="xs">
@@ -148,7 +161,6 @@ export function TournamentView({
             {tournament.name}
           </Title>
           {!spectator && <StageBadge stage={stage} size="sm" />}
-          {refreshButton}
         </Group>
         <Text size="xs" c="dimmed">
           {formatTournamentDate(tournament.event_date)} · {tournament.location}
@@ -185,7 +197,6 @@ export function TournamentView({
           title={tournament.name}
           subtitle={`${formatTournamentDate(tournament.event_date)} · ${tournament.location}`}
           badge={spectator ? undefined : <StageBadge stage={stage} />}
-          actions={refreshButton}
           mb={0}
         >
           <Stack gap={8}>
@@ -210,7 +221,7 @@ export function TournamentView({
   )
 
   return (
-    <Stack gap="md">
+    <Stack gap="md" pb="calc(5.5rem + env(safe-area-inset-bottom))">
       {headerMobile}
       {headerDesktop}
       {isOver ? (
@@ -302,6 +313,7 @@ export function TournamentView({
           </>
         )}
       </TabsBar>
+      <SpectatorRefreshBar tournamentId={tournament.id} />
     </Stack>
   )
 }

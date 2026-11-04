@@ -13,7 +13,7 @@ import {
   updateTournamentMeta,
 } from '../../features/tournament/api'
 import { formatTournamentDate } from '../../features/tournament/date'
-import { tournamentKeys, useSegments } from '../../features/tournament/hooks'
+import { invalidateTournamentCard, tournamentKeys, useSegments } from '../../features/tournament/hooks'
 import { getCompetitionStage, getCurrentPhase } from '../../features/tournament/schedule'
 import { fishingScheduleReady } from '../../features/tournament/scheduleEdit'
 import type { ScheduleSegment, Tournament, TournamentStatus } from '../../features/tournament/types'
@@ -106,7 +106,7 @@ export function TournamentScreen() {
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
       if (selected) {
-        await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(selected.id) })
+        await invalidateTournamentCard(queryClient, selected.id)
       }
     },
   })
@@ -119,8 +119,9 @@ export function TournamentScreen() {
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
       if (id) {
-        await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(id) })
+        await invalidateTournamentCard(queryClient, id)
         await queryClient.invalidateQueries({ queryKey: tournamentKeys.segments(id) })
+        await queryClient.invalidateQueries({ queryKey: tournamentKeys.miniTours(id) })
         await queryClient.invalidateQueries({ queryKey: tournamentKeys.catches(id) })
       }
     },
@@ -502,7 +503,7 @@ function ScheduleOps({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournament.id) })
+      await invalidateTournamentCard(queryClient, tournament.id)
     },
   })
 
