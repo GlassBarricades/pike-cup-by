@@ -7,7 +7,6 @@ import {
   useMiniTours,
   useSegments,
   useTournament,
-  useTournamentRealtime,
 } from '../../features/tournament/hooks'
 import { buildRace, projectStory, type DayStory, type RaceData } from '../../features/tournament/spectator'
 import type { CatchRow, MiniTour, ScheduleSegment, Tournament, TournamentEntry } from '../../features/tournament/types'
@@ -39,7 +38,6 @@ export function V2TournamentProvider({ children }: { children: ReactNode }) {
   const catchesQuery = useCatches(id)
   const miniQuery = useMiniTours(id)
   const segmentsQuery = useSegments(id)
-  useTournamentRealtime(id)
   const now = useNow(5_000)
   const tournament = tournamentQuery.data
   const entries = entriesQuery.data ?? []

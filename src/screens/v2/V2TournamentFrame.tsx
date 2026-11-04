@@ -1,5 +1,6 @@
-import { Group, Stack, Text, Title } from '@mantine/core'
+import { Button, Group, Stack, Text, Title } from '@mantine/core'
 import { NavLink, Outlet } from 'react-router-dom'
+import { useRefreshTournament } from '../../features/tournament/hooks'
 import { useV2Tournament } from './context'
 
 const links = [
@@ -14,12 +15,18 @@ const links = [
 
 export function V2SectionNav() {
   const { tournament } = useV2Tournament()
+  const { refresh, isFetching } = useRefreshTournament(tournament.id)
   const base = `/live/t/${tournament.id}`
   return (
     <Stack gap="sm">
-      <Title order={3} className="pc-display">
-        {tournament.name}
-      </Title>
+      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
+        <Title order={3} className="pc-display" style={{ minWidth: 0, flex: 1 }} lineClamp={2}>
+          {tournament.name}
+        </Title>
+        <Button size="compact-sm" variant="light" color="signal" loading={isFetching} onClick={() => void refresh()}>
+          Обновить
+        </Button>
+      </Group>
       <Group gap={6} wrap="nowrap" style={{ overflowX: 'auto' }}>
         {links.map((item) => (
           <NavLink

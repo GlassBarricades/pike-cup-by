@@ -1,9 +1,11 @@
 import { Stack, Text } from '@mantine/core'
+import { useTournamentRules } from '../../features/tournament/hooks'
 import type { Tournament } from '../../features/tournament/types'
 import { Panel } from '../../ui'
 
 export function RulesTab({ tournament }: { tournament: Tournament }) {
-  const blocks = tournament.rules_content.split('\n').filter((line) => line.trim().length > 0)
+  const { data: rulesContent = '', isLoading } = useTournamentRules(tournament.id)
+  const blocks = rulesContent.split('\n').filter((line) => line.trim().length > 0)
 
   return (
     <Stack gap="sm">
@@ -14,7 +16,11 @@ export function RulesTab({ tournament }: { tournament: Tournament }) {
       </Text>
       <Panel>
         <Stack gap="xs">
-          {blocks.length === 0 ? (
+          {isLoading ? (
+            <Text c="dimmed" size="sm">
+              Загрузка регламента…
+            </Text>
+          ) : blocks.length === 0 ? (
             <Text c="dimmed" size="sm">
               Регламент пока пуст
             </Text>

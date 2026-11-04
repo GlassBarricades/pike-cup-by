@@ -18,30 +18,73 @@ import {
   type ZoneJudgeRow,
 } from './types'
 
+/** Карточка турнира без тяжёлого rules_content (экономия egress для списков и LIVE). */
+const TOURNAMENT_CARD_SELECT =
+  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one'
+
+function asTournamentCard(row: Record<string, unknown> | null): Tournament | null {
+  if (!row) return null
+  return { ...(row as unknown as Tournament), rules_content: '' }
+}
+
 export async function fetchTournaments(): Promise<Tournament[]> {
   const { data, error } = await supabase
     .from('tournaments')
-    .select('*')
+    .select(TOURNAMENT_CARD_SELECT)
     .order('event_date', { ascending: false })
   if (error) throw error
-  return (data ?? []) as Tournament[]
+  return (data ?? []).map((row) => asTournamentCard(row as Record<string, unknown>)!)
 }
 
 export async function fetchTournamentById(id: string): Promise<Tournament | null> {
-  const { data, error } = await supabase.from('tournaments').select('*').eq('id', id).maybeSingle()
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select(TOURNAMENT_CARD_SELECT)
+    .eq('id', id)
+    .maybeSingle()
   if (error) throw error
-  return data as Tournament | null
+  return asTournamentCard(data as Record<string, unknown> | null)
+}
+
+export async function fetchTournamentRulesContent(id: string): Promise<string> {
+  const { data, error } = await supabase
+    .from('tournaments')
+    .select('rules_content')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return (data?.rules_content as string | undefined) ?? ''
 }
 
 /** Текущий: live → published (свежий) → любой последний по дате */
 export async function fetchActiveTournament(): Promise<Tournament | null> {
-  const list = await fetchTournaments()
-  if (list.length === 0) return null
-  const live = list.find((t) => t.status === 'live')
+  const { data: liveRows, error: liveError } = await supabase
+    .from('tournaments')
+    .select(TOURNAMENT_CARD_SELECT)
+    .eq('status', 'live')
+    .order('event_date', { ascending: false })
+    .limit(1)
+  if (liveError) throw liveError
+  const live = asTournamentCard((liveRows?.[0] as Record<string, unknown> | undefined) ?? null)
   if (live) return live
-  const published = list.find((t) => t.status === 'published')
+
+  const { data: publishedRows, error: publishedError } = await supabase
+    .from('tournaments')
+    .select(TOURNAMENT_CARD_SELECT)
+    .eq('status', 'published')
+    .order('event_date', { ascending: false })
+    .limit(1)
+  if (publishedError) throw publishedError
+  const published = asTournamentCard((publishedRows?.[0] as Record<string, unknown> | undefined) ?? null)
   if (published) return published
-  return list[0] ?? null
+
+  const { data: anyRows, error: anyError } = await supabase
+    .from('tournaments')
+    .select(TOURNAMENT_CARD_SELECT)
+    .order('event_date', { ascending: false })
+    .limit(1)
+  if (anyError) throw anyError
+  return asTournamentCard((anyRows?.[0] as Record<string, unknown> | undefined) ?? null)
 }
 
 const DEFAULT_RULES_STUB = `# Регламент
@@ -208,6 +251,10 @@ export async function fetchMiniTours(tournamentId: string): Promise<MiniTour[]> 
 const ENTRY_SELECT =
   '*, team:teams(*), roster:tournament_roster_members(*), draw_slip:draw_slips(*, sectors:draw_slip_sectors(*))'
 
+/** Достаточно для computeStandings / season digest — без бумажек и секторов. */
+const ENTRY_STANDINGS_SELECT =
+  'id, tournament_id, team_id, team_name_snapshot, quota, status, contact_phone, start_zone, draw_slip_id, roster_locked_at, team:teams(id, name), roster:tournament_roster_members(*)'
+
 export async function fetchEntries(tournamentId: string): Promise<TournamentEntry[]> {
   const { data, error } = await supabase
     .from('tournament_entries')
@@ -218,19 +265,21 @@ export async function fetchEntries(tournamentId: string): Promise<TournamentEntr
   return (data ?? []) as TournamentEntry[]
 }
 
-export async function fetchCatches(tournamentId: string): Promise<CatchRow[]> {
-  const { data: entries, error: entriesError } = await supabase
+export async function fetchEntriesForStandings(tournamentId: string): Promise<TournamentEntry[]> {
+  const { data, error } = await supabase
     .from('tournament_entries')
-    .select('id')
+    .select(ENTRY_STANDINGS_SELECT)
     .eq('tournament_id', tournamentId)
-  if (entriesError) throw entriesError
-  const ids = (entries ?? []).map((e) => e.id)
-  if (ids.length === 0) return []
+    .order('created_at')
+  if (error) throw error
+  return (data ?? []) as TournamentEntry[]
+}
 
+export async function fetchCatches(tournamentId: string): Promise<CatchRow[]> {
   const { data, error } = await supabase
     .from('catches')
     .select('*')
-    .in('entry_id', ids)
+    .eq('tournament_id', tournamentId)
     .order('created_at', { ascending: false })
   if (error) throw error
   return (data ?? []) as CatchRow[]
@@ -844,6 +893,7 @@ export async function addCatch(input: {
   miniTourId: string
   weightGrams: number
   userId: string
+  tournamentId?: string
 }): Promise<CatchRow> {
   const { data, error } = await supabase
     .from('catches')
@@ -852,6 +902,7 @@ export async function addCatch(input: {
       mini_tour_id: input.miniTourId,
       weight_grams: input.weightGrams,
       created_by: input.userId,
+      ...(input.tournamentId ? { tournament_id: input.tournamentId } : {}),
     })
     .select('*')
     .single()

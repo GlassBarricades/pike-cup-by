@@ -89,6 +89,7 @@ export function CatchesScreen() {
         miniTourId: miniTourId!,
         weightGrams: Number(weight),
         userId: user!.id,
+        tournamentId: tournament!.id,
       }),
     onSuccess: invalidateCatches,
   })

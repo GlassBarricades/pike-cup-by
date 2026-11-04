@@ -6,7 +6,6 @@ import {
   useMiniTours,
   useSegments,
   useTournament,
-  useTournamentRealtime,
 } from '../../features/tournament/hooks'
 import { TournamentView } from './TournamentView'
 
@@ -17,7 +16,6 @@ export function EventScreen() {
   const { data: catches = [] } = useCatches(tournament?.id)
   const { data: miniTours = [] } = useMiniTours(tournament?.id)
   const { data: segments = [], isSuccess: segmentsReady } = useSegments(tournament?.id)
-  useTournamentRealtime(tournament?.id)
 
   if (isLoading || (tournament && !segmentsReady)) {
     return (

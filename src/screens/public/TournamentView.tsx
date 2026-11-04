@@ -12,6 +12,7 @@ import {
   type Tournament,
   type TournamentEntry,
 } from '../../features/tournament/types'
+import { useRefreshTournament } from '../../features/tournament/hooks'
 import { useNow } from '../../features/tournament/useNow'
 import {
   EmptyState,
@@ -108,6 +109,7 @@ export function TournamentView({
   spectator?: boolean
 }) {
   const now = useNow(5_000)
+  const { refresh, isFetching } = useRefreshTournament(tournament.id)
   const stage = getCompetitionStage(tournament, segments, now)
   const isOver = stage === 'completed'
   const phase = isOver ? null : getCurrentPhase(tournament, segments, now)
@@ -127,6 +129,12 @@ export function TournamentView({
     { value: 'rules', label: 'Регламент' },
   ]
 
+  const refreshButton = (
+    <Button size="compact-sm" variant="light" color="signal" loading={isFetching} onClick={() => void refresh()}>
+      Обновить
+    </Button>
+  )
+
   const headerMobile = (
     <Box hiddenFrom="sm">
       <Stack gap="xs">
@@ -140,6 +148,7 @@ export function TournamentView({
             {tournament.name}
           </Title>
           {!spectator && <StageBadge stage={stage} size="sm" />}
+          {refreshButton}
         </Group>
         <Text size="xs" c="dimmed">
           {formatTournamentDate(tournament.event_date)} · {tournament.location}
@@ -176,6 +185,7 @@ export function TournamentView({
           title={tournament.name}
           subtitle={`${formatTournamentDate(tournament.event_date)} · ${tournament.location}`}
           badge={spectator ? undefined : <StageBadge stage={stage} />}
+          actions={refreshButton}
           mb={0}
         >
           <Stack gap={8}>

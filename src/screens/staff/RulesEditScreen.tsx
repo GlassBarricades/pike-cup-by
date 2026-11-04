@@ -2,40 +2,39 @@ import { useEffect, useState } from 'react'
 import { Button, Stack, Text, Textarea } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { lockTournamentRules, updateTournamentRules } from '../../features/tournament/api'
-import { tournamentKeys } from '../../features/tournament/hooks'
+import { tournamentKeys, useTournamentRules } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { EmptyState, PageHero, Panel } from '../../ui'
 
 export function RulesEditScreen({ embedded = false }: { embedded?: boolean }) {
   const { selected: tournament } = useStaffTournament()
+  const { data: loadedRules, isSuccess: rulesReady } = useTournamentRules(tournament?.id)
   const [content, setContent] = useState('')
   const queryClient = useQueryClient()
 
   useEffect(() => {
-    if (tournament) setContent(tournament.rules_content)
-  }, [tournament])
+    if (!tournament || !rulesReady) return
+    setContent(loadedRules ?? '')
+  }, [tournament, rulesReady, loadedRules])
+
+  const invalidateRules = async () => {
+    await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
+    await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
+    if (tournament) {
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournament.id) })
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.rules(tournament.id) })
+    }
+  }
 
   const saveMutation = useMutation({
     mutationFn: () => updateTournamentRules(tournament!.id, content),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
-      if (tournament) {
-        await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournament.id) })
-      }
-    },
+    onSuccess: invalidateRules,
   })
 
   const lockMutation = useMutation({
     mutationFn: () => lockTournamentRules(tournament!.id),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
-      if (tournament) {
-        await queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournament.id) })
-      }
-    },
+    onSuccess: invalidateRules,
   })
 
   const closed = useTournamentDayClosed()
@@ -71,11 +70,11 @@ export function RulesEditScreen({ embedded = false }: { embedded?: boolean }) {
             autosize
             value={content}
             onChange={(e) => setContent(e.currentTarget.value)}
-            disabled={locked}
+            disabled={locked || !rulesReady}
           />
           <Button
             color="signal"
-            disabled={locked}
+            disabled={locked || !rulesReady}
             loading={saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
           >
@@ -84,7 +83,7 @@ export function RulesEditScreen({ embedded = false }: { embedded?: boolean }) {
           <Button
             variant="light"
             color="orange"
-            disabled={locked}
+            disabled={locked || !rulesReady}
             loading={lockMutation.isPending}
             onClick={() => lockMutation.mutate()}
           >

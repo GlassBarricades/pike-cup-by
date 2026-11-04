@@ -3,7 +3,7 @@ import { Anchor, Button, Group, Stack, Text, Title } from '@mantine/core'
 import { Link, useParams } from 'react-router-dom'
 import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
 import { setPrimaryCheer, toggleCheer, useCheer } from '../../features/tournament/cheer'
-import { useCatches, useEntries, useMiniTours, useSegments, useTournament, useTournamentRealtime } from '../../features/tournament/hooks'
+import { useCatches, useEntries, useMiniTours, useRefreshTournament, useSegments, useTournament } from '../../features/tournament/hooks'
 import { clockWeighSlot, getCurrentPhase, physicalZone, resolveMapWindow, slotTitle, teamMarkers, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../../features/tournament/scoring'
 import { formatSlipCode } from '../../features/tournament/slips'
@@ -34,7 +34,7 @@ export function TeamLiveScreen() {
     const { data: catches = [] } = useCatches(tournament?.id)
     const { data: miniTours = [] } = useMiniTours(tournament?.id)
     const { data: segments = [] } = useSegments(tournament?.id)
-    useTournamentRealtime(tournament?.id)
+    const { refresh, isFetching } = useRefreshTournament(tournament?.id)
     const now = useNow(1_000)
 
     const entry = entries.find((item) => item.id === entryId)
@@ -106,9 +106,14 @@ export function TeamLiveScreen() {
 
     return (
         <Stack gap="lg">
-            <Anchor component={Link} to={`/tournament/${tournament.id}?tab=teams`} size="sm" c="dimmed">
-                ← {tournament.name}
-            </Anchor>
+            <Group justify="space-between" align="center" wrap="nowrap" gap="sm">
+                <Anchor component={Link} to={`/tournament/${tournament.id}?tab=teams`} size="sm" c="dimmed">
+                    ← {tournament.name}
+                </Anchor>
+                <Button size="compact-sm" variant="light" color="signal" loading={isFetching} onClick={() => void refresh()}>
+                    Обновить
+                </Button>
+            </Group>
             <div>
                 <Title order={2}>{entryTeamName(entry)}</Title>
                 <Text size="sm" c="dimmed">

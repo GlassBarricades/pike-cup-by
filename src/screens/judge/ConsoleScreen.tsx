@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { addCatch, deleteCatch } from '../../features/tournament/api'
-import { tournamentKeys, useCatchAuthors, useCatches, useEntries, useMiniTours, useSegments, useTournamentRealtime, useZoneJudges } from '../../features/tournament/hooks'
+import { tournamentKeys, useCatchAuthors, useCatches, useEntries, useMiniTours, useRefreshTournament, useSegments, useZoneJudges } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import {
@@ -181,8 +181,7 @@ export function ConsoleScreen() {
     const { data: segments = [] } = useSegments(tournamentId)
     const { data: zoneJudges = [] } = useZoneJudges(tournamentId)
     const { data: authors } = useCatchAuthors(catches)
-
-    useTournamentRealtime(tournamentId)
+    const { refresh, isFetching: refreshing } = useRefreshTournament(tournamentId)
 
     const queryClient = useQueryClient()
     const scrollerRef = useRef<HTMLDivElement>(null)
@@ -288,6 +287,7 @@ export function ConsoleScreen() {
                 miniTourId: input.miniTourId,
                 weightGrams: input.grams,
                 userId: user!.id,
+                tournamentId: tournamentId,
             })
         },
         onMutate: async () => {
@@ -389,15 +389,20 @@ export function ConsoleScreen() {
                             {weighedCount}/{zoneEntries.length}
                         </Badge>
                     </Group>
-                    <SegmentedControl
-                        size="xs"
-                        value={String(tourNumber)}
-                        onChange={(v) => setManualTour(Number(v) as 1 | 2)}
-                        data={[
-                            { value: '1', label: 'I тур' },
-                            { value: '2', label: 'II тур' },
-                        ]}
-                    />
+                    <Group gap="xs">
+                        <Button size="compact-xs" variant="light" color="signal" loading={refreshing} onClick={() => void refresh()}>
+                            Обновить
+                        </Button>
+                        <SegmentedControl
+                            size="xs"
+                            value={String(tourNumber)}
+                            onChange={(v) => setManualTour(Number(v) as 1 | 2)}
+                            data={[
+                                { value: '1', label: 'I тур' },
+                                { value: '2', label: 'II тур' },
+                            ]}
+                        />
+                    </Group>
                 </Group>
                 {mapWindow && (
                     <Group justify="space-between" align="center" wrap="nowrap" gap="xs">

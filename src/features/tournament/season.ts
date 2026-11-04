@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchCatches, fetchEntries, fetchMiniTours, fetchTournaments } from './api'
+import { fetchCatches, fetchEntriesForStandings, fetchMiniTours, fetchTournaments } from './api'
 import { computeStandings } from './scoring'
 import type { SeasonBundle } from './spectator'
 
@@ -7,13 +7,13 @@ export function useSeasonDigest(enabled = true) {
   return useQuery({
     queryKey: ['v2', 'season-digest'],
     enabled,
-    staleTime: 60_000,
+    staleTime: 15 * 60_000,
     queryFn: async (): Promise<SeasonBundle[]> => {
       const tournaments = (await fetchTournaments()).filter((tournament) => tournament.status !== 'draft')
       const bundles = await Promise.all(
         tournaments.map(async (tournament) => {
           const [entries, catches, miniTours] = await Promise.all([
-            fetchEntries(tournament.id),
+            fetchEntriesForStandings(tournament.id),
             fetchCatches(tournament.id),
             fetchMiniTours(tournament.id),
           ])

@@ -1,6 +1,5 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
-import { supabase } from '../../lib/supabase'
+import { useCallback, useMemo } from 'react'
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchActiveTournament,
   fetchActiveMemberships,
@@ -22,7 +21,9 @@ import {
   fetchTeamNameHistory,
   fetchTeamTournamentAppearances,
   fetchTeams,
+  fetchEntriesForStandings,
   fetchTournamentById,
+  fetchTournamentRulesContent,
   fetchTournaments,
   fetchZoneJudges,
 } from './api'
@@ -36,6 +37,7 @@ export const tournamentKeys = {
   list: ['tournaments'] as const,
   active: ['tournament', 'active'] as const,
   byId: (id: string) => ['tournament', id] as const,
+  rules: (id: string) => ['tournament', id, 'rules'] as const,
   segments: (id: string) => ['tournament', id, 'segments'] as const,
   miniTours: (id: string) => ['tournament', id, 'miniTours'] as const,
   entries: (id: string) => ['tournament', id, 'entries'] as const,
@@ -59,6 +61,14 @@ export function useTournament(tournamentId: string | undefined) {
   return useQuery({
     queryKey: tournamentKeys.byId(tournamentId ?? ''),
     queryFn: () => fetchTournamentById(tournamentId!),
+    enabled: Boolean(tournamentId),
+  })
+}
+
+export function useTournamentRules(tournamentId: string | undefined) {
+  return useQuery({
+    queryKey: tournamentKeys.rules(tournamentId ?? ''),
+    queryFn: () => fetchTournamentRulesContent(tournamentId!),
     enabled: Boolean(tournamentId),
   })
 }
@@ -141,7 +151,6 @@ export function useCatches(tournamentId: string | undefined) {
     queryKey: tournamentKeys.catches(tournamentId ?? ''),
     queryFn: () => fetchCatches(tournamentId!),
     enabled: Boolean(tournamentId),
-    refetchInterval: 10_000,
   })
 }
 
@@ -235,7 +244,7 @@ export function useTeamCompetitionResults(teamId: string | undefined) {
       const results = await Promise.all(
         [...byTournament.values()].map(async ({ tournament, entry }) => {
           const [entries, catches, miniTours] = await Promise.all([
-            fetchEntries(tournament.id),
+            fetchEntriesForStandings(tournament.id),
             fetchCatches(tournament.id),
             fetchMiniTours(tournament.id),
           ])
@@ -308,41 +317,31 @@ export function useCatchAuthors(catches: { created_by: string | null }[]) {
   })
 }
 
-export function useTournamentRealtime(tournamentId: string | undefined) {
+/** Ручное обновление данных турнира (без Realtime). */
+export function useRefreshTournament(tournamentId: string | undefined) {
   const queryClient = useQueryClient()
+  const fetching = useIsFetching({
+    predicate: (query) => {
+      if (!tournamentId) return false
+      const key = query.queryKey
+      if (!Array.isArray(key) || key[0] !== 'tournament') return false
+      if (key[1] === 'active') return true
+      return key[1] === tournamentId
+    },
+  })
 
-  useEffect(() => {
+  const refresh = useCallback(async () => {
     if (!tournamentId) return
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentKeys.catches(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentKeys.entries(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentKeys.segments(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentKeys.miniTours(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentKeys.zoneJudges(tournamentId) }),
+      queryClient.invalidateQueries({ queryKey: tournamentKeys.active }),
+    ])
+  }, [queryClient, tournamentId])
 
-    const channel = supabase
-      .channel(`live-${tournamentId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'catches' },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: tournamentKeys.catches(tournamentId) })
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tournament_zone_judges', filter: `tournament_id=eq.${tournamentId}` },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: tournamentKeys.zoneJudges(tournamentId) })
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'tournaments', filter: `id=eq.${tournamentId}` },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
-          void queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournamentId) })
-          void queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
-        },
-      )
-      .subscribe()
-
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-  }, [tournamentId, queryClient])
+  return { refresh, isFetching: fetching > 0 }
 }

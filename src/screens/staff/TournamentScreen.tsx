@@ -7,6 +7,7 @@ import { canManageRoles } from '../../features/auth/permissions'
 import {
   createTournament,
   deleteTournament,
+  fetchTournamentRulesContent,
   restartTournament,
   updateScheduleOps,
   updateTournamentMeta,
@@ -333,9 +334,16 @@ function CreateTournamentForm({
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const rulesSource = copyRules
-        ? tournaments.find((t) => t.rules_content?.length > 40)?.rules_content
-        : undefined
+      let rulesSource: string | undefined
+      if (copyRules && tournaments.length > 0) {
+        for (const tournament of tournaments) {
+          const text = await fetchTournamentRulesContent(tournament.id)
+          if (text.trim().length > 40) {
+            rulesSource = text
+            break
+          }
+        }
+      }
       return createTournament({
         name: newName,
         eventDate: newDate,

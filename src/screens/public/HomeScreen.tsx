@@ -10,7 +10,6 @@ import {
   useEntries,
   useMiniTours,
   useSegments,
-  useTournamentRealtime,
 } from '../../features/tournament/hooks'
 import { getCompetitionStage, getCurrentPhase, tourNumberFromPhase, type CurrentPhase } from '../../features/tournament/schedule'
 import { useNow } from '../../features/tournament/useNow'
@@ -63,7 +62,6 @@ export function HomeScreen() {
   const { data: catches = [] } = useCatches(id)
   const { data: miniTours = [] } = useMiniTours(id)
   const { data: segments = [], isSuccess: segmentsReady } = useSegments(id)
-  useTournamentRealtime(id)
 
   const stage = tournament && segmentsReady ? getCompetitionStage(tournament, segments, now) : null
   const phase = tournament && stage !== 'completed' ? getCurrentPhase(tournament, segments, now) : null

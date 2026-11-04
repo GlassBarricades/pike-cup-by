@@ -3,7 +3,7 @@ import { IconDeviceGamepad2, IconFishHook } from '@tabler/icons-react'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { formatTournamentDate, statusLabel } from '../../features/tournament/date'
-import { useEntries, useZoneJudges } from '../../features/tournament/hooks'
+import { useEntries, useTournamentRules, useZoneJudges } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { ActionTile, EmptyState, PageHeader, Panel, SectionTitle, StepList, type StepItem } from '../../ui'
 
@@ -13,13 +13,14 @@ export function HqScreen() {
     const { selected, tournaments } = useStaffTournament()
     const { data: entries = [] } = useEntries(selected?.id)
     const { data: judges = [] } = useZoneJudges(selected?.id)
+    const { data: rulesContent = '' } = useTournamentRules(selected?.id)
 
     const assignedA = entries.filter((e) => e.start_zone === 'A').length
     const assignedB = entries.filter((e) => e.start_zone === 'B').length
     const unassigned = entries.filter((e) => !e.start_zone).length
     const judgesA = judges.filter((j) => j.zone === 'A').length
     const judgesB = judges.filter((j) => j.zone === 'B').length
-    const rulesLen = selected?.rules_content?.trim().length ?? 0
+    const rulesLen = rulesContent.trim().length
     const rulesLocked = Boolean(selected?.rules_locked_at)
 
     const prepSteps: StepItem[] = [

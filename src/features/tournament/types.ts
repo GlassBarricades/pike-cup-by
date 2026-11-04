@@ -14,6 +14,7 @@ export type Tournament = {
   prize_slots: number
   org_slots: number
   status: TournamentStatus
+  /** Пусто на карточке турнира; полный текст грузится отдельно на экране регламента. */
   rules_content: string
   rules_updated_at: string
   rules_locked_at: string | null
@@ -126,6 +127,7 @@ export type TournamentRosterMember = {
 
 export type CatchRow = {
   id: string
+  tournament_id: string
   entry_id: string
   mini_tour_id: string
   weight_grams: number
