@@ -76,7 +76,7 @@ export function ArchiveScreen() {
           title="Турниры"
           rightSection={
             canManage ? (
-              <Button component={Link} to="/staff/tournament" color="signal" variant="outline" size="sm">
+              <Button component={Link} to="/staff/tournament?create=1" color="signal" variant="outline" size="sm">
                 Создать
               </Button>
             ) : undefined

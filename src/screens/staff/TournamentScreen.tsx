@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Button, Checkbox, Group, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageRoles } from '../../features/auth/permissions'
-import { deleteTournament, restartTournament, updateScheduleOps, updateTournamentMeta } from '../../features/tournament/api'
+import {
+  createTournament,
+  deleteTournament,
+  restartTournament,
+  updateScheduleOps,
+  updateTournamentMeta,
+} from '../../features/tournament/api'
 import { formatTournamentDate } from '../../features/tournament/date'
 import { tournamentKeys, useSegments } from '../../features/tournament/hooks'
 import { getCompetitionStage, getCurrentPhase } from '../../features/tournament/schedule'
@@ -12,7 +19,7 @@ import type { ScheduleSegment, Tournament, TournamentStatus } from '../../featur
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { useNow } from '../../features/tournament/useNow'
-import { ClosedDayNotice, EmptyState, PageHero, Panel, PhaseClock, SectionTitle, StageBadge, TabsBar, Timeline } from '../../ui'
+import { ClosedDayNotice, PageHero, Panel, PhaseClock, SectionTitle, StageBadge, TabsBar, Timeline } from '../../ui'
 import { JudgesScreen } from './JudgesScreen'
 import { RulesEditScreen } from './RulesEditScreen'
 import { ScheduleEditor } from './ScheduleEditor'
@@ -24,11 +31,20 @@ const statusOptions = [
   { value: 'finished', label: 'Завершён (архив)' },
 ]
 
+const createStatusOptions = [
+  { value: 'published', label: 'Опубликован (актуальный)' },
+  { value: 'draft', label: 'Черновик' },
+  { value: 'live', label: 'Идёт' },
+  { value: 'finished', label: 'Завершён (архив)' },
+]
+
 export function TournamentScreen() {
   const { role } = useAuth()
   const isAdmin = canManageRoles(role)
-  const { selected, setSelectedId, tournaments } = useStaffTournament()
-  const { data: segments = [], isSuccess: segmentsReady } = useSegments(selected?.id)
+  const { selected, setSelectedId, tournaments, loading } = useStaffTournament()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const creating = searchParams.get('create') === '1' || (!loading && !selected)
+  const { data: segments = [], isSuccess: segmentsReady } = useSegments(creating ? undefined : selected?.id)
   const now = useNow(15_000)
   const [name, setName] = useState('')
   const [location, setLocation] = useState('')
@@ -38,6 +54,29 @@ export function TournamentScreen() {
   const [zeroPlacePlusOne, setZeroPlacePlusOne] = useState(true)
 
   const queryClient = useQueryClient()
+
+  const openCreate = () => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.set('create', '1')
+        next.delete('tab')
+        return next
+      },
+      { replace: false },
+    )
+  }
+
+  const closeCreate = () => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        next.delete('create')
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   useEffect(() => {
     if (!selected) return
@@ -97,13 +136,30 @@ export function TournamentScreen() {
     },
   })
 
-  if (!selected) {
+  if (loading && !selected && searchParams.get('create') !== '1') {
     return (
-      <EmptyState
-        title="Нет выбранного турнира"
-        description="Выберите турнир в меню слева."
+      <Text c="dimmed" size="sm">
+        Загрузка турниров…
+      </Text>
+    )
+  }
+
+  if (creating) {
+    return (
+      <CreateTournamentForm
+        tournaments={tournaments}
+        canCancel={Boolean(selected)}
+        onCancel={closeCreate}
+        onCreated={(id) => {
+          setSelectedId(id)
+          closeCreate()
+        }}
       />
     )
+  }
+
+  if (!selected) {
+    return null
   }
 
   const stage =
@@ -117,6 +173,11 @@ export function TournamentScreen() {
         title={selected.name}
         subtitle={`${formatTournamentDate(selected.event_date)} · ${selected.location}`}
         badge={stage ? <StageBadge stage={stage} /> : undefined}
+        actions={
+          <Button variant="outline" color="signal" size="sm" onClick={openCreate}>
+            Создать турнир
+          </Button>
+        }
         mb={0}
       />
 
@@ -245,6 +306,133 @@ export function TournamentScreen() {
           )
         }
       </TabsBar>
+    </Stack>
+  )
+}
+
+function CreateTournamentForm({
+  tournaments,
+  canCancel,
+  onCancel,
+  onCreated,
+}: {
+  tournaments: Tournament[]
+  canCancel: boolean
+  onCancel: () => void
+  onCreated: (id: string) => void
+}) {
+  const queryClient = useQueryClient()
+  const [newName, setNewName] = useState('Pike Cup in Belarus')
+  const [newLocation, setNewLocation] = useState('озеро Повстынь')
+  const [newDate, setNewDate] = useState('')
+  const [newStatus, setNewStatus] = useState<TournamentStatus>('published')
+  const [newOrganizers, setNewOrganizers] = useState('Артемчик Евгений, Зубко Сергей')
+  const [withSchedule, setWithSchedule] = useState(true)
+  const [copyRules, setCopyRules] = useState(true)
+  const [newZeroPlacePlusOne, setNewZeroPlacePlusOne] = useState(true)
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const rulesSource = copyRules
+        ? tournaments.find((t) => t.rules_content?.length > 40)?.rules_content
+        : undefined
+      return createTournament({
+        name: newName,
+        eventDate: newDate,
+        location: newLocation,
+        status: newStatus,
+        organizers: newOrganizers
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        rulesContent: rulesSource,
+        withDefaultSchedule: withSchedule,
+        zeroPlaceIsGroupSizePlusOne: newZeroPlacePlusOne,
+      })
+    },
+    onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
+      onCreated(created.id)
+    },
+  })
+
+  return (
+    <Stack gap="lg">
+      <PageHero
+        title="Новый турнир"
+        subtitle="Заполните карточку — дальше заявки, зоны и судьи в разделах штаба."
+        actions={
+          canCancel ? (
+            <Button variant="subtle" color="gray" size="sm" onClick={onCancel}>
+              К текущему
+            </Button>
+          ) : undefined
+        }
+        mb={0}
+      />
+
+      <Panel>
+        <Stack gap="md">
+          <SectionTitle>Создать турнир</SectionTitle>
+          <Text size="sm" c="dimmed">
+            Для прошедших протоколов выберите статус «Завершён», затем добавьте заявки, зоны и веса в разделах штаба.
+          </Text>
+          <TextInput label="Название" value={newName} onChange={(e) => setNewName(e.currentTarget.value)} />
+          <TextInput
+            label="Дата"
+            type="date"
+            value={newDate}
+            onChange={(e) => setNewDate(e.currentTarget.value)}
+          />
+          <TextInput
+            label="Место"
+            value={newLocation}
+            onChange={(e) => setNewLocation(e.currentTarget.value)}
+          />
+          <TextInput
+            label="Оргкомитет (через запятую)"
+            value={newOrganizers}
+            onChange={(e) => setNewOrganizers(e.currentTarget.value)}
+          />
+          <Select
+            label="Статус"
+            data={createStatusOptions}
+            value={newStatus}
+            onChange={(v) => setNewStatus((v as TournamentStatus) ?? 'published')}
+          />
+          <Checkbox
+            label="Создать типовое расписание и мини-туры"
+            checked={withSchedule}
+            onChange={(e) => setWithSchedule(e.currentTarget.checked)}
+          />
+          <Checkbox
+            label="Скопировать регламент с существующего турнира"
+            checked={copyRules}
+            onChange={(e) => setCopyRules(e.currentTarget.checked)}
+            disabled={tournaments.length === 0}
+          />
+          <Checkbox
+            label="Ноль улова = размер группы + 1"
+            description="Если выключено — ноль даёт место равное размеру группы"
+            checked={newZeroPlacePlusOne}
+            onChange={(e) => setNewZeroPlacePlusOne(e.currentTarget.checked)}
+          />
+          <Button
+            color="signal"
+            disabled={!newName.trim() || !newDate || !newLocation.trim()}
+            loading={createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+          >
+            Создать турнир
+          </Button>
+          {createMutation.isError && (
+            <Text c="red" size="sm">
+              {(createMutation.error as Error).message}
+            </Text>
+          )}
+        </Stack>
+      </Panel>
     </Stack>
   )
 }
