@@ -59,6 +59,7 @@ import { CatchesScreen } from '../screens/staff/CatchesScreen'
 import { ConsoleScreen } from '../screens/judge/ConsoleScreen'
 import { AdminHubScreen } from '../screens/admin/AdminHubScreen'
 import { RolesScreen } from '../screens/admin/RolesScreen'
+import { SettingsScreen } from '../screens/admin/SettingsScreen'
 
 function RedirectLegacyV2() {
   const { pathname, search, hash } = useLocation()
@@ -224,6 +225,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <AdminHubScreen /> },
       { path: 'roles', element: <RolesScreen /> },
+      { path: 'settings', element: <SettingsScreen /> },
     ],
   },
   { path: '/login', element: <LoginScreen /> },

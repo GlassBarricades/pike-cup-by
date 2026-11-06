@@ -1,5 +1,5 @@
 import { SimpleGrid, Stack, Text } from '@mantine/core'
-import { IconUserCog } from '@tabler/icons-react'
+import { IconSettings, IconUserCog } from '@tabler/icons-react'
 import { ActionTile, PageHeader } from '../../ui'
 
 export function AdminHubScreen() {
@@ -16,6 +16,12 @@ export function AdminHubScreen() {
           title="Роли"
           description="Участник, судья, организатор, админ"
           icon={IconUserCog}
+        />
+        <ActionTile
+          to="/admin/settings"
+          title="Настройки"
+          description="Регистрация и системные переключатели"
+          icon={IconSettings}
         />
       </SimpleGrid>
     </Stack>

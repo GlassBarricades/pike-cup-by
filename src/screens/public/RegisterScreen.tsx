@@ -13,10 +13,12 @@ import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { BrandMark, Panel, ThemeToggle } from '../../ui'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { registerSchema, zodFormErrors } from '../../features/auth/schemas'
+import { useAppSettings } from '../../features/settings/hooks'
 import { isSupabaseConfigured } from '../../lib/env'
 
 export function RegisterScreen() {
   const { signUp, session, loading } = useAuth()
+  const { data: settings, isLoading: settingsLoading } = useAppSettings()
   const navigate = useNavigate()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -28,6 +30,10 @@ export function RegisterScreen() {
 
   if (!loading && session) {
     return <Navigate to="/profile" replace />
+  }
+
+  if (!settingsLoading && settings?.hide_registration) {
+    return <Navigate to="/login" replace />
   }
 
   const handleSubmit = form.onSubmit(async (values) => {

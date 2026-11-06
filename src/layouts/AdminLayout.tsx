@@ -15,6 +15,7 @@ import {
   IconClipboardList,
   IconHome,
   IconLayoutDashboard,
+  IconSettings,
   IconUserCog,
 } from '@tabler/icons-react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -31,6 +32,7 @@ type NavItem = {
 const adminNav: NavItem[] = [
   { to: '/admin', label: 'Обзор', icon: IconLayoutDashboard, exact: true },
   { to: '/admin/roles', label: 'Пользователи и роли', icon: IconUserCog },
+  { to: '/admin/settings', label: 'Настройки', icon: IconSettings },
 ]
 
 function navActive(pathname: string, item: NavItem) {

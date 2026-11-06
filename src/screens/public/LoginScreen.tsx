@@ -5,14 +5,17 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { BrandMark, Panel, ThemeToggle } from '../../ui'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { loginSchema, zodFormErrors } from '../../features/auth/schemas'
+import { useAppSettings } from '../../features/settings/hooks'
 import { isSupabaseConfigured } from '../../lib/env'
 
 export function LoginScreen() {
     const { signIn, session, loading } = useAuth()
+    const { data: settings } = useAppSettings()
     const navigate = useNavigate()
     const location = useLocation()
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [submitting, setSubmitting] = useState(false)
+    const showRegister = !settings?.hide_registration
 
     const from =
         (location.state as { from?: string } | null)?.from && (location.state as { from?: string }).from !== '/login' ? (location.state as { from: string }).from : null
@@ -73,12 +76,14 @@ export function LoginScreen() {
                     </form>
                 </Panel>
 
-                <Text size="sm" ta="center">
-                    Нет аккаунта?{' '}
-                    <Anchor component={Link} to="/register" c="signal">
-                        Зарегистрироваться
-                    </Anchor>
-                </Text>
+                {showRegister && (
+                    <Text size="sm" ta="center">
+                        Нет аккаунта?{' '}
+                        <Anchor component={Link} to="/register" c="signal">
+                            Зарегистрироваться
+                        </Anchor>
+                    </Text>
+                )}
             </Stack>
         </div>
     )
