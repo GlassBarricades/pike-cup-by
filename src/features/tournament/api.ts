@@ -272,7 +272,8 @@ export async function fetchEntriesForStandings(tournamentId: string): Promise<To
     .eq('tournament_id', tournamentId)
     .order('created_at')
   if (error) throw error
-  return (data ?? []) as TournamentEntry[]
+  // PostgREST types team:teams(...) as an array; runtime is a single object (or null).
+  return (data ?? []) as unknown as TournamentEntry[]
 }
 
 export async function fetchCatches(tournamentId: string): Promise<CatchRow[]> {
@@ -1080,8 +1081,8 @@ export async function cheerMine(tournamentId: string, spectatorKey: string): Pro
     p_spectator_key: spectatorKey,
   })
   if (error) throw error
-  return (data ?? [])
-    .map((row) => (row as { entry_id?: string }).entry_id)
+  return ((data ?? []) as Array<{ entry_id?: string }>)
+    .map((row) => row.entry_id)
     .filter((id): id is string => typeof id === 'string')
 }
 
