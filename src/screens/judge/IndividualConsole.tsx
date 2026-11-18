@@ -143,11 +143,11 @@ export function IndividualConsole() {
   const activeZone = zone && myZones.includes(zone) ? zone : myZones[0] ?? null
 
   const phase = tournament ? getCurrentPhase(tournament, segments, now) : null
-  const window = tournament ? resolveMapWindow(tournament, segments, now) : null
+  const mapWindow = tournament ? resolveMapWindow(tournament, segments, now) : null
   const phaseTour = tourNumberFromPhase(phase)
-  const weigh = window
+  const weigh = mapWindow
     ? resolveWeighTarget({
-        window,
+        window: mapWindow,
         segments,
         phaseKind: phase?.kind ?? null,
         selectedTour,
@@ -327,7 +327,7 @@ export function IndividualConsole() {
               disabled={!activeZone}
               onClick={() => {
                 if (!weighingDone) {
-                  if (!window.confirm(`Отметить взвешивание зоны ${activeZone} как завершённое?`)) return
+                  if (!globalThis.confirm(`Отметить взвешивание зоны ${activeZone} как завершённое?`)) return
                 }
                 setSelectedMemberId(null)
                 weighDoneMutation.mutate(!weighingDone)
