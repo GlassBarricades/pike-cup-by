@@ -19,8 +19,8 @@ export function RulesEditScreen({ embedded = false }: { embedded?: boolean }) {
   }, [tournament, rulesReady, loadedRules])
 
   const invalidateRules = async () => {
-    await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
-    await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
+    await queryClient.invalidateQueries({ queryKey: ['tournament', 'active'] })
+    await queryClient.invalidateQueries({ queryKey: ['tournaments'] })
     if (tournament) {
       await invalidateTournamentCard(queryClient, tournament.id)
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.rules(tournament.id) })

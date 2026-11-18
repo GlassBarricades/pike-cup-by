@@ -3,6 +3,7 @@ import {
   Anchor,
   Badge,
   Button,
+  Checkbox,
   Group,
   Stack,
   Text,
@@ -39,15 +40,17 @@ export function AthleteDetailScreen() {
   const [editing, setEditing] = useState(false)
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
+  const [isJunior, setIsJunior] = useState(false)
 
   useEffect(() => {
     if (!athlete) return
     setFullName(athlete.full_name)
     setPhone(athlete.phone ?? '')
+    setIsJunior(Boolean(athlete.is_junior))
   }, [athlete])
 
   const saveMutation = useMutation({
-    mutationFn: () => updateAthlete(athleteId!, { fullName, phone }),
+    mutationFn: () => updateAthlete(athleteId!, { fullName, phone, isJunior }),
     onSuccess: async () => {
       setEditing(false)
       await queryClient.invalidateQueries({ queryKey: ['athlete', athleteId] })
@@ -83,7 +86,14 @@ export function AthleteDetailScreen() {
 
       <Group justify="space-between" align="flex-start">
         <div>
-          <Title order={2}>{athlete.full_name}</Title>
+          <Group gap="sm" align="center">
+            <Title order={2}>{athlete.full_name}</Title>
+            {athlete.is_junior && (
+              <Badge color="teal" variant="light">
+                Юниор
+              </Badge>
+            )}
+          </Group>
           {withTeam?.current_team_name ? (
             <Text mt={4}>
               Команда:{' '}
@@ -141,6 +151,11 @@ export function AthleteDetailScreen() {
           <Stack gap="sm">
             <TextInput label="ФИО" value={fullName} onChange={(e) => setFullName(e.currentTarget.value)} />
             <TextInput label="Телефон" value={phone} onChange={(e) => setPhone(e.currentTarget.value)} />
+            <Checkbox
+              label="Юниор"
+              checked={isJunior}
+              onChange={(e) => setIsJunior(e.currentTarget.checked)}
+            />
             <Group>
               <Button
                 color="signal"

@@ -17,6 +17,9 @@ import { TeamLiveScreen } from '../screens/public/TeamLiveScreen'
 import { LeaderboardScreen } from '../screens/public/LeaderboardScreen'
 import { RulesScreen } from '../screens/public/RulesScreen'
 import { ArchiveScreen } from '../screens/public/ArchiveScreen'
+import { LeaguesHubScreen } from '../screens/public/LeaguesHubScreen'
+import { LeagueDetailScreen } from '../screens/public/LeagueDetailScreen'
+import { FestivalsScreen } from '../screens/public/FestivalsScreen'
 import { PeopleHubScreen } from '../screens/public/PeopleHubScreen'
 import { AthletesLayout } from '../screens/public/AthletesLayout'
 import { AthletesIndexScreen } from '../screens/public/AthletesIndexScreen'
@@ -54,7 +57,7 @@ import { V2TournamentOutlet } from '../screens/v2/context'
 import { HqScreen } from '../screens/staff/HqScreen'
 import { TournamentScreen } from '../screens/staff/TournamentScreen'
 import { EntriesScreen } from '../screens/staff/EntriesScreen'
-import { DrawScreen } from '../screens/staff/DrawScreen'
+import { DrawRouter } from '../screens/staff/DrawRouter'
 import { CatchesScreen } from '../screens/staff/CatchesScreen'
 import { ConsoleScreen } from '../screens/judge/ConsoleScreen'
 import { AdminHubScreen } from '../screens/admin/AdminHubScreen'
@@ -92,6 +95,9 @@ export const router = createBrowserRouter([
           { path: ':teamId', element: <TeamDetailScreen /> },
         ],
       },
+      { path: 'leagues', element: <LeaguesHubScreen /> },
+      { path: 'leagues/:slug', element: <LeagueDetailScreen /> },
+      { path: 'festivals', element: <FestivalsScreen /> },
       { path: 'tournament', element: <ArchiveScreen /> },
       { path: 'tournament/rules', element: <RedirectToCurrent suffix="?tab=rules" /> },
       { path: 'tournament/schedule', element: <RedirectToCurrent suffix="?tab=schedule" /> },
@@ -184,7 +190,7 @@ export const router = createBrowserRouter([
         path: 'draw',
         element: (
           <RoleGuard allow={canManageTournament}>
-            <DrawScreen />
+            <DrawRouter />
           </RoleGuard>
         ),
       },

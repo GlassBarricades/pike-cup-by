@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 import { formatTournamentDate } from '../../features/tournament/date'
 import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
-import { useRefreshTournament } from '../../features/tournament/hooks'
+import { getFormat, isIndividual, isPikecup } from '../../features/tournament/formats'
+import { useAthleteDraws, useRefreshTournament } from '../../features/tournament/hooks'
 import { getCompetitionStage, getCurrentPhase, slotTitle } from '../../features/tournament/schedule'
 import {
   entryTeamName,
@@ -129,6 +130,8 @@ export function TournamentView({
   spectator?: boolean
 }) {
   const now = useNow(5_000)
+  const format = getFormat(tournament)
+  const { data: draws = [] } = useAthleteDraws(isIndividual(format) ? tournament.id : undefined)
   const stage = getCompetitionStage(tournament, segments, now)
   const isOver = stage === 'completed'
   const phase = isOver ? null : getCurrentPhase(tournament, segments, now)
@@ -143,7 +146,7 @@ export function TournamentView({
     { value: 'results', label: 'Таблица' },
     { value: 'catches', label: 'Уловы' },
     { value: 'teams', label: `Команды (${teamsSorted.length})` },
-    { value: 'map', label: 'Карта' },
+    ...(isPikecup(format) ? [{ value: 'map', label: 'Карта' }] : []),
     { value: 'schedule', label: 'Расписание' },
     { value: 'rules', label: 'Регламент' },
   ]
@@ -240,6 +243,7 @@ export function TournamentView({
                 catches={catches}
                 miniTours={miniTours}
                 segments={segments}
+                draws={draws}
               />
             )}
 
@@ -272,25 +276,30 @@ export function TournamentView({
                       <div>
                         <Text fw={600}>{entryTeamName(e)}</Text>
                         <Text size="xs" c="dimmed">
-                          Старт: зона {e.start_zone ?? '—'}
+                          {(e.roster ?? [])
+                            .filter((m) => m.role === 'athlete')
+                            .map((m) => m.full_name_snapshot)
+                            .join(', ') || 'Состав не указан'}
                           {e.draw_slip ? ` · бумажка № ${e.draw_slip.code}` : ''}
                         </Text>
                       </div>
-                      <Button
-                        component={Link}
-                        to={`/tournament/${tournament.id}/team/${e.id}`}
-                        variant="subtle"
-                        color="gray"
-                        size="compact-xs"
-                      >
-                        Сейчас
-                      </Button>
+                      {isPikecup(format) && (
+                        <Button
+                          component={Link}
+                          to={`/tournament/${tournament.id}/team/${e.id}`}
+                          variant="subtle"
+                          color="gray"
+                          size="compact-xs"
+                        >
+                          Сейчас
+                        </Button>
+                      )}
                     </Group>
                   ))}
                 </SimpleGrid>
               ))}
 
-            {active === 'map' && (
+            {active === 'map' && isPikecup(format) && (
               <LakeBoard
                 tournament={tournament}
                 segments={segments}

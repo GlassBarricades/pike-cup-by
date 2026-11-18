@@ -2,7 +2,10 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { Text } from '@mantine/core'
 import { Outlet, useParams } from 'react-router-dom'
 import { useCheerSync } from '../../features/tournament/cheer'
+import { getFormat } from '../../features/tournament/formats'
+import { computeResults, type TournamentResults } from '../../features/tournament/formats/results'
 import {
+  useAthleteDraws,
   useCatches,
   useEntries,
   useMiniTours,
@@ -10,7 +13,14 @@ import {
   useTournament,
 } from '../../features/tournament/hooks'
 import { buildRace, projectStory, type DayStory, type RaceData } from '../../features/tournament/spectator'
-import type { CatchRow, MiniTour, ScheduleSegment, Tournament, TournamentEntry } from '../../features/tournament/types'
+import type {
+  AthleteDraw,
+  CatchRow,
+  MiniTour,
+  ScheduleSegment,
+  Tournament,
+  TournamentEntry,
+} from '../../features/tournament/types'
 import { useNow } from '../../features/tournament/useNow'
 
 export type V2TournamentValue = {
@@ -19,6 +29,8 @@ export type V2TournamentValue = {
   catches: CatchRow[]
   miniTours: MiniTour[]
   segments: ScheduleSegment[]
+  draws: AthleteDraw[]
+  results: TournamentResults
   race: RaceData
   story: DayStory
 }
@@ -35,10 +47,12 @@ export function V2TournamentProvider({ children }: { children: ReactNode }) {
   const { tournamentId } = useParams()
   const tournamentQuery = useTournament(tournamentId)
   const id = tournamentQuery.data?.id
+  const needsDraws = tournamentQuery.data ? getFormat(tournamentQuery.data).engine === 'individual' : false
   const entriesQuery = useEntries(id)
   const catchesQuery = useCatches(id)
   const miniQuery = useMiniTours(id)
   const segmentsQuery = useSegments(id)
+  const drawsQuery = useAthleteDraws(needsDraws ? id : undefined)
   useCheerSync(id)
   const now = useNow(5_000)
   const tournament = tournamentQuery.data
@@ -46,6 +60,12 @@ export function V2TournamentProvider({ children }: { children: ReactNode }) {
   const catches = catchesQuery.data ?? []
   const miniTours = miniQuery.data ?? []
   const segments = segmentsQuery.data ?? []
+  const draws = drawsQuery.data ?? []
+
+  const results = useMemo(() => {
+    if (!tournament) return null
+    return computeResults({ tournament, entries, catches, miniTours, draws })
+  }, [tournament, entries, catches, miniTours, draws])
 
   const race = useMemo(
     () => (tournament ? buildRace(tournament, entries, catches, miniTours, segments) : null),
@@ -56,13 +76,23 @@ export function V2TournamentProvider({ children }: { children: ReactNode }) {
     [tournament, race, entries, catches, miniTours, segments, now],
   )
 
-  if (tournamentQuery.isLoading || (id && (entriesQuery.isLoading || catchesQuery.isLoading || miniQuery.isLoading || segmentsQuery.isLoading))) {
+  if (
+    tournamentQuery.isLoading ||
+    (id &&
+      (entriesQuery.isLoading ||
+        catchesQuery.isLoading ||
+        miniQuery.isLoading ||
+        segmentsQuery.isLoading ||
+        (needsDraws && drawsQuery.isLoading)))
+  ) {
     return <Text c="dimmed">Загрузка…</Text>
   }
-  if (!tournament || !race || !story) return <Text>Турнир не найден</Text>
+  if (!tournament || !results || !race || !story) return <Text>Турнир не найден</Text>
 
   return (
-    <V2TournamentContext.Provider value={{ tournament, entries, catches, miniTours, segments, race, story }}>
+    <V2TournamentContext.Provider
+      value={{ tournament, entries, catches, miniTours, segments, draws, results, race, story }}
+    >
       {children}
     </V2TournamentContext.Provider>
   )

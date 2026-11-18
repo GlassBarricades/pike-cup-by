@@ -124,28 +124,28 @@ export function oppositeZone(zone: 'A' | 'B' | null | undefined): 'A' | 'B' | nu
     return null
 }
 
-/** Физическая зона команды в данном туре: I = стартовая, II = противоположная. */
-export function physicalZone(startZone: 'A' | 'B' | null | undefined, tourNumber: 1 | 2): 'A' | 'B' | null {
+/** Физическая зона команды в данном туре (PikeCup): I = стартовая, II+ = противоположная. */
+export function physicalZone(startZone: 'A' | 'B' | null | undefined, tourNumber: number): 'A' | 'B' | null {
     if (!startZone) return null
     return tourNumber === 1 ? startZone : oppositeZone(startZone)
 }
 
-/** Текущий тур по ключу сегмента расписания (`tour1_*` / `tour2_*`). */
-export function tourNumberFromSegmentKey(key: string | null | undefined): 1 | 2 | null {
+/** Текущий тур по ключу сегмента расписания (`tour1_*` / `tour2_*` / `tourN_*`). */
+export function tourNumberFromSegmentKey(key: string | null | undefined): number | null {
     if (!key) return null
-    if (key.startsWith('tour1')) return 1
-    if (key.startsWith('tour2')) return 2
-    return null
+    const match = /^tour(\d+)/.exec(key)
+    if (!match) return null
+    return Number(match[1])
 }
 
-export type FishingSlot = { tour: 1 | 2; mini: number }
+export type FishingSlot = { tour: number; mini: number }
 
 export type MapWindow =
     | { state: 'off'; label: string }
-    | { state: 'fishing'; tour: 1 | 2; mini: number; label: string }
+    | { state: 'fishing'; tour: number; mini: number; label: string }
     | {
           state: 'moving'
-          tour: 1 | 2
+          tour: number
           mini: number
           from: FishingSlot | null
           progress: number
@@ -167,16 +167,16 @@ export type TeamMarker = {
 type SegmentMeaning = { kind: 'fishing' | 'move' | 'other'; slot: FishingSlot | null }
 
 function asSlot(tour: number | null | undefined, mini: number | null | undefined): FishingSlot | null {
-    if ((tour === 1 || tour === 2) && typeof mini === 'number' && mini >= 1 && mini <= 5) {
+    if (typeof tour === 'number' && tour >= 1 && tour <= 9 && typeof mini === 'number' && mini >= 1 && mini <= 20) {
         return { tour, mini }
     }
     return null
 }
 
 function slotFromKey(key: string): FishingSlot | null {
-    const match = /^tour([12])_mt([1-5])$/.exec(key)
+    const match = /^tour(\d+)_mt(\d+)$/.exec(key)
     if (!match) return null
-    return { tour: Number(match[1]) as 1 | 2, mini: Number(match[2]) }
+    return asSlot(Number(match[1]), Number(match[2]))
 }
 
 /** Новые окна читаются из полей. У архива то же правило выводится из ключа. */
@@ -221,8 +221,11 @@ function moveProgress(now: Date, start: Date, end: Date): number {
     return clamp01((now.getTime() - start.getTime()) / span)
 }
 
-function romanTour(tour: 1 | 2): string {
-    return tour === 1 ? 'I' : 'II'
+function romanTour(tour: number): string {
+    if (tour === 1) return 'I'
+    if (tour === 2) return 'II'
+    if (tour === 3) return 'III'
+    return String(tour)
 }
 
 function windowLabel(state: 'fishing' | 'moving', slot: FishingSlot, from: FishingSlot | null): string {
@@ -231,13 +234,13 @@ function windowLabel(state: 'fishing' | 'moving', slot: FishingSlot, from: Fishi
     return `Переход на мини-тур ${slot.mini}`
 }
 
-function tourFromSegment(segment: ScheduleSegment | null): 1 | 2 | null {
+function tourFromSegment(segment: ScheduleSegment | null): number | null {
     if (!segment) return null
     return interpretSegment(segment).slot?.tour ?? tourNumberFromSegmentKey(segment.key)
 }
 
 /** Тур, который сейчас виден на зонах: ловля, переход или ближайшее следующее окно. */
-export function tourNumberFromPhase(phase: CurrentPhase | null): 1 | 2 | null {
+export function tourNumberFromPhase(phase: CurrentPhase | null): number | null {
     if (!phase) return null
     if (phase.kind === 'gap') return tourFromSegment(phase.nextSegment) ?? tourFromSegment(phase.segment)
     return tourFromSegment(phase.segment)
@@ -310,15 +313,33 @@ export function slotTitle(slot: FishingSlot): string {
     return `${romanTour(slot.tour)} тур · мини-тур ${slot.mini}`
 }
 
-/** Мини-тур, в который садится улов по часам. Во время перехода — прошлый. */
+/** Последний fishing-сегмент дня (по sort_order). */
+export function lastFishingSegment(segments: ScheduleSegment[]): ScheduleSegment | null {
+    const fishing = orderedSegments(segments).filter((segment) => interpretSegment(segment).kind === 'fishing')
+    return fishing[fishing.length - 1] ?? null
+}
+
+/** Ловля уже закончилась по часам расписания (с учётом delay/pause). */
+export function isFishingComplete(
+    tournament: Pick<Tournament, 'schedule_delay_minutes' | 'schedule_paused_at'>,
+    segments: ScheduleSegment[],
+    now = new Date(),
+): boolean {
+    const last = lastFishingSegment(segments)
+    if (!last) return false
+    const effectiveNow = getEffectiveNow(tournament, now)
+    return effectiveNow >= new Date(last.planned_ends_at)
+}
+
+/** Мини-тур, в который садится улов по часам. Во время перехода — прошлый; после ловли — последний. */
 export function clockWeighSlot(window: MapWindow, segments: ScheduleSegment[], phaseKind: CurrentPhase['kind'] | null): FishingSlot | null {
     if (window.state === 'fishing') return { tour: window.tour, mini: window.mini }
     if (window.state === 'moving') return window.from
-    if (phaseKind === 'after') {
-        const slots = fishingSlotsInOrder(segments)
-        return slots[slots.length - 1] ?? null
-    }
-    return null
+    // До старта ловли писать некуда
+    if (phaseKind === 'before') return null
+    // После ловли (scoring/awards/after или off между ними) — последний мини-тур дня
+    const slots = fishingSlotsInOrder(segments)
+    return slots[slots.length - 1] ?? null
 }
 
 export function previousFishingSlot(slot: FishingSlot, segments: ScheduleSegment[]): FishingSlot | null {
@@ -328,7 +349,7 @@ export function previousFishingSlot(slot: FishingSlot, segments: ScheduleSegment
     return slots[index - 1] ?? null
 }
 
-export function lastFishingSlotOfTour(segments: ScheduleSegment[], tour: 1 | 2): FishingSlot | null {
+export function lastFishingSlotOfTour(segments: ScheduleSegment[], tour: number): FishingSlot | null {
     const slots = fishingSlotsInOrder(segments).filter((item) => item.tour === tour)
     return slots[slots.length - 1] ?? null
 }
@@ -338,7 +359,7 @@ export function resolveWeighTarget(input: {
     window: MapWindow
     segments: ScheduleSegment[]
     phaseKind: CurrentPhase['kind'] | null
-    selectedTour: 1 | 2
+    selectedTour: number
     stepBack: boolean
 }): { slot: FishingSlot | null; note: string | null } {
     const clock = clockWeighSlot(input.window, input.segments, input.phaseKind)

@@ -1,6 +1,7 @@
 import { Text } from '@mantine/core'
 import { Link } from 'react-router-dom'
 
+/** Оболочка платформы; PikeCup — название лиги, не бренд всего приложения. */
 export function BrandMark({
   size = 'md',
   link = true,
@@ -15,14 +16,15 @@ export function BrandMark({
       className="pc-display"
       style={{
         fontSize,
-        letterSpacing: '0.08em',
+        letterSpacing: '0.06em',
         color: 'var(--pc-text)',
         lineHeight: 1,
       }}
     >
-      Pike
+      Рыбспорт
       <Text span style={{ color: 'var(--pc-signal)' }}>
-        Cup
+        {' '}
+        РБ
       </Text>
     </Text>
   )

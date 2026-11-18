@@ -215,7 +215,7 @@ export function DrawScreen() {
   const { selected: tournament } = useStaffTournament()
   const closed = useTournamentDayClosed()
   const { data: entries = [] } = useEntries(tournament?.id)
-  const { data: slips = [] } = useDrawSlips()
+  const { data: slips = [] } = useDrawSlips(tournament?.id)
   const queryClient = useQueryClient()
   const [teamSearch, setTeamSearch] = useState('')
   const [assignFilter, setAssignFilter] = useState<AssignFilter>('all')
@@ -239,6 +239,7 @@ export function DrawScreen() {
     onSuccess: async () => {
       if (tournament) {
         await queryClient.invalidateQueries({ queryKey: tournamentKeys.entries(tournament.id) })
+        await queryClient.invalidateQueries({ queryKey: tournamentKeys.drawSlips(tournament.id) })
       }
     },
   })
@@ -277,7 +278,7 @@ export function DrawScreen() {
     <Stack gap="lg">
       <PageHero
         title="Жеребьёвка"
-        subtitle="Прикрепите бумажку к команде. В списке виден сектор I тура (МТ1) — по нему можно узнать карточку без напечатанного номера. Зона I тура берётся с бумажки, II тур — противоположная."
+        subtitle="Прикрепите бумажку этого турнира к команде. Пакет создаётся во вкладке «Турнир → Бумажки». Сектор I тура (МТ1) помогает узнать карточку без номера."
       />
 
       {closed && <ClosedDayNotice />}
@@ -339,7 +340,7 @@ export function DrawScreen() {
                             }}
                             searchable
                             clearable
-                            placeholder={slips.length === 0 ? 'В справочнике нет бумажек' : 'Бумажка'}
+                            placeholder={slips.length === 0 ? 'Нет бумажек у турнира' : 'Бумажка'}
                             nothingFoundMessage="Нет свободных бумажек"
                             disabled={closed || slips.length === 0 || slipMutation.isPending}
                             style={{ flex: '1 1 14rem' }}

@@ -1,6 +1,7 @@
-# PikeCup
+# Рыбспорт РБ
 
-Мобильное приложение турнира Pike Cup in Belarus (Vite + React + Mantine + Supabase + PWA).
+Платформа лиг и фестивалей рыболовного спорта Республики Беларусь (Vite + React + Mantine + Supabase + PWA).  
+**PikeCup** — первая (национальная) лига в системе.
 
 ## Стек
 

@@ -13,11 +13,13 @@ import { IconSearch } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { addCatch, deleteCatch, updateCatchWeight } from '../../features/tournament/api'
 import { useAuth } from '../../features/auth/AuthProvider'
+import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { tournamentKeys, useCatchAuthors, useCatches, useCatchRevisions, useEntries, useMiniTours } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { oppositeZone } from '../../features/tournament/schedule'
 import {
+  entryTeamColumn,
   entryTeamName,
   type CatchRow,
   type MiniTour,
@@ -54,7 +56,10 @@ export function CatchesScreen() {
   const { data: authors } = useCatchAuthors(revisions.map((revision) => ({ created_by: revision.actor_id })))
   const queryClient = useQueryClient()
 
+  const format = tournament ? getFormat(tournament) : null
+  const individual = format ? isIndividual(format) : false
   const [entryId, setEntryId] = useState<string | null>(null)
+  const [rosterMemberId, setRosterMemberId] = useState<string | null>(null)
   const [miniTourId, setMiniTourId] = useState<string | null>(null)
   const [weight, setWeight] = useState<number | string>(1000)
   const [logFilter, setLogFilter] = useState('')
@@ -63,6 +68,19 @@ export function CatchesScreen() {
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries])
   const miniById = useMemo(() => new Map(miniTours.map((m) => [m.id, m])), [miniTours])
+  const athleteOptions = useMemo(
+    () =>
+      entries.flatMap((entry) =>
+        (entry.roster ?? [])
+          .filter((m) => m.role === 'athlete')
+          .map((m) => ({
+            value: m.id,
+            label: `${m.full_name_snapshot} · ${entryTeamColumn(entry)}`,
+            entryId: entry.id,
+          })),
+      ),
+    [entries],
+  )
 
   const revisionsByCatch = useMemo(() => {
     const map = new Map<string, typeof revisions>()
@@ -83,14 +101,20 @@ export function CatchesScreen() {
   }
 
   const addMutation = useMutation({
-    mutationFn: () =>
-      addCatch({
-        entryId: entryId!,
+    mutationFn: () => {
+      const resolvedEntryId = individual
+        ? athleteOptions.find((a) => a.value === rosterMemberId)?.entryId
+        : entryId
+      if (!resolvedEntryId) throw new Error('Не выбран участник')
+      return addCatch({
+        entryId: resolvedEntryId,
         miniTourId: miniTourId!,
         weightGrams: Number(weight),
         userId: user!.id,
         tournamentId: tournament!.id,
-      }),
+        rosterMemberId: individual ? rosterMemberId : null,
+      })
+    },
     onSuccess: invalidateCatches,
   })
 
@@ -110,15 +134,20 @@ export function CatchesScreen() {
     },
   })
 
-  const selectedEntry = entries.find((e) => e.id === entryId)
+  const selectedEntryId = individual
+    ? athleteOptions.find((a) => a.value === rosterMemberId)?.entryId
+    : entryId
+  const selectedEntry = entries.find((e) => e.id === selectedEntryId)
 
   const miniTourOptions = useMemo(
     () =>
       miniTours.map((m) => ({
         value: m.id,
-        label: miniTourLabel(selectedEntry, m),
+        label: individual
+          ? `${m.tour_number === 1 ? 'I' : 'II'} тур · МТ ${m.mini_number}`
+          : miniTourLabel(selectedEntry, m),
       })),
-    [miniTours, selectedEntry],
+    [miniTours, selectedEntry, individual],
   )
 
   const logRows = useMemo(() => {
@@ -178,32 +207,46 @@ export function CatchesScreen() {
 
       <Panel>
         <Stack gap="md">
-          <Select
-            label="Команда"
-            data={entries
-              .slice()
-              .sort((a, b) => entryTeamName(a).localeCompare(entryTeamName(b), 'ru'))
-              .map((e) => ({ value: e.id, label: entryTeamName(e) }))}
-            value={entryId}
-            onChange={setEntryId}
-            searchable
-          />
+          {individual ? (
+            <Select
+              label="Спортсмен"
+              data={athleteOptions}
+              value={rosterMemberId}
+              onChange={setRosterMemberId}
+              searchable
+            />
+          ) : (
+            <Select
+              label="Команда"
+              data={entries
+                .slice()
+                .sort((a, b) => entryTeamName(a).localeCompare(entryTeamName(b), 'ru'))
+                .map((e) => ({ value: e.id, label: entryTeamName(e) }))}
+              value={entryId}
+              onChange={setEntryId}
+              searchable
+            />
+          )}
           <Select
             label="Мини-тур"
             data={miniTourOptions}
             value={miniTourId}
             onChange={setMiniTourId}
             description={
-              selectedEntry
-                ? `Для этой команды: I тур — зона ${selectedEntry.start_zone ?? '—'}, II тур — зона ${oppositeZone(selectedEntry.start_zone) ?? '—'}`
-                : 'Выберите команду — в списке появится её зона'
+              individual
+                ? 'Вес пишется на спортсмена за выбранный мини-тур'
+                : selectedEntry
+                  ? `Для этой команды: I тур — зона ${selectedEntry.start_zone ?? '—'}, II тур — зона ${oppositeZone(selectedEntry.start_zone) ?? '—'}`
+                  : 'Выберите команду — в списке появится её зона'
             }
           />
           <NumberInput label="Вес, граммы (= баллы)" min={1} value={weight} onChange={setWeight} />
           <Button
             color="signal"
             size="lg"
-            disabled={!entryId || !miniTourId || !user || Number(weight) <= 0}
+            disabled={
+              (individual ? !rosterMemberId : !entryId) || !miniTourId || !user || Number(weight) <= 0
+            }
             loading={addMutation.isPending}
             onClick={() => addMutation.mutate()}
           >

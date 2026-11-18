@@ -1,12 +1,14 @@
 import { Stack, Text } from '@mantine/core'
 import { formatTournamentDate } from '../../features/tournament/date'
+import { useDefaultLeague } from '../../features/tournament/hooks'
 import { useSeasonDigest } from '../../features/tournament/season'
 import { formatPlace } from '../../features/tournament/scoring'
 import { podiumRows } from '../../features/tournament/spectator'
 import { EmptyState, SurfaceCard } from '../../ui'
 
 export function V2Archive() {
-  const { data: bundles = [], isLoading } = useSeasonDigest()
+  const { data: defaultLeague } = useDefaultLeague()
+  const { data: bundles = [], isLoading } = useSeasonDigest({ leagueId: defaultLeague?.id })
   if (isLoading) return <Text c="dimmed">Считаем итоги…</Text>
   if (bundles.length === 0) return <EmptyState title="Архив пуст" />
   return (

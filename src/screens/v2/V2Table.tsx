@@ -2,11 +2,14 @@ import { Fragment, useMemo, useState, type CSSProperties } from 'react'
 import { Anchor, Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { useCheer } from '../../features/tournament/cheer'
+import { isIndividual } from '../../features/tournament/formats'
+import { getFormat } from '../../features/tournament/formats'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone } from '../../features/tournament/schedule'
 import { entryZonesWithCatch, gapLine, gramsLabel, sumGap, zoneExplanations, zoneGap } from '../../features/tournament/spectator'
 import { useBoardMode, writeBoardMode, type BoardMode } from '../../features/tournament/v2Store'
 import { EmptyState } from '../../ui'
+import { IndividualResults } from '../public/IndividualResults'
 import { useV2Tournament } from './context'
 import { RulesComic } from './RulesComic'
 
@@ -18,17 +21,19 @@ const modes: { id: BoardMode; label: string }[] = [
 ]
 
 export function V2Table() {
-  const { tournament, entries, catches, miniTours, story } = useV2Tournament()
+  const { tournament, entries, catches, miniTours, story, results } = useV2Tournament()
   const mode = useBoardMode()
   const [comic, setComic] = useState(false)
   const [query, setQuery] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
   const cheerState = useCheer(tournament.id)
   const cheerId = cheerState.primaryId
-  const cheer = story.standings.find((row) => row.entryId === cheerId)
-  const tour = story.clock?.tour ?? 2
+
+  const cheer = story?.standings.find((row) => row.entryId === cheerId)
+  const tour = story?.clock?.tour ?? 2
 
   const rows = useMemo(() => {
+    if (!story) return []
     const needle = query.trim().toLocaleLowerCase('ru')
     return story.standings.filter((row) => {
       if (mode === 'my-group' && cheer && row.startZone !== cheer.startZone) return false
@@ -38,7 +43,13 @@ export function V2Table() {
       const haystack = [row.teamName, ...row.rosterNames].join(' ').toLocaleLowerCase('ru')
       return haystack.includes(needle)
     })
-  }, [story.standings, mode, cheer, tour, query])
+  }, [story, mode, cheer, tour, query])
+
+  if (isIndividual(getFormat(tournament)) && results.engine === 'individual') {
+    return <IndividualResults teams={results.teams} athletes={results.athletes} />
+  }
+
+  if (!story) return <EmptyState title="Нет данных" />
 
   return (
     <Stack gap="sm">

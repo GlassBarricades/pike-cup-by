@@ -1,9 +1,10 @@
 import { Group, Stack, Text, Title } from '@mantine/core'
 import { NavLink, Outlet } from 'react-router-dom'
+import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { SpectatorRefreshBar } from '../../ui'
 import { useV2Tournament } from './context'
 
-const links = [
+const pikecupLinks = [
   { to: '/now', label: 'Сейчас', end: true },
   { to: '/feed', label: 'Лента', end: true },
   {
@@ -19,9 +20,17 @@ const links = [
   { to: '/teams', label: 'Команды', end: false },
 ]
 
+const individualLinks = [
+  { to: '/table', label: 'Таблица', end: false },
+  { to: '/feed', label: 'Лента', end: true },
+  { to: '/schedule', label: 'День', end: false },
+  { to: '/teams', label: 'Команды', end: false },
+]
+
 export function V2SectionNav() {
   const { tournament } = useV2Tournament()
   const base = `/live/t/${tournament.id}`
+  const links = isIndividual(getFormat(tournament)) ? individualLinks : pikecupLinks
   return (
     <Stack gap="sm">
       <Title order={3} className="pc-display" lineClamp={2}>
@@ -33,7 +42,7 @@ export function V2SectionNav() {
             key={item.label}
             to={`${base}${item.to}`}
             end={item.end}
-            title={'title' in item ? item.title : undefined}
+            title={'title' in item ? (item.title as string | undefined) : undefined}
             style={({ isActive }) => ({
               flex: '0 0 auto',
               padding: '6px 10px',
@@ -47,7 +56,7 @@ export function V2SectionNav() {
           >
             <Text size="sm" inherit span>
               {item.label}
-              {'hint' in item && item.hint ? (
+              {'hint' in item && typeof item.hint === 'string' ? (
                 <Text span size="xs" c="dimmed" ml={4} style={{ fontWeight: 600 }}>
                   {item.hint}
                 </Text>

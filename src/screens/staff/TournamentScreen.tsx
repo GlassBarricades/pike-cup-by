@@ -13,17 +13,33 @@ import {
   updateTournamentMeta,
 } from '../../features/tournament/api'
 import { formatTournamentDate } from '../../features/tournament/date'
-import { invalidateTournamentCard, tournamentKeys, useSegments } from '../../features/tournament/hooks'
+import {
+  invalidateTournamentCard,
+  invalidateTournamentLists,
+  tournamentKeys,
+  useDefaultLeague,
+  useLeagues,
+  useSegments,
+} from '../../features/tournament/hooks'
 import { getCompetitionStage, getCurrentPhase } from '../../features/tournament/schedule'
-import { fishingScheduleReady } from '../../features/tournament/scheduleEdit'
 import type { ScheduleSegment, Tournament, TournamentStatus } from '../../features/tournament/types'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { useNow } from '../../features/tournament/useNow'
 import { ClosedDayNotice, PageHero, Panel, PhaseClock, SectionTitle, StageBadge, TabsBar, Timeline } from '../../ui'
+import { DrawSlipsPanel } from './DrawSlipsPanel'
+import { FormatEditPanel } from './FormatEditPanel'
 import { JudgesScreen } from './JudgesScreen'
 import { RulesEditScreen } from './RulesEditScreen'
 import { ScheduleEditor } from './ScheduleEditor'
+import {
+  BOOR_INDIVIDUAL_TEAM_FORMAT,
+  defaultFormatForLeague,
+  getFormat,
+  PIKECUP_FORMAT,
+  type TournamentFormat,
+} from '../../features/tournament/formats'
+import { fishingScheduleReady } from '../../features/tournament/scheduleEdit'
 
 const statusOptions = [
   { value: 'draft', label: 'Черновик' },
@@ -39,6 +55,8 @@ const createStatusOptions = [
   { value: 'finished', label: 'Завершён (архив)' },
 ]
 
+const FESTIVAL_VALUE = '__festival__'
+
 export function TournamentScreen() {
   const { role } = useAuth()
   const isAdmin = canManageRoles(role)
@@ -53,8 +71,16 @@ export function TournamentScreen() {
   const [status, setStatus] = useState<TournamentStatus>('published')
   const [organizers, setOrganizers] = useState('')
   const [zeroPlacePlusOne, setZeroPlacePlusOne] = useState(true)
+  /** FESTIVAL_VALUE = фестиваль */
+  const [leagueId, setLeagueId] = useState<string>(FESTIVAL_VALUE)
+  const { data: leagues = [] } = useLeagues()
 
   const queryClient = useQueryClient()
+
+  const leagueSelectData = [
+    { value: FESTIVAL_VALUE, label: 'Фестиваль (без лиги)' },
+    ...leagues.map((league) => ({ value: league.id, label: league.name })),
+  ]
 
   const openCreate = () => {
     setSearchParams(
@@ -87,6 +113,7 @@ export function TournamentScreen() {
     setStatus(selected.status)
     setOrganizers(selected.organizers.join(', '))
     setZeroPlacePlusOne(selected.zero_place_is_group_size_plus_one !== false)
+    setLeagueId(selected.league_id ?? FESTIVAL_VALUE)
   }, [selected])
 
   const saveMutation = useMutation({
@@ -96,6 +123,7 @@ export function TournamentScreen() {
         location,
         event_date: eventDate,
         status,
+        league_id: leagueId === FESTIVAL_VALUE ? null : leagueId,
         organizers: organizers
           .split(',')
           .map((s) => s.trim())
@@ -103,8 +131,7 @@ export function TournamentScreen() {
         zero_place_is_group_size_plus_one: zeroPlacePlusOne,
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
+      await invalidateTournamentLists(queryClient)
       if (selected) {
         await invalidateTournamentCard(queryClient, selected.id)
       }
@@ -116,8 +143,7 @@ export function TournamentScreen() {
     onSuccess: async () => {
       setStatus('live')
       const id = selected?.id
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
+      await invalidateTournamentLists(queryClient)
       if (id) {
         await invalidateTournamentCard(queryClient, id)
         await queryClient.invalidateQueries({ queryKey: tournamentKeys.segments(id) })
@@ -132,8 +158,7 @@ export function TournamentScreen() {
     onSuccess: async (_data, tournamentId) => {
       const next = tournaments.find((tournament) => tournament.id !== tournamentId)
       setSelectedId(next?.id ?? null)
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
+      await invalidateTournamentLists(queryClient)
       queryClient.removeQueries({ queryKey: ['tournament', tournamentId] })
     },
   })
@@ -186,6 +211,8 @@ export function TournamentScreen() {
       <TabsBar
         tabs={[
           { value: 'card', label: 'Карточка' },
+          { value: 'format', label: 'Формат' },
+          { value: 'slips', label: 'Бумажки' },
           { value: 'rules', label: 'Регламент' },
           { value: 'schedule', label: 'Расписание' },
           { value: 'judges', label: 'Судьи' },
@@ -193,7 +220,11 @@ export function TournamentScreen() {
         defaultTab="card"
       >
         {(active) =>
-          active === 'rules' ? (
+          active === 'format' ? (
+            <FormatEditPanel tournament={selected} />
+          ) : active === 'slips' ? (
+            <DrawSlipsPanel tournament={selected} />
+          ) : active === 'rules' ? (
             <RulesEditScreen embedded />
           ) : active === 'schedule' ? (
             <ScheduleTab tournament={selected} segments={segments} ready={segmentsReady} />
@@ -211,6 +242,14 @@ export function TournamentScreen() {
                     onChange={(e) => setEventDate(e.currentTarget.value)}
                   />
                   <TextInput label="Место" value={location} onChange={(e) => setLocation(e.currentTarget.value)} />
+                  <Select
+                    label="Лига"
+                    description="Этап лиги или фестиваль вне сезона."
+                    data={leagueSelectData}
+                    value={leagueId}
+                    onChange={(v) => setLeagueId(v ?? '')}
+                    searchable
+                  />
                   <TextInput
                     label="Оргкомитет (через запятую)"
                     value={organizers}
@@ -324,6 +363,8 @@ function CreateTournamentForm({
   onCreated: (id: string) => void
 }) {
   const queryClient = useQueryClient()
+  const { data: leagues = [] } = useLeagues()
+  const { data: defaultLeague } = useDefaultLeague()
   const [newName, setNewName] = useState('Pike Cup in Belarus')
   const [newLocation, setNewLocation] = useState('озеро Повстынь')
   const [newDate, setNewDate] = useState('')
@@ -332,6 +373,28 @@ function CreateTournamentForm({
   const [withSchedule, setWithSchedule] = useState(true)
   const [copyRules, setCopyRules] = useState(true)
   const [newZeroPlacePlusOne, setNewZeroPlacePlusOne] = useState(true)
+  /** null до загрузки default; FESTIVAL_VALUE = фестиваль */
+  const [newLeagueId, setNewLeagueId] = useState<string | null>(null)
+  const [format, setFormat] = useState<TournamentFormat>(BOOR_INDIVIDUAL_TEAM_FORMAT)
+
+  useEffect(() => {
+    if (newLeagueId !== null) return
+    if (defaultLeague) setNewLeagueId(defaultLeague.id)
+  }, [defaultLeague, newLeagueId])
+
+  useEffect(() => {
+    if (!newLeagueId || newLeagueId === FESTIVAL_VALUE) {
+      setFormat(BOOR_INDIVIDUAL_TEAM_FORMAT)
+      return
+    }
+    const league = leagues.find((row) => row.id === newLeagueId)
+    setFormat(defaultFormatForLeague(league ?? null))
+  }, [newLeagueId, leagues])
+
+  const leagueSelectData = [
+    { value: FESTIVAL_VALUE, label: 'Фестиваль (без лиги)' },
+    ...leagues.map((league) => ({ value: league.id, label: league.name })),
+  ]
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -345,11 +408,20 @@ function CreateTournamentForm({
           }
         }
       }
+      const formatPayload: TournamentFormat = {
+        ...format,
+        ranking: {
+          ...format.ranking,
+          zeroPlace: newZeroPlacePlusOne ? 'group_size_plus_one' : 'group_size',
+        },
+      }
       return createTournament({
         name: newName,
         eventDate: newDate,
         location: newLocation,
         status: newStatus,
+        leagueId: !newLeagueId || newLeagueId === FESTIVAL_VALUE ? null : newLeagueId,
+        format: formatPayload,
         organizers: newOrganizers
           .split(',')
           .map((s) => s.trim())
@@ -360,8 +432,7 @@ function CreateTournamentForm({
       })
     },
     onSuccess: async (created) => {
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
+      await invalidateTournamentLists(queryClient)
       onCreated(created.id)
     },
   })
@@ -399,6 +470,26 @@ function CreateTournamentForm({
             value={newLocation}
             onChange={(e) => setNewLocation(e.currentTarget.value)}
           />
+          <Select
+            label="Лига"
+            description="Этап лиги или фестиваль вне сезона."
+            data={leagueSelectData}
+            value={newLeagueId ?? defaultLeague?.id ?? FESTIVAL_VALUE}
+            onChange={(v) => setNewLeagueId(v ?? FESTIVAL_VALUE)}
+            searchable
+          />
+          <Select
+            label="Формат"
+            data={[
+              { value: 'pikecup', label: 'PikeCup' },
+              { value: 'boor_individual', label: 'БООР: личный + командный' },
+            ]}
+            value={format.engine === 'pikecup' ? 'pikecup' : 'boor_individual'}
+            onChange={(v) => {
+              if (v === 'pikecup') setFormat(structuredClone(PIKECUP_FORMAT))
+              else setFormat(structuredClone(BOOR_INDIVIDUAL_TEAM_FORMAT))
+            }}
+          />
           <TextInput
             label="Оргкомитет (через запятую)"
             value={newOrganizers}
@@ -412,6 +503,7 @@ function CreateTournamentForm({
           />
           <Checkbox
             label="Создать типовое расписание и мини-туры"
+            description="Шаблон зависит от формата (PikeCup или БООР)."
             checked={withSchedule}
             onChange={(e) => setWithSchedule(e.currentTarget.checked)}
           />
@@ -469,7 +561,7 @@ function ScheduleTab({
         <Timeline segments={segments} delayMinutes={tournament.schedule_delay_minutes} />
       </div>
       <ScheduleOps tournament={tournament} segments={segments} closed={closed} />
-      {fishingScheduleReady(segments) ? (
+      {fishingScheduleReady(segments, getFormat(tournament)) ? (
         <ScheduleEditor tournamentId={tournament.id} segments={segments} disabled={closed} />
       ) : (
         <Text size="sm" c="dimmed">
@@ -501,8 +593,7 @@ function ScheduleOps({
   const mutation = useMutation({
     mutationFn: (patch: Parameters<typeof updateScheduleOps>[1]) => updateScheduleOps(tournament.id, patch),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
+      await invalidateTournamentLists(queryClient)
       await invalidateTournamentCard(queryClient, tournament.id)
     },
   })

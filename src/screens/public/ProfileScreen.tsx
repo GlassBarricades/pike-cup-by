@@ -10,7 +10,7 @@ export function ProfileScreen() {
     return (
         <div className="pc-page pc-page--narrow">
             <Stack gap="lg">
-                <PageHero title="Профиль" subtitle="Аккаунт PikeCup" />
+                <PageHero title="Профиль" subtitle="Аккаунт Рыбспорт РБ" />
 
                 <Panel>
                     <Stack gap="sm">

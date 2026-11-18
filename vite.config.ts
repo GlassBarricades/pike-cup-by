@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'PikeCup',
-        short_name: 'PikeCup',
-        description: 'Рыболовное соревнование PikeCup — Республика Беларусь',
+        name: 'Рыбспорт РБ',
+        short_name: 'Рыбспорт',
+        description: 'Лиги и фестивали рыболовного спорта Республики Беларусь',
         theme_color: '#1B4965',
         background_color: '#E8F1F5',
         display: 'standalone',

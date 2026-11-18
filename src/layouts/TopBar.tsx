@@ -26,7 +26,7 @@ export function TopBar() {
             <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
                 <BrandMark size="sm" />
                 <Text size="xs" c="dimmed" visibleFrom="sm">
-                    Беларусь
+                    Лиги и фестивали
                 </Text>
             </Group>
 

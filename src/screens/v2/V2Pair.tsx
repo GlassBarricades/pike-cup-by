@@ -1,7 +1,7 @@
 import { Stack, Text, Title } from '@mantine/core'
 import { Link, useParams } from 'react-router-dom'
 import { formatTournamentDate } from '../../features/tournament/date'
-import { useTeam, useTeamMembers } from '../../features/tournament/hooks'
+import { useDefaultLeague, useTeam, useTeamMembers } from '../../features/tournament/hooks'
 import { useSeasonDigest } from '../../features/tournament/season'
 import { formatPlace } from '../../features/tournament/scoring'
 import { gramsLabel, pairStats, rivalsForNames } from '../../features/tournament/spectator'
@@ -13,7 +13,8 @@ export function V2Pair() {
   const { teamId } = useParams()
   const { data: team, isLoading } = useTeam(teamId)
   const { data: members = [] } = useTeamMembers(teamId)
-  const { data: bundles = [], isLoading: seasonLoading } = useSeasonDigest()
+  const { data: defaultLeague } = useDefaultLeague()
+  const { data: bundles = [], isLoading: seasonLoading } = useSeasonDigest({ leagueId: defaultLeague?.id })
   const names = useMemo(() => {
     const fromMembers = members.map((member) => member.athlete?.full_name).filter((name): name is string => Boolean(name))
     if (fromMembers.length >= 2) return fromMembers.slice(0, 2)

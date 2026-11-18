@@ -3,6 +3,7 @@ import { useQuery, type QueryClient } from '@tanstack/react-query'
 import {
   fetchActiveTournament,
   fetchActiveMemberships,
+  fetchAthleteDraws,
   fetchAthleteById,
   fetchAthleteMembershipHistory,
   fetchAthleteTournamentAppearances,
@@ -12,6 +13,9 @@ import {
   fetchDrawSlips,
   fetchEntries,
   fetchJudgeCandidates,
+  fetchLeagueById,
+  fetchLeagueBySlug,
+  fetchLeagues,
   fetchMiniTours,
   fetchProfilesByIds,
   fetchSegments,
@@ -31,11 +35,27 @@ import { pickCurrentTournament } from './date'
 import { getCompetitionStage } from './schedule'
 import { useNow } from './useNow'
 import { computeStandings, type StandingRow } from './scoring'
-import type { Tournament, TournamentEntry } from './types'
+import type {
+  ActiveTournamentScope,
+  Tournament,
+  TournamentEntry,
+  TournamentListFilter,
+} from './types'
+
+export const DEFAULT_LEAGUE_SLUG = 'pikecup'
 
 export const tournamentKeys = {
-  list: ['tournaments'] as const,
-  active: ['tournament', 'active'] as const,
+  list: (filter?: TournamentListFilter) =>
+    ['tournaments', filter?.leagueId ?? (filter?.festivalsOnly ? 'festivals' : 'all')] as const,
+  leagues: ['leagues'] as const,
+  leagueSlug: (slug: string) => ['league', 'slug', slug] as const,
+  leagueId: (id: string) => ['league', id] as const,
+  active: (scope?: ActiveTournamentScope) =>
+    [
+      'tournament',
+      'active',
+      scope?.kind === 'league' ? scope.leagueId : scope?.kind === 'festivals' ? 'festivals' : 'any',
+    ] as const,
   byId: (id: string) => ['tournament', id] as const,
   rules: (id: string) => ['tournament', id, 'rules'] as const,
   segments: (id: string) => ['tournament', id, 'segments'] as const,
@@ -45,7 +65,8 @@ export const tournamentKeys = {
   cheerCounts: (id: string) => ['tournament', id, 'cheerCounts'] as const,
   revisions: (id: string) => ['tournament', id, 'revisions'] as const,
   zoneJudges: (id: string) => ['tournament', id, 'zoneJudges'] as const,
-  drawSlips: ['drawSlips'] as const,
+  athleteDraws: (id: string) => ['tournament', id, 'athleteDraws'] as const,
+  drawSlips: (tournamentId: string) => ['tournament', tournamentId, 'drawSlips'] as const,
   judgeCandidates: ['judgeCandidates'] as const,
   teams: ['teams'] as const,
   athletes: ['athletes'] as const,
@@ -62,10 +83,51 @@ export function invalidateTournamentCard(queryClient: QueryClient, tournamentId:
   return queryClient.invalidateQueries({ queryKey: tournamentKeys.byId(tournamentId), exact: true })
 }
 
-export function useTournaments() {
+/** Списки и active с любым scope (префиксный invalidate). */
+export function invalidateTournamentLists(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['tournaments'] }),
+    queryClient.invalidateQueries({ queryKey: ['tournament', 'active'] }),
+    queryClient.invalidateQueries({ queryKey: tournamentKeys.leagues }),
+  ])
+}
+
+export function useLeagues(activeOnly = true) {
   return useQuery({
-    queryKey: tournamentKeys.list,
-    queryFn: fetchTournaments,
+    queryKey: [...tournamentKeys.leagues, activeOnly ? 'active' : 'all'] as const,
+    queryFn: () => fetchLeagues(activeOnly),
+    staleTime: STALE_UNTIL_MUTATION,
+  })
+}
+
+export function useLeagueBySlug(slug: string | undefined) {
+  return useQuery({
+    queryKey: tournamentKeys.leagueSlug(slug ?? ''),
+    queryFn: () => fetchLeagueBySlug(slug!),
+    enabled: Boolean(slug),
+    staleTime: STALE_UNTIL_MUTATION,
+  })
+}
+
+export function useLeague(leagueId: string | undefined) {
+  return useQuery({
+    queryKey: tournamentKeys.leagueId(leagueId ?? ''),
+    queryFn: () => fetchLeagueById(leagueId!),
+    enabled: Boolean(leagueId),
+    staleTime: STALE_UNTIL_MUTATION,
+  })
+}
+
+/** Лига PikeCup (seed) — для сезона / home по умолчанию. */
+export function useDefaultLeague() {
+  return useLeagueBySlug(DEFAULT_LEAGUE_SLUG)
+}
+
+export function useTournaments(filter?: TournamentListFilter, enabled = true) {
+  return useQuery({
+    queryKey: tournamentKeys.list(filter),
+    queryFn: () => fetchTournaments(filter),
+    enabled,
     staleTime: STALE_UNTIL_MUTATION,
   })
 }
@@ -88,16 +150,16 @@ export function useTournamentRules(tournamentId: string | undefined) {
   })
 }
 
-export function useActiveTournament() {
+export function useActiveTournament(scope: ActiveTournamentScope = { kind: 'any' }) {
   return useQuery({
-    queryKey: tournamentKeys.active,
-    queryFn: fetchActiveTournament,
+    queryKey: tournamentKeys.active(scope),
+    queryFn: () => fetchActiveTournament(scope),
     staleTime: STALE_UNTIL_MUTATION,
   })
 }
 
-export function useCurrentAndArchive() {
-  const query = useTournaments()
+export function useCurrentAndArchive(filter?: TournamentListFilter) {
+  const query = useTournaments(filter)
   const current = useMemo(
     () => (query.data ? pickCurrentTournament(query.data) : null),
     [query.data],
@@ -121,7 +183,7 @@ export function useSegments(tournamentId: string | undefined) {
 export function useSegmentsForTournaments(tournamentIds: string[]) {
   const ids = useMemo(() => [...tournamentIds].sort(), [tournamentIds])
   return useQuery({
-    queryKey: [...tournamentKeys.list, 'segments', ids] as const,
+    queryKey: [...tournamentKeys.list(), 'segments', ids] as const,
     queryFn: () => fetchSegmentsForTournaments(ids),
     enabled: ids.length > 0,
     staleTime: STALE_UNTIL_MUTATION,
@@ -294,10 +356,11 @@ export function useTeamMembers(teamId: string | undefined) {
   })
 }
 
-export function useDrawSlips() {
+export function useDrawSlips(tournamentId: string | undefined) {
   return useQuery({
-    queryKey: tournamentKeys.drawSlips,
-    queryFn: fetchDrawSlips,
+    queryKey: tournamentKeys.drawSlips(tournamentId ?? ''),
+    queryFn: () => fetchDrawSlips(tournamentId!),
+    enabled: Boolean(tournamentId),
     staleTime: STALE_UNTIL_MUTATION,
   })
 }
@@ -306,6 +369,15 @@ export function useZoneJudges(tournamentId: string | undefined) {
   return useQuery({
     queryKey: tournamentKeys.zoneJudges(tournamentId ?? ''),
     queryFn: () => fetchZoneJudges(tournamentId!),
+    enabled: Boolean(tournamentId),
+    staleTime: STALE_UNTIL_MUTATION,
+  })
+}
+
+export function useAthleteDraws(tournamentId: string | undefined) {
+  return useQuery({
+    queryKey: tournamentKeys.athleteDraws(tournamentId ?? ''),
+    queryFn: () => fetchAthleteDraws(tournamentId!),
     enabled: Boolean(tournamentId),
     staleTime: STALE_UNTIL_MUTATION,
   })

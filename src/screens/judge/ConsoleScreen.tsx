@@ -4,12 +4,15 @@ import { IconArrowLeft, IconBackspace, IconSearch } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
-import { addCatch, deleteCatch } from '../../features/tournament/api'
+import { addCatch, deleteCatch, isZoneWeighingCompleted, setZoneWeighingCompleted } from '../../features/tournament/api'
+import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { tournamentKeys, useCatchAuthors, useCatches, useEntries, useMiniTours, useRefreshTournament, useSegments, useZoneJudges } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
+import { IndividualConsole } from './IndividualConsole'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import {
     getCurrentPhase,
+    isFishingComplete,
     physicalZone,
     previousFishingSlot,
     resolveMapWindow,
@@ -23,12 +26,12 @@ import { EmptyState } from '../../ui'
 
 type Panel = 'console' | 'results'
 
-function tourWeight(entryId: string, tourNumber: 1 | 2, catches: CatchRow[], miniTours: MiniTour[]): number {
+function tourWeight(entryId: string, tourNumber: number, catches: CatchRow[], miniTours: MiniTour[]): number {
     const miniIds = new Set(miniTours.filter((m) => m.tour_number === tourNumber).map((m) => m.id))
     return catches.filter((c) => c.entry_id === entryId && miniIds.has(c.mini_tour_id)).reduce((sum, c) => sum + c.weight_grams, 0)
 }
 
-function tourCatches(entryId: string, tourNumber: 1 | 2, catches: CatchRow[], miniTours: MiniTour[]): CatchRow[] {
+function tourCatches(entryId: string, tourNumber: number, catches: CatchRow[], miniTours: MiniTour[]): CatchRow[] {
     const miniIds = new Set(miniTours.filter((m) => m.tour_number === tourNumber).map((m) => m.id))
     return catches.filter((c) => c.entry_id === entryId && miniIds.has(c.mini_tour_id)).sort((a, b) => a.created_at.localeCompare(b.created_at))
 }
@@ -168,6 +171,14 @@ function WeightNumpad({
 }
 
 export function ConsoleScreen() {
+    const { selected: tournament } = useStaffTournament()
+    if (tournament && isIndividual(getFormat(tournament))) {
+        return <IndividualConsole />
+    }
+    return <PikecupConsole />
+}
+
+function PikecupConsole() {
     const { user, role } = useAuth()
     const isOrg = canManageTournament(role)
     const { selected: tournament } = useStaffTournament()
@@ -193,8 +204,8 @@ export function ConsoleScreen() {
 
     const phase = tournament ? getCurrentPhase(tournament, segments, now) : null
     const scheduleTour = tourNumberFromPhase(phase)
-    const [manualTour, setManualTour] = useState<1 | 2 | null>(null)
-    const tourNumber: 1 | 2 = manualTour ?? scheduleTour ?? 1
+    const [manualTour, setManualTour] = useState<number | null>(null)
+    const tourNumber: number = manualTour ?? scheduleTour ?? 1
 
     useEffect(() => {
         if (scheduleTour) setManualTour(null)
@@ -279,9 +290,26 @@ export function ConsoleScreen() {
         }
     }, [queryClient, tournamentId])
 
+    const fishingDone = tournament ? isFishingComplete(tournament, segments, now) : false
+    const weighingDone = isZoneWeighingCompleted(zoneJudges, zone)
+    const inputLocked = closed || weighingDone
+
+    const weighDoneMutation = useMutation({
+        mutationFn: (completed: boolean) => {
+            if (!tournamentId || !zone) throw new Error('Нет зоны')
+            return setZoneWeighingCompleted({ tournamentId, zone, completed })
+        },
+        onSuccess: async () => {
+            if (tournamentId) {
+                await queryClient.invalidateQueries({ queryKey: tournamentKeys.zoneJudges(tournamentId) })
+            }
+        },
+    })
+
     const saveMutation = useMutation({
         mutationFn: (input: { grams: number; entryId: string; miniTourId: string }) => {
             if (closed) throw new Error('Турнир завершён')
+            if (weighingDone) throw new Error('Взвешивание зоны завершено — нажмите «Продолжить взвешивание»')
             return addCatch({
                 entryId: input.entryId,
                 miniTourId: input.miniTourId,
@@ -358,6 +386,36 @@ export function ConsoleScreen() {
                 {closed && (
                     <Text size="sm" c="dimmed">
                         Турнир завершён. Взвешивание закрыто до перезапуска.
+                    </Text>
+                )}
+                {fishingDone && !closed && (
+                    <Group justify="space-between" align="center" wrap="wrap" gap="xs">
+                        <Text size="sm" c={weighingDone ? 'teal' : 'dimmed'}>
+                            {weighingDone
+                                ? `Зона ${zone}: взвешивание отмечено как завершённое`
+                                : 'Ловля окончена — вес пишется в последний мини-тур'}
+                        </Text>
+                        <Button
+                            size="compact-sm"
+                            color={weighingDone ? 'gray' : 'signal'}
+                            variant={weighingDone ? 'light' : 'filled'}
+                            loading={weighDoneMutation.isPending}
+                            disabled={!zone}
+                            onClick={() => {
+                                if (!weighingDone) {
+                                    if (!window.confirm(`Отметить взвешивание зоны ${zone} как завершённое?`)) return
+                                }
+                                setEditingEntryId(null)
+                                weighDoneMutation.mutate(!weighingDone)
+                            }}
+                        >
+                            {weighingDone ? 'Продолжить взвешивание' : 'Закончить взвешивание'}
+                        </Button>
+                    </Group>
+                )}
+                {weighDoneMutation.isError && (
+                    <Text size="sm" c="red">
+                        {(weighDoneMutation.error as Error).message}
                     </Text>
                 )}
                 {failedSave && !editingEntryId && (
@@ -489,7 +547,7 @@ export function ConsoleScreen() {
                                             key={entry.id}
                                             className={`pc-judge-team-btn ${w > 0 ? 'pc-judge-team-btn--done' : ''}`}
                                             onClick={() => {
-                                                if (!closed) setEditingEntryId(entry.id)
+                                                if (!inputLocked) setEditingEntryId(entry.id)
                                             }}
                                         >
                                             <Text fw={800} size="md" lineClamp={2} ta="center">
@@ -528,7 +586,7 @@ export function ConsoleScreen() {
                                             <UnstyledButton
                                                 style={{ minWidth: 0, flex: 1, textAlign: 'left' }}
                                                 onClick={() => {
-                                                    if (closed) return
+                                                    if (inputLocked) return
                                                     goToPanel('console')
                                                     setEditingEntryId(entry.id)
                                                 }}
@@ -562,7 +620,7 @@ export function ConsoleScreen() {
                                                         size="compact-sm"
                                                         color="red"
                                                         variant="subtle"
-                                                        disabled={closed}
+                                                        disabled={inputLocked}
                                                         loading={deleteMutation.isPending && deleteMutation.variables === row.id}
                                                         onClick={() => {
                                                             if (
@@ -588,7 +646,7 @@ export function ConsoleScreen() {
                 </section>
             </div>
 
-            {editingEntry && user && (
+            {editingEntry && user && !inputLocked && (
                 <WeightNumpad
                     key={editingEntry.id}
                     teamName={entryTeamName(editingEntry)}

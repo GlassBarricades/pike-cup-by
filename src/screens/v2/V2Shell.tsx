@@ -16,7 +16,7 @@ export function V2Home() {
   const { data: tournament, isLoading } = useActiveTournament()
   const { data: tournaments = [], isLoading: listLoading } = useTournaments()
   if (isLoading || listLoading) return null
-  if (tournament) return <Navigate to={`/live/t/${tournament.id}`} replace />
+  if (tournament) return <Navigate to={`/live/t/${tournament.id}/table`} replace />
   const visible = tournaments.filter((item) => item.status !== 'draft')
   if (visible.length === 0) {
     return <EmptyState title="Турниров для обзора нет" description="Когда соревнование опубликуют, день откроется здесь." />

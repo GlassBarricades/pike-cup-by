@@ -1,4 +1,4 @@
-import { IconAntennaBars5, IconArchive, IconChartHistogram, IconDeviceGamepad2, IconHome, IconUserCircle, IconUsersGroup, type Icon } from '@tabler/icons-react'
+import { IconAntennaBars5, IconChartHistogram, IconDeviceGamepad2, IconHome, IconTrophy, IconUserCircle, IconUsersGroup, type Icon } from '@tabler/icons-react'
 import type { AppRole } from '../features/auth/types'
 
 export type NavItem = {
@@ -19,7 +19,7 @@ export function getNavItems(role?: AppRole | null, options?: { live?: boolean; r
         items.push({ to: options.reviewTo, label: 'Разбор', icon: IconChartHistogram })
     }
     items.push(
-        { to: '/tournament', label: 'Турниры', icon: IconArchive },
+        { to: '/leagues', label: 'Лиги', icon: IconTrophy },
         { to: '/people', label: 'Участники', icon: IconUsersGroup },
         { to: '/profile', label: 'Профиль', icon: IconUserCircle },
     )
@@ -33,8 +33,14 @@ export function isNavActive(pathname: string, to: string) {
     if (to === '/') {
         return pathname === '/'
     }
-    if (to === '/tournament') {
-        return pathname === '/tournament' || pathname.startsWith('/tournament/')
+    if (to === '/leagues') {
+        return (
+            pathname === '/leagues' ||
+            pathname.startsWith('/leagues/') ||
+            pathname === '/festivals' ||
+            pathname === '/tournament' ||
+            pathname.startsWith('/tournament/')
+        )
     }
     if (to === '/people') {
         return pathname === '/people' || pathname.startsWith('/athletes') || pathname.startsWith('/teams')

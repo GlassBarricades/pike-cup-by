@@ -1,7 +1,7 @@
 import { Stack, Text, Title } from '@mantine/core'
 import { Link, useParams } from 'react-router-dom'
 import { formatTournamentDate } from '../../features/tournament/date'
-import { useAthlete, useAthletesCatalog } from '../../features/tournament/hooks'
+import { useAthlete, useAthletesCatalog, useDefaultLeague } from '../../features/tournament/hooks'
 import { useSeasonDigest } from '../../features/tournament/season'
 import { formatPlace } from '../../features/tournament/scoring'
 import { athleteSeason, gramsLabel } from '../../features/tournament/spectator'
@@ -13,7 +13,8 @@ export function V2Athlete() {
   const { athleteId } = useParams()
   const { data: athlete, isLoading } = useAthlete(athleteId)
   const { data: catalog = [] } = useAthletesCatalog()
-  const { data: bundles = [], isLoading: seasonLoading } = useSeasonDigest()
+  const { data: defaultLeague } = useDefaultLeague()
+  const { data: bundles = [], isLoading: seasonLoading } = useSeasonDigest({ leagueId: defaultLeague?.id })
   const season = useMemo(() => (athleteId ? athleteSeason(bundles, athleteId) : null), [bundles, athleteId])
   const withTeam = catalog.find((item) => item.id === athleteId)
 

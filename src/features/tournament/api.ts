@@ -1,18 +1,35 @@
 import { supabase } from '../../lib/supabase'
-import { FISHING_KEYS, type ScheduleWriteRow } from './scheduleEdit'
 import {
+  fishingKeys,
+  getFormat,
+  isPikecup,
+  parseFormat,
+  PIKECUP_FORMAT,
+  zeroPlacePlusOne,
+  type TournamentFormat,
+} from './formats'
+import { FISHING_KEYS, type ScheduleWriteRow } from './scheduleEdit'
+import { oppositeZone } from './schedule'
+import { slipPackForFormat, type SlipPackCard } from './slipPacks'
+import {
+  type ActiveTournamentScope,
   type Athlete,
+  type AthleteDraw,
   type CatchRevision,
   type CatchRow,
   type DrawSlip,
   type JudgeCandidate,
+  type League,
+  type LeagueKind,
   type MiniTour,
+  type RosterRole,
   type ScheduleSegment,
   type Team,
   type TeamMembership,
   type TeamNameHistoryRow,
   type Tournament,
   type TournamentEntry,
+  type TournamentListFilter,
   type TournamentRosterMember,
   type ZoneCode,
   type ZoneJudgeRow,
@@ -20,18 +37,108 @@ import {
 
 /** Карточка турнира без тяжёлого rules_content (экономия egress для списков и LIVE). */
 const TOURNAMENT_CARD_SELECT =
-  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one'
+  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, league_id, format, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one'
+
+const LEAGUE_SELECT =
+  'id, slug, name, short_name, kind, region_code, description, brand_color, is_active, default_format, created_at, updated_at'
 
 function asTournamentCard(row: Record<string, unknown> | null): Tournament | null {
   if (!row) return null
-  return { ...(row as unknown as Tournament), rules_content: '' }
+  const format = parseFormat(row.format)
+  return {
+    ...(row as unknown as Tournament),
+    format,
+    rules_content: '',
+    zero_place_is_group_size_plus_one: zeroPlacePlusOne(format),
+  }
 }
 
-export async function fetchTournaments(): Promise<Tournament[]> {
+function asLeague(row: Record<string, unknown> | null): League | null {
+  if (!row) return null
+  return {
+    ...(row as unknown as League),
+    default_format: row.default_format == null ? null : parseFormat(row.default_format),
+  }
+}
+
+function applyTournamentFilter(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query: any,
+  filter?: TournamentListFilter,
+) {
+  if (filter?.festivalsOnly) return query.is('league_id', null)
+  if (filter?.leagueId) return query.eq('league_id', filter.leagueId)
+  return query
+}
+
+export async function fetchLeagues(activeOnly = true): Promise<League[]> {
+  let query = supabase.from('leagues').select(LEAGUE_SELECT).order('name')
+  if (activeOnly) query = query.eq('is_active', true)
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []).map((row) => asLeague(row as Record<string, unknown>)!)
+}
+
+export async function fetchLeagueBySlug(slug: string): Promise<League | null> {
   const { data, error } = await supabase
-    .from('tournaments')
-    .select(TOURNAMENT_CARD_SELECT)
-    .order('event_date', { ascending: false })
+    .from('leagues')
+    .select(LEAGUE_SELECT)
+    .eq('slug', slug)
+    .maybeSingle()
+  if (error) throw error
+  return asLeague(data as Record<string, unknown> | null)
+}
+
+export async function fetchLeagueById(id: string): Promise<League | null> {
+  const { data, error } = await supabase
+    .from('leagues')
+    .select(LEAGUE_SELECT)
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw error
+  return asLeague(data as Record<string, unknown> | null)
+}
+
+export async function createLeague(input: {
+  slug: string
+  name: string
+  shortName: string
+  kind: LeagueKind
+  regionCode?: string | null
+  description?: string
+  brandColor?: string | null
+}): Promise<League> {
+  const { data, error } = await supabase
+    .from('leagues')
+    .insert({
+      slug: input.slug.trim().toLowerCase(),
+      name: input.name.trim(),
+      short_name: input.shortName.trim(),
+      kind: input.kind,
+      region_code: input.regionCode?.trim() || null,
+      description: input.description?.trim() ?? '',
+      brand_color: input.brandColor?.trim() || null,
+    })
+    .select(LEAGUE_SELECT)
+    .single()
+  if (error) throw error
+  return data as League
+}
+
+export async function updateLeague(
+  leagueId: string,
+  patch: Partial<
+    Pick<League, 'name' | 'short_name' | 'kind' | 'region_code' | 'description' | 'brand_color' | 'is_active'>
+  >,
+): Promise<void> {
+  const { error } = await supabase.from('leagues').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', leagueId)
+  if (error) throw error
+}
+
+export async function fetchTournaments(filter?: TournamentListFilter): Promise<Tournament[]> {
+  let query = supabase.from('tournaments').select(TOURNAMENT_CARD_SELECT).order('event_date', { ascending: false })
+  query = applyTournamentFilter(query, filter)
+  const { data, error } = await query
   if (error) throw error
   return (data ?? []).map((row) => asTournamentCard(row as Record<string, unknown>)!)
 }
@@ -57,32 +164,28 @@ export async function fetchTournamentRulesContent(id: string): Promise<string> {
 }
 
 /** Текущий: live → published (свежий) → любой последний по дате */
-export async function fetchActiveTournament(): Promise<Tournament | null> {
-  const { data: liveRows, error: liveError } = await supabase
-    .from('tournaments')
-    .select(TOURNAMENT_CARD_SELECT)
-    .eq('status', 'live')
-    .order('event_date', { ascending: false })
-    .limit(1)
+export async function fetchActiveTournament(
+  scope: ActiveTournamentScope = { kind: 'any' },
+): Promise<Tournament | null> {
+  const scoped = (status?: Tournament['status']) => {
+    let query = supabase.from('tournaments').select(TOURNAMENT_CARD_SELECT)
+    if (status) query = query.eq('status', status)
+    if (scope.kind === 'league') query = query.eq('league_id', scope.leagueId)
+    if (scope.kind === 'festivals') query = query.is('league_id', null)
+    return query.order('event_date', { ascending: false }).limit(1)
+  }
+
+  const { data: liveRows, error: liveError } = await scoped('live')
   if (liveError) throw liveError
   const live = asTournamentCard((liveRows?.[0] as Record<string, unknown> | undefined) ?? null)
   if (live) return live
 
-  const { data: publishedRows, error: publishedError } = await supabase
-    .from('tournaments')
-    .select(TOURNAMENT_CARD_SELECT)
-    .eq('status', 'published')
-    .order('event_date', { ascending: false })
-    .limit(1)
+  const { data: publishedRows, error: publishedError } = await scoped('published')
   if (publishedError) throw publishedError
   const published = asTournamentCard((publishedRows?.[0] as Record<string, unknown> | undefined) ?? null)
   if (published) return published
 
-  const { data: anyRows, error: anyError } = await supabase
-    .from('tournaments')
-    .select(TOURNAMENT_CARD_SELECT)
-    .order('event_date', { ascending: false })
-    .limit(1)
+  const { data: anyRows, error: anyError } = await scoped()
   if (anyError) throw anyError
   return asTournamentCard((anyRows?.[0] as Record<string, unknown> | undefined) ?? null)
 }
@@ -101,10 +204,10 @@ type ScheduleSeedRow = {
   endHour: number
   endMin: number
   /** Ловля: создаёт mini_tours. Переход мини-тур не создаёт. */
-  tour?: 1 | 2
+  tour?: number
   mini?: number
   windowKind?: 'fishing' | 'move'
-  moveTour?: 1 | 2
+  moveTour?: number
   moveMini?: number
 }
 
@@ -136,6 +239,27 @@ const DEFAULT_DAY_SCHEDULE: ScheduleSeedRow[] = [
   { key: 'awards', title: 'Награждение победителей', sort_order: 160, startHour: 17, startMin: 20, endHour: 18, endMin: 0 },
 ]
 
+/** Шаблон «Западный Кордон» / БООР: 2 тура × 3 мини-тура. */
+const BOOR_DAY_SCHEDULE: ScheduleSeedRow[] = [
+  { key: 'arrival', title: 'Заезд и сборы участников', sort_order: 10, startHour: 6, startMin: 0, endHour: 7, endMin: 0 },
+  { key: 'draw', title: 'Жеребьёвка', sort_order: 20, startHour: 7, startMin: 0, endHour: 8, endMin: 0 },
+  { key: 'opening', title: 'Построение и открытие', sort_order: 30, startHour: 8, startMin: 0, endHour: 8, endMin: 30 },
+  { key: 'to_t1_mt1', title: 'Выход на 1 этап 1 тура', sort_order: 35, startHour: 8, startMin: 30, endHour: 9, endMin: 0, windowKind: 'move', moveTour: 1, moveMini: 1 },
+  { key: 'tour1_mt1', title: 'I тур · этап 1', sort_order: 40, startHour: 9, startMin: 0, endHour: 10, endMin: 0, tour: 1, mini: 1, windowKind: 'fishing' },
+  { key: 'move_t1_mt2', title: 'Переход на этап 2', sort_order: 45, startHour: 10, startMin: 0, endHour: 10, endMin: 10, windowKind: 'move', moveTour: 1, moveMini: 2 },
+  { key: 'tour1_mt2', title: 'I тур · этап 2', sort_order: 50, startHour: 10, startMin: 10, endHour: 11, endMin: 10, tour: 1, mini: 2, windowKind: 'fishing' },
+  { key: 'move_t1_mt3', title: 'Переход на этап 3', sort_order: 55, startHour: 11, startMin: 10, endHour: 11, endMin: 20, windowKind: 'move', moveTour: 1, moveMini: 3 },
+  { key: 'tour1_mt3', title: 'I тур · этап 3', sort_order: 60, startHour: 11, startMin: 20, endHour: 12, endMin: 20, tour: 1, mini: 3, windowKind: 'fishing' },
+  { key: 'break', title: 'Отдых, обед', sort_order: 70, startHour: 12, startMin: 30, endHour: 13, endMin: 30, windowKind: 'move', moveTour: 2, moveMini: 1 },
+  { key: 'to_t2_mt1', title: 'Выход на 1 этап 2 тура', sort_order: 75, startHour: 13, startMin: 30, endHour: 14, endMin: 0, windowKind: 'move', moveTour: 2, moveMini: 1 },
+  { key: 'tour2_mt1', title: 'II тур · этап 1', sort_order: 80, startHour: 14, startMin: 0, endHour: 15, endMin: 10, tour: 2, mini: 1, windowKind: 'fishing' },
+  { key: 'move_t2_mt2', title: 'Переход на этап 2', sort_order: 85, startHour: 15, startMin: 10, endHour: 15, endMin: 20, windowKind: 'move', moveTour: 2, moveMini: 2 },
+  { key: 'tour2_mt2', title: 'II тур · этап 2', sort_order: 90, startHour: 15, startMin: 20, endHour: 16, endMin: 20, tour: 2, mini: 2, windowKind: 'fishing' },
+  { key: 'move_t2_mt3', title: 'Переход на этап 3', sort_order: 95, startHour: 16, startMin: 20, endHour: 17, endMin: 30, windowKind: 'move', moveTour: 2, moveMini: 3 },
+  { key: 'tour2_mt3', title: 'II тур · этап 3', sort_order: 100, startHour: 17, startMin: 30, endHour: 18, endMin: 30, tour: 2, mini: 3, windowKind: 'fishing' },
+  { key: 'awards', title: 'Построение, награждение, закрытие', sort_order: 110, startHour: 19, startMin: 30, endHour: 20, endMin: 30 },
+]
+
 function minskIso(eventDate: string, hour: number, minute: number): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${eventDate}T${pad(hour)}:${pad(minute)}:00+03:00`
@@ -153,8 +277,28 @@ function minskClock(iso: string): { hour: number; minute: number } {
   return { hour: hour === 24 ? 0 : hour, minute: pick('minute') }
 }
 
-export async function seedDefaultSchedule(tournamentId: string, eventDate: string): Promise<void> {
-  const segmentRows = DEFAULT_DAY_SCHEDULE.map((row) => ({
+function scheduleTemplateForFormat(format: TournamentFormat): ScheduleSeedRow[] {
+  if (isPikecup(format)) return DEFAULT_DAY_SCHEDULE
+  return BOOR_DAY_SCHEDULE
+}
+
+export async function seedScheduleFromFormat(
+  tournamentId: string,
+  eventDate: string,
+  format: TournamentFormat,
+  template?: ScheduleSeedRow[],
+): Promise<void> {
+  const rows = template ?? scheduleTemplateForFormat(format)
+  const expectedKeys = new Set(fishingKeys(format))
+  const fishingInTemplate = rows.filter((r) => r.tour && r.mini)
+  for (const row of fishingInTemplate) {
+    const key = `tour${row.tour}_mt${row.mini}`
+    if (!expectedKeys.has(key) && row.key !== key) {
+      // allow custom titles as long as tour/mini match format
+    }
+  }
+
+  const segmentRows = rows.map((row) => ({
     tournament_id: tournamentId,
     key: row.key,
     title: row.title,
@@ -173,15 +317,22 @@ export async function seedDefaultSchedule(tournamentId: string, eventDate: strin
   if (segError) throw segError
 
   const byKey = new Map((segments ?? []).map((s) => [s.key as string, s.id as string]))
-  const miniRows = DEFAULT_DAY_SCHEDULE.filter((r) => r.tour && r.mini).map((r) => ({
-    tournament_id: tournamentId,
-    segment_id: byKey.get(r.key)!,
-    tour_number: r.tour!,
-    mini_number: r.mini!,
-  }))
+  const miniRows = rows
+    .filter((r) => r.tour && r.mini)
+    .map((r) => ({
+      tournament_id: tournamentId,
+      segment_id: byKey.get(r.key)!,
+      tour_number: r.tour!,
+      mini_number: r.mini!,
+    }))
 
   const { error: miniError } = await supabase.from('mini_tours').insert(miniRows)
   if (miniError) throw miniError
+}
+
+/** @deprecated используйте seedScheduleFromFormat */
+export async function seedDefaultSchedule(tournamentId: string, eventDate: string): Promise<void> {
+  await seedScheduleFromFormat(tournamentId, eventDate, PIKECUP_FORMAT)
 }
 
 export async function createTournament(input: {
@@ -189,11 +340,25 @@ export async function createTournament(input: {
   eventDate: string
   location: string
   status: Tournament['status']
+  /** null = фестиваль вне лиги */
+  leagueId?: string | null
+  format?: TournamentFormat
   organizers?: string[]
   rulesContent?: string
   withDefaultSchedule?: boolean
   zeroPlaceIsGroupSizePlusOne?: boolean
 }): Promise<Tournament> {
+  const format = input.format ?? PIKECUP_FORMAT
+  const zeroPlusOne =
+    input.zeroPlaceIsGroupSizePlusOne ?? zeroPlacePlusOne(format)
+  const formatPayload: TournamentFormat = {
+    ...format,
+    ranking: {
+      ...format.ranking,
+      zeroPlace: zeroPlusOne ? 'group_size_plus_one' : 'group_size',
+    },
+  }
+
   const { data, error } = await supabase
     .from('tournaments')
     .insert({
@@ -201,19 +366,34 @@ export async function createTournament(input: {
       event_date: input.eventDate,
       location: input.location.trim(),
       status: input.status,
+      league_id: input.leagueId === undefined ? null : input.leagueId,
+      format: formatPayload,
       organizers: input.organizers ?? [],
       rules_content: input.rulesContent?.trim() || DEFAULT_RULES_STUB,
-      zero_place_is_group_size_plus_one: input.zeroPlaceIsGroupSizePlusOne ?? true,
+      zero_place_is_group_size_plus_one: zeroPlusOne,
     })
-    .select('*')
+    .select(TOURNAMENT_CARD_SELECT)
     .single()
   if (error) throw error
 
-  const tournament = data as Tournament
+  const tournament = asTournamentCard(data as Record<string, unknown>)!
   if (input.withDefaultSchedule !== false) {
-    await seedDefaultSchedule(tournament.id, input.eventDate)
+    await seedScheduleFromFormat(tournament.id, input.eventDate, formatPayload)
   }
+  await seedDrawSlipsForTournament(tournament.id, formatPayload)
   return tournament
+}
+
+export async function updateTournamentFormat(tournamentId: string, format: TournamentFormat): Promise<void> {
+  const { error } = await supabase
+    .from('tournaments')
+    .update({
+      format,
+      zero_place_is_group_size_plus_one: zeroPlacePlusOne(format),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', tournamentId)
+  if (error) throw error
 }
 
 export async function fetchSegments(tournamentId: string): Promise<ScheduleSegment[]> {
@@ -249,7 +429,7 @@ export async function fetchMiniTours(tournamentId: string): Promise<MiniTour[]> 
 }
 
 const ENTRY_SELECT =
-  '*, team:teams(*), roster:tournament_roster_members(*), draw_slip:draw_slips(*, sectors:draw_slip_sectors(*))'
+  '*, team:teams(*), roster:tournament_roster_members(*, draw_slip:draw_slips(*, sectors:draw_slip_sectors(*))), draw_slip:draw_slips(*, sectors:draw_slip_sectors(*))'
 
 /** Достаточно для computeStandings / season digest — без бумажек и секторов. */
 const ENTRY_STANDINGS_SELECT =
@@ -452,12 +632,14 @@ export async function fetchAthletesWithTeams(): Promise<AthleteWithTeam[]> {
 export async function createAthlete(input: {
   fullName: string
   phone?: string
+  isJunior?: boolean
 }): Promise<Athlete> {
   const { data, error } = await supabase
     .from('athletes')
     .insert({
       full_name: input.fullName.trim(),
       phone: input.phone?.trim() || null,
+      is_junior: Boolean(input.isJunior),
     })
     .select('*')
     .single()
@@ -467,13 +649,14 @@ export async function createAthlete(input: {
 
 export async function updateAthlete(
   athleteId: string,
-  input: { fullName: string; phone?: string },
+  input: { fullName: string; phone?: string; isJunior?: boolean },
 ): Promise<void> {
   const { error } = await supabase
     .from('athletes')
     .update({
       full_name: input.fullName.trim(),
       phone: input.phone?.trim() || null,
+      is_junior: Boolean(input.isJunior),
       updated_at: new Date().toISOString(),
     })
     .eq('id', athleteId)
@@ -561,12 +744,11 @@ export async function fetchActiveMemberships(teamId: string): Promise<TeamMember
   return (data ?? []) as TeamMembership[]
 }
 
-/** Назначить ровно 2 уже существующих рыбака в команду (текущий состав). */
-export async function setTeamMembers(teamId: string, athleteIds: [string, string]): Promise<void> {
-  const [a, b] = athleteIds
-  if (!a || !b || a === b) {
-    throw new Error('Выберите двух разных рыбаков')
-  }
+/** Назначить текущий состав команды (1–N рыбаков). */
+export async function setTeamMembers(teamId: string, athleteIds: string[]): Promise<void> {
+  const unique = [...new Set(athleteIds.filter(Boolean))]
+  if (unique.length === 0) throw new Error('Выберите хотя бы одного рыбака')
+  if (unique.length !== athleteIds.length) throw new Error('Рыбаки в составе не должны повторяться')
 
   const now = new Date().toISOString()
 
@@ -580,14 +762,13 @@ export async function setTeamMembers(teamId: string, athleteIds: [string, string
   const { error: endAthletesError } = await supabase
     .from('team_memberships')
     .update({ ended_at: now })
-    .in('athlete_id', [a, b])
+    .in('athlete_id', unique)
     .is('ended_at', null)
   if (endAthletesError) throw endAthletesError
 
-  const { error: insertError } = await supabase.from('team_memberships').insert([
-    { team_id: teamId, athlete_id: a },
-    { team_id: teamId, athlete_id: b },
-  ])
+  const { error: insertError } = await supabase.from('team_memberships').insert(
+    unique.map((athlete_id) => ({ team_id: teamId, athlete_id })),
+  )
   if (insertError) throw insertError
 }
 
@@ -606,10 +787,18 @@ export async function createEntryFromTeam(input: {
   quota: TournamentEntry['quota']
   contactPhone?: string
   startZone?: ZoneCode | null
+  /** Если не передан — берём из карточки турнира */
+  format?: TournamentFormat
+  /** Доп. роли только по ФИО (капитан / представитель) */
+  extraRoster?: { fullName: string; role: Exclude<RosterRole, 'athlete'> }[]
 }): Promise<TournamentEntry> {
+  const tournament = await fetchTournamentById(input.tournamentId)
+  const format = input.format ?? (tournament ? getFormat(tournament) : PIKECUP_FORMAT)
   const memberships = await fetchActiveMemberships(input.teamId)
-  if (memberships.length !== 2) {
-    throw new Error('У команды должно быть ровно 2 спортсмена в текущем составе')
+  if (memberships.length < format.roster.minAthletes || memberships.length > format.roster.maxAthletes) {
+    throw new Error(
+      `У команды должно быть от ${format.roster.minAthletes} до ${format.roster.maxAthletes} спортсменов в текущем составе`,
+    )
   }
 
   const team = await fetchTeamById(input.teamId)
@@ -630,16 +819,239 @@ export async function createEntryFromTeam(input: {
     .single()
   if (error) throw error
 
-  const roster = memberships.slice(0, 2).map((m, index) => ({
+  const athletes = memberships.map((m, index) => ({
     entry_id: (entry as TournamentEntry).id,
     athlete_id: m.athlete_id,
     full_name_snapshot: m.athlete?.full_name ?? 'Без имени',
-    slot: (index + 1) as 1 | 2,
+    slot: index + 1,
+    role: 'athlete' as const,
+    is_junior: Boolean(m.athlete?.is_junior),
   }))
-  const { error: rosterError } = await supabase.from('tournament_roster_members').insert(roster)
+  let nextSlot = athletes.length + 1
+  const extras = (input.extraRoster ?? [])
+    .filter((row) => row.fullName.trim())
+    .map((row) => {
+      const item = {
+        entry_id: (entry as TournamentEntry).id,
+        athlete_id: null as string | null,
+        full_name_snapshot: row.fullName.trim(),
+        slot: nextSlot,
+        role: row.role,
+        is_junior: false,
+      }
+      nextSlot += 1
+      return item
+    })
+  const { error: rosterError } = await supabase
+    .from('tournament_roster_members')
+    .insert([...athletes, ...extras])
   if (rosterError) throw rosterError
 
   return entry as TournamentEntry
+}
+
+/**
+ * Участник без команды — только личный зачёт.
+ * team_id = null, в составе один спортсмен.
+ */
+export async function createSoloEntry(input: {
+  tournamentId: string
+  fullName: string
+  athleteId?: string | null
+  isJunior?: boolean
+  quota?: TournamentEntry['quota']
+  contactPhone?: string
+}): Promise<TournamentEntry> {
+  const fullName = input.fullName.trim()
+  if (!fullName) throw new Error('Укажите ФИО спортсмена')
+
+  let isJunior = Boolean(input.isJunior)
+  if (input.athleteId) {
+    const { data: athlete } = await supabase
+      .from('athletes')
+      .select('is_junior')
+      .eq('id', input.athleteId)
+      .maybeSingle()
+    if (athlete) isJunior = Boolean(athlete.is_junior)
+  }
+
+  const { data: entry, error } = await supabase
+    .from('tournament_entries')
+    .insert({
+      tournament_id: input.tournamentId,
+      team_id: null,
+      team_name_snapshot: fullName,
+      quota: input.quota ?? 'open',
+      contact_phone: input.contactPhone?.trim() || null,
+      start_zone: null,
+      status: 'confirmed',
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+
+  const { error: rosterError } = await supabase.from('tournament_roster_members').insert({
+    entry_id: (entry as TournamentEntry).id,
+    athlete_id: input.athleteId ?? null,
+    full_name_snapshot: fullName,
+    slot: 1,
+    role: 'athlete',
+    is_junior: isJunior,
+  })
+  if (rosterError) {
+    await supabase.from('tournament_entries').delete().eq('id', (entry as TournamentEntry).id)
+    throw rosterError
+  }
+
+  return entry as TournamentEntry
+}
+
+export async function replaceEntryRoster(
+  entryId: string,
+  members: {
+    athleteId?: string | null
+    fullName: string
+    role: RosterRole
+    slot: number
+    isJunior?: boolean
+  }[],
+): Promise<void> {
+  const { error: delError } = await supabase.from('tournament_roster_members').delete().eq('entry_id', entryId)
+  if (delError) throw delError
+  if (members.length === 0) return
+  const { error } = await supabase.from('tournament_roster_members').insert(
+    members.map((m) => ({
+      entry_id: entryId,
+      athlete_id: m.athleteId ?? null,
+      full_name_snapshot: m.fullName.trim(),
+      slot: m.slot,
+      role: m.role,
+      is_junior: Boolean(m.isJunior),
+    })),
+  )
+  if (error) throw error
+}
+
+export async function fetchAthleteDraws(tournamentId: string): Promise<AthleteDraw[]> {
+  const { data, error } = await supabase
+    .from('athlete_draws')
+    .select('*')
+    .eq('tournament_id', tournamentId)
+    .order('tour_number')
+    .order('mini_number')
+    .order('sector')
+  if (error) throw error
+  return (data ?? []) as AthleteDraw[]
+}
+
+export async function upsertAthleteDraws(
+  tournamentId: string,
+  rows: Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[],
+): Promise<void> {
+  if (rows.length === 0) return
+  const { error } = await supabase.from('athlete_draws').upsert(
+    rows.map((row) => ({
+      tournament_id: tournamentId,
+      roster_member_id: row.roster_member_id,
+      tour_number: row.tour_number,
+      mini_number: row.mini_number,
+      zone: row.zone,
+      sector: row.sector,
+    })),
+    { onConflict: 'roster_member_id,tour_number,mini_number' },
+  )
+  if (error) throw error
+}
+
+export async function clearAthleteDraws(tournamentId: string): Promise<void> {
+  const { error } = await supabase.from('athlete_draws').delete().eq('tournament_id', tournamentId)
+  if (error) throw error
+}
+
+/**
+ * Случайная жеребьёвка: в каждом туре спортсмен получает одну зону на все мини-туры;
+ * секторы внутри зоны тура не повторяются.
+ */
+/**
+ * Случайные сектора. Пары из одной заявки (`entryAthleteIds` длины 2) в I туре
+ * получают разные зоны; во II+ — противоположные стартовым (A/B).
+ */
+export function generateAthleteDraws(input: {
+  format: TournamentFormat
+  rosterMemberIds: string[]
+  /** Группы athlete id по заявке; пара из 2 → opposite zones в туре 1. */
+  entryAthleteIds?: string[][]
+  sectorsPerZone?: number
+}): Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[] {
+  const sectorsPerZone = input.sectorsPerZone ?? 40
+  const zones = input.format.zones
+  if (zones.length === 0) throw new Error('В формате нет зон')
+  const ids = [...input.rosterMemberIds]
+  const groups =
+    input.entryAthleteIds?.map((g) => g.filter((id) => ids.includes(id))).filter((g) => g.length > 0) ??
+    ids.map((id) => [id])
+  const result: Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[] = []
+
+  const assignTour1Zones = (): Map<string, string> => {
+    const zoneOf = new Map<string, string>()
+    const counts = new Map<string, number>(zones.map((z) => [z, 0]))
+    const twoZone = zones.length === 2
+
+    for (const group of groups) {
+      if (twoZone && group.length === 2) {
+        const flip = Math.random() < 0.5
+        const z0 = zones[0]!
+        const z1 = zones[1]!
+        zoneOf.set(group[0]!, flip ? z0 : z1)
+        zoneOf.set(group[1]!, flip ? z1 : z0)
+        counts.set(z0, (counts.get(z0) ?? 0) + 1)
+        counts.set(z1, (counts.get(z1) ?? 0) + 1)
+      }
+    }
+
+    const remaining = ids.filter((id) => !zoneOf.has(id)).sort(() => Math.random() - 0.5)
+    for (const id of remaining) {
+      let best = zones[0]!
+      for (const z of zones) {
+        if ((counts.get(z) ?? 0) < (counts.get(best) ?? 0)) best = z
+      }
+      zoneOf.set(id, best)
+      counts.set(best, (counts.get(best) ?? 0) + 1)
+    }
+    return zoneOf
+  }
+
+  const tour1Zones = assignTour1Zones()
+
+  for (const tour of input.format.tours) {
+    const zoneOf = new Map<string, string>()
+    for (const id of ids) {
+      const start = tour1Zones.get(id)!
+      if (tour.number === 1 || zones.length !== 2) {
+        zoneOf.set(id, start)
+      } else {
+        zoneOf.set(id, oppositeZone(start as 'A' | 'B') ?? start)
+      }
+    }
+
+    for (const zone of zones) {
+      const inZone = ids.filter((id) => zoneOf.get(id) === zone)
+      const sectors = Array.from({ length: Math.max(sectorsPerZone, inZone.length) }, (_, i) => i + 1)
+      for (let mini = 1; mini <= tour.minis; mini += 1) {
+        const sectorPool = [...sectors].sort(() => Math.random() - 0.5)
+        inZone.forEach((rosterMemberId, index) => {
+          result.push({
+            roster_member_id: rosterMemberId,
+            tour_number: tour.number,
+            mini_number: mini,
+            zone,
+            sector: sectorPool[index] ?? index + 1,
+          })
+        })
+      }
+    }
+  }
+  return result
 }
 
 export async function updateEntryZone(entryId: string, startZone: ZoneCode): Promise<void> {
@@ -659,17 +1071,116 @@ export async function updateEntryZones(entryIds: string[], startZone: ZoneCode):
   if (error) throw error
 }
 
-export async function fetchDrawSlips(): Promise<DrawSlip[]> {
+export async function fetchDrawSlips(tournamentId: string): Promise<DrawSlip[]> {
   const { data, error } = await supabase
     .from('draw_slips')
     .select('*, sectors:draw_slip_sectors(*)')
+    .eq('tournament_id', tournamentId)
     .order('sort_order')
     .order('code')
   if (error) throw error
   return (data ?? []) as DrawSlip[]
 }
 
+export async function countDrawSlips(tournamentId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('draw_slips')
+    .select('id', { count: 'exact', head: true })
+    .eq('tournament_id', tournamentId)
+  if (error) throw error
+  return count ?? 0
+}
+
+async function insertSlipPack(tournamentId: string, pack: SlipPackCard[]): Promise<void> {
+  if (pack.length === 0) return
+
+  const { data: slips, error } = await supabase
+    .from('draw_slips')
+    .insert(
+      pack.map((card) => ({
+        tournament_id: tournamentId,
+        code: card.code,
+        start_zone: card.start_zone,
+        sort_order: card.sort_order,
+      })),
+    )
+    .select('id, code')
+  if (error) throw error
+
+  const idByCode = new Map((slips ?? []).map((row) => [row.code as string, row.id as string]))
+  const sectorRows = pack.flatMap((card) => {
+    const slipId = idByCode.get(card.code)
+    if (!slipId) return []
+    return card.sectors.map((sector) => ({
+      slip_id: slipId,
+      tour_number: sector.tour_number,
+      mini_number: sector.mini_number,
+      sector_number: sector.sector_number,
+    }))
+  })
+  if (sectorRows.length === 0) return
+  const { error: sectorError } = await supabase.from('draw_slip_sectors').insert(sectorRows)
+  if (sectorError) throw sectorError
+}
+
+/**
+ * Создаёт пакет бумажек турнира по формату.
+ * @param replace — удалить текущий пакет и залить заново (только если нет назначений).
+ */
+export async function seedDrawSlipsForTournament(
+  tournamentId: string,
+  format: TournamentFormat,
+  options?: { replace?: boolean },
+): Promise<{ seeded: number; packId: string | null }> {
+  const pack = slipPackForFormat(format)
+  if (!pack) return { seeded: 0, packId: null }
+
+  const existing = await countDrawSlips(tournamentId)
+  if (existing > 0 && !options?.replace) {
+    return { seeded: 0, packId: format.draw === 'pikecup_slips' ? 'pikecup' : 'boor' }
+  }
+
+  if (existing > 0 && options?.replace) {
+    const assigned = await countAssignedDrawSlips(tournamentId)
+    if (assigned > 0) {
+      throw new Error('Нельзя перезалить бумажки: уже есть назначения командам или спортсменам')
+    }
+    const { error: delError } = await supabase.from('draw_slips').delete().eq('tournament_id', tournamentId)
+    if (delError) throw delError
+  }
+
+  await insertSlipPack(tournamentId, pack)
+  return {
+    seeded: pack.length,
+    packId: format.draw === 'pikecup_slips' ? 'pikecup' : 'boor',
+  }
+}
+
+export async function countAssignedDrawSlips(tournamentId: string): Promise<number> {
+  const { data: entries, error } = await supabase
+    .from('tournament_entries')
+    .select('id, draw_slip_id, roster:tournament_roster_members(draw_slip_id)')
+    .eq('tournament_id', tournamentId)
+  if (error) throw error
+
+  let n = 0
+  for (const entry of entries ?? []) {
+    if (entry.draw_slip_id) n += 1
+    for (const member of (entry.roster as { draw_slip_id: string | null }[] | null) ?? []) {
+      if (member.draw_slip_id) n += 1
+    }
+  }
+  return n
+}
+
 export async function setEntryDrawSlip(entryId: string, slipId: string | null): Promise<void> {
+  const { data: entry, error: entryError } = await supabase
+    .from('tournament_entries')
+    .select('id, tournament_id')
+    .eq('id', entryId)
+    .single()
+  if (entryError) throw entryError
+
   if (!slipId) {
     const { error } = await supabase
       .from('tournament_entries')
@@ -681,10 +1192,13 @@ export async function setEntryDrawSlip(entryId: string, slipId: string | null): 
 
   const { data: slip, error: slipError } = await supabase
     .from('draw_slips')
-    .select('start_zone')
+    .select('id, start_zone, tournament_id')
     .eq('id', slipId)
     .single()
   if (slipError) throw slipError
+  if (slip.tournament_id !== entry.tournament_id) {
+    throw new Error('Бумажка принадлежит другому турниру')
+  }
 
   const { error } = await supabase
     .from('tournament_entries')
@@ -696,6 +1210,122 @@ export async function setEntryDrawSlip(entryId: string, slipId: string | null): 
     }
     throw error
   }
+}
+
+/** Выдать бумажку спортсмену (individual): roster.draw_slip_id + athlete_draws. */
+export async function setAthleteDrawSlip(input: {
+  tournamentId: string
+  rosterMemberId: string
+  slipId: string | null
+}): Promise<void> {
+  const { tournamentId, rosterMemberId, slipId } = input
+
+  const { data: member, error: memberError } = await supabase
+    .from('tournament_roster_members')
+    .select('id, entry_id, entry:tournament_entries!inner(id, tournament_id)')
+    .eq('id', rosterMemberId)
+    .single()
+  if (memberError) throw memberError
+  const entryTournamentId = (member.entry as { tournament_id: string }).tournament_id
+  if (entryTournamentId !== tournamentId) {
+    throw new Error('Спортсмен не из этого турнира')
+  }
+
+  if (!slipId) {
+    const { error } = await supabase
+      .from('tournament_roster_members')
+      .update({ draw_slip_id: null })
+      .eq('id', rosterMemberId)
+    if (error) throw error
+    const { error: clearError } = await supabase
+      .from('athlete_draws')
+      .delete()
+      .eq('tournament_id', tournamentId)
+      .eq('roster_member_id', rosterMemberId)
+    if (clearError) throw clearError
+    return
+  }
+
+  const { data: slip, error: slipError } = await supabase
+    .from('draw_slips')
+    .select('*, sectors:draw_slip_sectors(*)')
+    .eq('id', slipId)
+    .single()
+  if (slipError) throw slipError
+  if (slip.tournament_id !== tournamentId) {
+    throw new Error('Бумажка принадлежит другому турниру')
+  }
+
+  const { data: taken, error: takenError } = await supabase
+    .from('tournament_roster_members')
+    .select('id, entry:tournament_entries!inner(tournament_id)')
+    .eq('draw_slip_id', slipId)
+    .neq('id', rosterMemberId)
+  if (takenError) throw takenError
+  const conflict = (taken ?? []).some(
+    (row) => (row.entry as { tournament_id: string }).tournament_id === tournamentId,
+  )
+  if (conflict) {
+    throw new Error('Эта бумажка уже выдана другому спортсмену')
+  }
+
+  // Пара из одной заявки: в I туре разные стартовые зоны
+  const startZone = slip.start_zone as ZoneCode
+  const { data: teammates, error: teammatesError } = await supabase
+    .from('tournament_roster_members')
+    .select('id, draw_slip_id, role')
+    .eq('entry_id', member.entry_id)
+    .eq('role', 'athlete')
+    .neq('id', rosterMemberId)
+  if (teammatesError) throw teammatesError
+
+  const partnerSlipIds = (teammates ?? [])
+    .map((row) => row.draw_slip_id as string | null)
+    .filter((id): id is string => Boolean(id))
+  if (partnerSlipIds.length > 0) {
+    const { data: partnerSlips, error: partnerSlipsError } = await supabase
+      .from('draw_slips')
+      .select('id, start_zone')
+      .in('id', partnerSlipIds)
+    if (partnerSlipsError) throw partnerSlipsError
+    const sameZone = (partnerSlips ?? []).some((row) => row.start_zone === startZone)
+    if (sameZone) {
+      throw new Error(
+        `У напарника уже зона ${startZone}. Нужна бумажка зоны ${oppositeZone(startZone) ?? 'другой'}`,
+      )
+    }
+  }
+
+  const { error: assignError } = await supabase
+    .from('tournament_roster_members')
+    .update({ draw_slip_id: slipId })
+    .eq('id', rosterMemberId)
+  if (assignError) throw assignError
+
+  const sectors = (slip.sectors ?? []) as {
+    tour_number: number
+    mini_number: number
+    sector_number: number
+  }[]
+  const rows = sectors.map((sector) => {
+    const zone =
+      sector.tour_number === 1 ? startZone : (oppositeZone(startZone) as ZoneCode)
+    return {
+      roster_member_id: rosterMemberId,
+      tour_number: sector.tour_number,
+      mini_number: sector.mini_number,
+      zone,
+      sector: sector.sector_number,
+    }
+  })
+
+  const { error: clearError } = await supabase
+    .from('athlete_draws')
+    .delete()
+    .eq('tournament_id', tournamentId)
+    .eq('roster_member_id', rosterMemberId)
+  if (clearError) throw clearError
+  await upsertAthleteDraws(tournamentId, rows)
 }
 
 export async function lockAllRosters(tournamentId: string): Promise<void> {
@@ -789,11 +1419,17 @@ export async function updateTournamentMeta(
       | 'status'
       | 'organizers'
       | 'event_date'
+      | 'league_id'
+      | 'format'
       | 'zero_place_is_group_size_plus_one'
     >
   >,
 ): Promise<void> {
-  const { error } = await supabase.from('tournaments').update(patch).eq('id', tournamentId)
+  const payload = { ...patch } as Record<string, unknown>
+  if (patch.format) {
+    payload.zero_place_is_group_size_plus_one = zeroPlacePlusOne(patch.format)
+  }
+  const { error } = await supabase.from('tournaments').update(payload).eq('id', tournamentId)
   if (error) throw error
 }
 
@@ -878,6 +1514,7 @@ async function writeCatchRevision(row: {
   miniTourId: string
   weightGrams: number
   action: 'insert' | 'update' | 'delete'
+  rosterMemberId?: string | null
 }): Promise<void> {
   const { error } = await supabase.from('catch_revisions').insert({
     catch_id: row.catchId,
@@ -885,6 +1522,7 @@ async function writeCatchRevision(row: {
     mini_tour_id: row.miniTourId,
     weight_grams: row.weightGrams,
     action: row.action,
+    roster_member_id: row.rosterMemberId ?? null,
   })
   if (error) throw error
 }
@@ -895,6 +1533,7 @@ export async function addCatch(input: {
   weightGrams: number
   userId: string
   tournamentId?: string
+  rosterMemberId?: string | null
 }): Promise<CatchRow> {
   const { data, error } = await supabase
     .from('catches')
@@ -903,6 +1542,7 @@ export async function addCatch(input: {
       mini_tour_id: input.miniTourId,
       weight_grams: input.weightGrams,
       created_by: input.userId,
+      roster_member_id: input.rosterMemberId ?? null,
       ...(input.tournamentId ? { tournament_id: input.tournamentId } : {}),
     })
     .select('*')
@@ -916,6 +1556,7 @@ export async function addCatch(input: {
       miniTourId: created.mini_tour_id,
       weightGrams: created.weight_grams,
       action: 'insert',
+      rosterMemberId: created.roster_member_id,
     })
   } catch (revisionError) {
     await supabase.from('catches').delete().eq('id', created.id)
@@ -1031,6 +1672,25 @@ export async function setZoneJudge(input: {
 export async function removeZoneJudge(id: string): Promise<void> {
   const { error } = await supabase.from('tournament_zone_judges').delete().eq('id', id)
   if (error) throw error
+}
+
+/** Закончить / продолжить взвешивание зоны (флаг на всех судьях зоны). */
+export async function setZoneWeighingCompleted(input: {
+  tournamentId: string
+  zone: ZoneCode
+  completed: boolean
+}): Promise<void> {
+  const { error } = await supabase.rpc('set_zone_weighing_completed', {
+    p_tournament_id: input.tournamentId,
+    p_zone: input.zone,
+    p_completed: input.completed,
+  })
+  if (error) throw error
+}
+
+export function isZoneWeighingCompleted(judges: ZoneJudgeRow[], zone: ZoneCode | null | undefined): boolean {
+  if (!zone) return false
+  return judges.some((j) => j.zone === zone && Boolean(j.weighing_completed_at))
 }
 
 export async function fetchProfilesByIds(

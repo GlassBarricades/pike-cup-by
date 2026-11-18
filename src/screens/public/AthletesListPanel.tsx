@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   Badge,
   Button,
+  Checkbox,
   Group,
   Modal,
   Stack,
@@ -42,12 +43,14 @@ export function AthletesListPanel({ compact }: { compact?: boolean }) {
 
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
+  const [isJunior, setIsJunior] = useState(false)
 
   const createMutation = useMutation({
-    mutationFn: () => createAthlete({ fullName, phone }),
+    mutationFn: () => createAthlete({ fullName, phone, isJunior }),
     onSuccess: async (created) => {
       setFullName('')
       setPhone('')
+      setIsJunior(false)
       setCreateOpen(false)
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.athletes })
       navigate(`/athletes/${created.id}`)
@@ -111,9 +114,16 @@ export function AthletesListPanel({ compact }: { compact?: boolean }) {
             >
               <Group justify="space-between" wrap="nowrap" align="flex-start">
                 <div style={{ minWidth: 0 }}>
-                  <Text fw={700} size="sm" truncate>
-                    {a.full_name}
-                  </Text>
+                  <Group gap={6} wrap="nowrap">
+                    <Text fw={700} size="sm" truncate>
+                      {a.full_name}
+                    </Text>
+                    {a.is_junior && (
+                      <Badge size="xs" color="teal" variant="light">
+                        Юниор
+                      </Badge>
+                    )}
+                  </Group>
                   <Text size="xs" c="dimmed" truncate>
                     {a.current_team_name ?? 'Без команды'}
                   </Text>
@@ -145,6 +155,11 @@ export function AthletesListPanel({ compact }: { compact?: boolean }) {
             label="Телефон"
             value={phone}
             onChange={(e) => setPhone(e.currentTarget.value)}
+          />
+          <Checkbox
+            label="Юниор"
+            checked={isJunior}
+            onChange={(e) => setIsJunior(e.currentTarget.checked)}
           />
           {createMutation.isError && (
             <Text c="red" size="sm">

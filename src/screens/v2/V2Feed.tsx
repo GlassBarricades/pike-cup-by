@@ -9,10 +9,55 @@ import { EmptyState } from '../../ui'
 import { useV2Tournament } from './context'
 
 export function V2Feed() {
-  const { tournament, story } = useV2Tournament()
+  const { tournament, story, catches, entries, miniTours, draws } = useV2Tournament()
   const cheer = useCheer(tournament.id)
   const { newCatchIds, hasRefreshed } = useRefreshTournament(tournament.id)
   const newIds = hasRefreshed && newCatchIds.length > 0 ? new Set(newCatchIds) : null
+
+  if (!story) {
+    const athleteById = new Map(
+      entries.flatMap((e) => (e.roster ?? []).map((m) => [m.id, { name: m.full_name_snapshot, team: e.team_name_snapshot }])),
+    )
+    const miniById = new Map(miniTours.map((m) => [m.id, m]))
+    const sorted = [...catches].sort((a, b) => b.created_at.localeCompare(a.created_at))
+    if (sorted.length === 0) {
+      return <EmptyState title="Лента пустая" description="Строка появится с первым взвешиванием." />
+    }
+    return (
+      <Stack gap={0}>
+        {sorted.map((row) => {
+          const athlete = row.roster_member_id ? athleteById.get(row.roster_member_id) : null
+          const mini = miniById.get(row.mini_tour_id)
+          const draw = draws.find(
+            (d) =>
+              d.roster_member_id === row.roster_member_id &&
+              d.tour_number === mini?.tour_number &&
+              d.mini_number === mini?.mini_number,
+          )
+          return (
+            <Group
+              key={row.id}
+              justify="space-between"
+              py="xs"
+              style={{ borderBottom: '1px solid var(--pc-line)' }}
+            >
+              <div>
+                <Text size="sm" fw={600}>
+                  {athlete?.name ?? 'Спортсмен'} · {athlete?.team ?? ''}
+                </Text>
+                <Text size="xs" c="dimmed">
+                  {mini ? slotTitle({ tour: mini.tour_number, mini: mini.mini_number }) : '—'}
+                  {draw ? ` · ${draw.zone}/${draw.sector}` : ''}
+                </Text>
+              </div>
+              <Text fw={700}>{row.weight_grams} г</Text>
+            </Group>
+          )
+        })}
+      </Stack>
+    )
+  }
+
   if (story.moments.length === 0) {
     return <EmptyState title="Лента пустая" description="Строка появится с первым взвешиванием." />
   }

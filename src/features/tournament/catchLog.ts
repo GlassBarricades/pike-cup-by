@@ -10,7 +10,7 @@ export type CatchLogItem = {
   teamName: string
   rosterNames: string[]
   grams: number
-  tour: 1 | 2 | null
+  tour: number | null
   mini: number | null
   zone: ZoneCode | null
   sector: number | null

@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { formatTournamentDate } from '../../features/tournament/date'
-import { useSegmentsForTournaments, useTournaments } from '../../features/tournament/hooks'
+import { useLeagues, useSegmentsForTournaments, useTournaments } from '../../features/tournament/hooks'
 import { getCompetitionStage, type CompetitionStage } from '../../features/tournament/schedule'
 import type { ScheduleSegment, Tournament } from '../../features/tournament/types'
 import { useNow } from '../../features/tournament/useNow'
@@ -27,6 +27,8 @@ function segmentsByTournament(rows: ScheduleSegment[]): Map<string, ScheduleSegm
 
 export function ArchiveScreen() {
   const { data: tournaments = [], isLoading } = useTournaments()
+  const { data: leagues = [] } = useLeagues(false)
+  const leagueNameById = useMemo(() => new Map(leagues.map((league) => [league.id, league.name])), [leagues])
   const ids = useMemo(() => tournaments.map((tournament) => tournament.id), [tournaments])
   const { data: segments = [], isSuccess: segmentsReady } = useSegmentsForTournaments(ids)
   const now = useNow(15_000)
@@ -83,7 +85,7 @@ export function ArchiveScreen() {
           }
         />
         <Text size="sm" c="dimmed">
-          Все соревнования PikeCup.
+          Все соревнования платформы — этапы лиг и фестивали.
         </Text>
 
         {tournaments.length === 0 ? (
@@ -91,10 +93,14 @@ export function ArchiveScreen() {
         ) : (
           <Stack gap="lg">
             {featured && (
-              <TournamentCard row={featured} featured />
+              <TournamentCard row={featured} featured leagueName={leagueNameById.get(featured.tournament.league_id ?? '')} />
             )}
             {restOpen.map((row) => (
-              <TournamentCard key={row.tournament.id} row={row} />
+              <TournamentCard
+                key={row.tournament.id}
+                row={row}
+                leagueName={leagueNameById.get(row.tournament.league_id ?? '')}
+              />
             ))}
             {byYear.map(([year, list]) => (
               <Stack key={year} gap="xs">
@@ -102,7 +108,11 @@ export function ArchiveScreen() {
                   {year}
                 </Text>
                 {list.map((row) => (
-                  <TournamentCard key={row.tournament.id} row={row} />
+                  <TournamentCard
+                    key={row.tournament.id}
+                    row={row}
+                    leagueName={leagueNameById.get(row.tournament.league_id ?? '')}
+                  />
                 ))}
               </Stack>
             ))}
@@ -113,15 +123,24 @@ export function ArchiveScreen() {
   )
 }
 
-function TournamentCard({ row, featured = false }: { row: TournamentRow; featured?: boolean }) {
+function TournamentCard({
+  row,
+  featured = false,
+  leagueName,
+}: {
+  row: TournamentRow
+  featured?: boolean
+  leagueName?: string
+}) {
   const { tournament, stage } = row
+  const scope = tournament.league_id ? leagueName ?? 'Лига' : 'Фестиваль'
   return (
     <SurfaceCard
       to={`/tournament/${tournament.id}`}
       title={tournament.name}
       stage={stage}
       featured={featured}
-      lines={[`${formatTournamentDate(tournament.event_date)} · ${tournament.location}`]}
+      lines={[`${formatTournamentDate(tournament.event_date)} · ${tournament.location}`, scope]}
     />
   )
 }

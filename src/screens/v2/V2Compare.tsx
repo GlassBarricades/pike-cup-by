@@ -48,7 +48,7 @@ function Track({
   cells: { grams: number | null }[]
   max: number
   color: string
-  slots: { tour: 1 | 2; mini: number }[]
+  slots: { tour: number; mini: number }[]
 }) {
   return (
     <Stack gap={6}>

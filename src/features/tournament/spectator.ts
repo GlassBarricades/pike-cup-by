@@ -40,7 +40,7 @@ export type CatchMoment = {
   teamName: string
   rosterNames: string[]
   grams: number
-  tour: 1 | 2 | null
+  tour: number | null
   mini: number | null
   zone: ZoneCode | null
   sector: number | null
@@ -106,7 +106,7 @@ export type DayRecords = {
     entryId: string
     teamName: string
     grams: number
-    tour: 1 | 2
+    tour: number
     mini: number
   } | null
   heaviestSector: {
@@ -115,7 +115,7 @@ export type DayRecords = {
     grams: number
     zone: ZoneCode
     sector: number
-    tour: 1 | 2
+    tour: number
     mini: number
   } | null
   biggestJump: {
@@ -123,7 +123,7 @@ export type DayRecords = {
     teamName: string
     from: number
     to: number
-    tour: 1 | 2 | null
+    tour: number | null
     mini: number | null
   } | null
   driestZone: { zone: ZoneCode; zeroShare: number; zeros: number; weighed: number } | null
@@ -728,16 +728,16 @@ export function gapLine(gap: GapInfo): string {
   return parts.join(' · ')
 }
 
-export function shoreLeaders(standings: StandingRow[], tour: 1 | 2, zone: ZoneCode): StandingRow[] {
+export function shoreLeaders(standings: StandingRow[], tour: number, zone: ZoneCode): StandingRow[] {
   return standings
     .filter((row) => physicalZone(row.startZone, tour) === zone && zoneWeight(row, zone) > 0)
     .sort((a, b) => zonePlace(a, zone) - zonePlace(b, zone) || zoneWeight(b, zone) - zoneWeight(a, zone))
     .slice(0, 3)
 }
 
-export function slipRoute(entry: TournamentEntry, tour: 1 | 2 | 'both'): { tour: 1 | 2; mini: number; zone: ZoneCode; sector: number }[] {
-  const tours: Array<1 | 2> = tour === 'both' ? [1, 2] : [tour]
-  const points: { tour: 1 | 2; mini: number; zone: ZoneCode; sector: number }[] = []
+export function slipRoute(entry: TournamentEntry, tour: number | 'both'): { tour: number; mini: number; zone: ZoneCode; sector: number }[] {
+  const tours: Array<number> = tour === 'both' ? [1, 2] : [tour]
+  const points: { tour: number; mini: number; zone: ZoneCode; sector: number }[] = []
   for (const item of tours) {
     const zone = physicalZone(startOf(entry), item)
     if (!zone) continue
@@ -771,8 +771,8 @@ export function sectorHistory(
   slots: FishingSlot[],
   zone: ZoneCode,
   sector: number,
-): { tour: 1 | 2; mini: number; entryId: string; teamName: string; grams: number | null }[] {
-  const rows: { tour: 1 | 2; mini: number; entryId: string; teamName: string; grams: number | null }[] = []
+): { tour: number; mini: number; entryId: string; teamName: string; grams: number | null }[] {
+  const rows: { tour: number; mini: number; entryId: string; teamName: string; grams: number | null }[] = []
   for (const slot of slots) {
     const entry = teamAtSector(entries, slot, zone, sector)
     if (!entry) continue
@@ -809,7 +809,7 @@ export type SlotMark = {
   date: string
   entryId: string
   teamName: string
-  tour: 1 | 2
+  tour: number
   mini: number
   grams: number
   zone: ZoneCode | null

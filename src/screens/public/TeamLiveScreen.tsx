@@ -17,7 +17,7 @@ function grams(value: number): string {
 
 function tourHasCatch(
     start: ZoneCode,
-    tour: 1 | 2,
+    tour: number,
     entries: { id: string; start_zone: ZoneCode | null }[],
     catches: { entry_id: string; mini_tour_id: string }[],
     miniTours: { id: string; tour_number: number }[]
@@ -77,9 +77,9 @@ export function TeamLiveScreen() {
     if (!entry) return <Text>Команда в этом турнире не найдена</Text>
 
     const liveTour = tourNumberFromPhase(phase)
-    const shownTour: 1 | 2 = liveTour ?? 1
+    const shownTour = liveTour ?? 1
     const shore = physicalZone(entry.start_zone, shownTour)
-    const otherTour: 1 | 2 = shownTour === 1 ? 2 : 1
+    const otherTour = shownTour === 1 ? 2 : 1
     const otherShore = physicalZone(entry.start_zone, otherTour)
     const start = entry.start_zone
     const shoreOpen = start ? tourHasCatch(start, shownTour, entries, catches, miniTours) : false

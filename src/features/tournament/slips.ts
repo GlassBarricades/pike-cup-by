@@ -6,7 +6,7 @@ export function formatSlipCode(code: string): string {
 
 export function slipSector(
   slip: Pick<DrawSlip, 'sectors'> | null | undefined,
-  tour: 1 | 2,
+  tour: number,
   mini: number,
 ): number | null {
   const row = slip?.sectors?.find((sector) => sector.tour_number === tour && sector.mini_number === mini)

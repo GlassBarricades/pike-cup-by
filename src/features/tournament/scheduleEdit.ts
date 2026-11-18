@@ -1,17 +1,8 @@
+import { fishingKeys as keysFromFormat, PIKECUP_FORMAT, type TournamentFormat } from './formats'
 import type { ScheduleSegment } from './types'
 
-export const FISHING_KEYS = [
-  'tour1_mt1',
-  'tour1_mt2',
-  'tour1_mt3',
-  'tour1_mt4',
-  'tour1_mt5',
-  'tour2_mt1',
-  'tour2_mt2',
-  'tour2_mt3',
-  'tour2_mt4',
-  'tour2_mt5',
-] as const
+/** @deprecated PikeCup keys; предпочитайте fishingKeys(format) */
+export const FISHING_KEYS = keysFromFormat(PIKECUP_FORMAT)
 
 export type DraftKind = 'fishing' | 'move' | 'stage'
 
@@ -37,15 +28,17 @@ export type ScheduleWriteRow = {
   startsAt: string
   endsAt: string
   windowKind: 'fishing' | 'move' | null
-  moveTour: 1 | 2 | null
+  moveTour: number | null
   moveMini: number | null
 }
 
-const FISHING_KEY_SET = new Set<string>(FISHING_KEYS)
-
-export function fishingScheduleReady(segments: ScheduleSegment[]): boolean {
+export function fishingScheduleReady(
+  segments: ScheduleSegment[],
+  format: TournamentFormat = PIKECUP_FORMAT,
+): boolean {
+  const keys = keysFromFormat(format)
   const byKey = new Map(segments.map((segment) => [segment.key, segment]))
-  return FISHING_KEYS.every((key) => byKey.get(key)?.window_kind === 'fishing')
+  return keys.every((key) => byKey.get(key)?.window_kind === 'fishing')
 }
 
 export function toMinskInput(date: Date): string {
@@ -69,10 +62,10 @@ export function fromMinskInput(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-function fishingSlot(key: string): { tour: 1 | 2; mini: number } | null {
-  const match = /^tour([12])_mt([1-5])$/.exec(key)
+function fishingSlot(key: string): { tour: number; mini: number } | null {
+  const match = /^tour(\d+)_mt(\d+)$/.exec(key)
   if (!match) return null
-  return { tour: Number(match[1]) as 1 | 2, mini: Number(match[2]) }
+  return { tour: Number(match[1]), mini: Number(match[2]) }
 }
 
 function minutesBetween(startIso: string, endIso: string): number {
@@ -80,8 +73,9 @@ function minutesBetween(startIso: string, endIso: string): number {
   return Math.max(1, minutes)
 }
 
-function rowFromSegment(segment: ScheduleSegment): ScheduleDraftRow {
-  const lockedFishing = FISHING_KEY_SET.has(segment.key)
+function rowFromSegment(segment: ScheduleSegment, format: TournamentFormat = PIKECUP_FORMAT): ScheduleDraftRow {
+  const locked = new Set(keysFromFormat(format))
+  const lockedFishing = locked.has(segment.key) || Boolean(fishingSlot(segment.key) && segment.window_kind === 'fishing')
   const kind: DraftKind = lockedFishing ? 'fishing' : segment.window_kind === 'move' ? 'move' : 'stage'
   return {
     id: segment.id,
@@ -93,7 +87,10 @@ function rowFromSegment(segment: ScheduleSegment): ScheduleDraftRow {
   }
 }
 
-export function draftFromSegments(segments: ScheduleSegment[]): ScheduleDraft {
+export function draftFromSegments(
+  segments: ScheduleSegment[],
+  format: TournamentFormat = PIKECUP_FORMAT,
+): ScheduleDraft {
   const ordered = [...segments].sort((a, b) => a.sort_order - b.sort_order)
   if (ordered.length === 0) {
     return { anchor: new Date(), rows: [] }
@@ -101,7 +98,7 @@ export function draftFromSegments(segments: ScheduleSegment[]): ScheduleDraft {
   const rows: ScheduleDraftRow[] = []
   for (let index = 0; index < ordered.length; index++) {
     const segment = ordered[index]
-    rows.push(rowFromSegment(segment))
+    rows.push(rowFromSegment(segment, format))
     const next = ordered[index + 1]
     if (!next) continue
     const gap = Math.round(
@@ -169,7 +166,7 @@ export function insertStage(draft: ScheduleDraft, afterIndex: number): ScheduleD
   return { ...draft, rows }
 }
 
-function nextFishing(rows: ScheduleDraftRow[], index: number): { tour: 1 | 2; mini: number } | null {
+function nextFishing(rows: ScheduleDraftRow[], index: number): { tour: number; mini: number } | null {
   for (let cursor = index + 1; cursor < rows.length; cursor++) {
     if (rows[cursor].kind !== 'fishing') continue
     return fishingSlot(rows[cursor].key)

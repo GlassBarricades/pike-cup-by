@@ -2,10 +2,13 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'rea
 import { Anchor, Box, Button, Group, Stack, Table, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { formatTournamentDate } from '../../features/tournament/date'
+import { getFormat, isIndividual } from '../../features/tournament/formats'
+import { computeResults } from '../../features/tournament/formats/results'
 import { getCompetitionStage, getCurrentPhase, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../../features/tournament/scoring'
 import { useNow } from '../../features/tournament/useNow'
 import {
+  type AthleteDraw,
   type CatchRow,
   type MiniTour,
   type ScheduleSegment,
@@ -15,6 +18,7 @@ import {
 } from '../../features/tournament/types'
 import { useCheer } from '../../features/tournament/cheer'
 import { EmptyState, Panel } from '../../ui'
+import { IndividualResults } from './IndividualResults'
 
 type BoardView = 'A' | 'B' | 'sum'
 type GroupMode = 'now' | 'past'
@@ -23,12 +27,12 @@ function grams(value: number): string {
   return `${value.toLocaleString('ru-RU')} г`
 }
 
-function startGroupOnZone(zone: 'A' | 'B', tour: 1 | 2): ZoneCode {
+function startGroupOnZone(zone: 'A' | 'B', tour: number): ZoneCode {
   if (tour === 1) return zone
   return zone === 'A' ? 'B' : 'A'
 }
 
-function tourForZone(startZone: ZoneCode, zone: 'A' | 'B'): 1 | 2 {
+function tourForZone(startZone: ZoneCode, zone: 'A' | 'B'): number {
   return startZone === zone ? 1 : 2
 }
 
@@ -47,12 +51,14 @@ export function ResultsTab({
   catches,
   miniTours,
   segments,
+  draws = [],
 }: {
   tournament: Tournament
   entries: TournamentEntry[]
   catches: CatchRow[]
   miniTours: MiniTour[]
   segments: ScheduleSegment[]
+  draws?: AthleteDraw[]
 }) {
   const now = useNow(5_000)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -65,9 +71,15 @@ export function ResultsTab({
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
   const cheer = useCheer(tournament.id)
   const cheerId = cheer.primaryId
+  const format = getFormat(tournament)
 
   const phase = tournament.status === 'finished' ? null : getCurrentPhase(tournament, segments, now)
   const liveTour = tourNumberFromPhase(phase)
+
+  const individualResults = useMemo(() => {
+    if (!isIndividual(format)) return null
+    return computeResults({ tournament, entries, catches, miniTours, draws })
+  }, [format, tournament, entries, catches, miniTours, draws])
 
   const standings = useMemo(
     () =>
@@ -78,7 +90,7 @@ export function ResultsTab({
   )
 
   const opened = useMemo(() => {
-    const flags: Record<ZoneCode, Record<1 | 2, boolean>> = {
+    const flags: Record<ZoneCode, Record<number, boolean>> = {
       A: { 1: false, 2: false },
       B: { 1: false, 2: false },
     }
@@ -249,6 +261,16 @@ export function ResultsTab({
   const protocolRows = [...standings].sort(
     (a, b) => a.finalPlace - b.finalPlace || a.teamName.localeCompare(b.teamName, 'ru'),
   )
+
+  if (individualResults?.engine === 'individual') {
+    return (
+      <IndividualResults
+        teams={individualResults.teams}
+        athletes={individualResults.athletes}
+        juniors={individualResults.juniors}
+      />
+    )
+  }
 
   return (
     <>

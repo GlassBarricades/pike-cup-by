@@ -119,7 +119,7 @@ export function V2Review() {
   const [slotMark, setSlotMark] = useState<string | null>(null)
   const [zone, setZone] = useState<Zone>('A')
   const [onlyMine, setOnlyMine] = useState(false)
-  const season = useSeasonDigest(tab === 'season')
+  const season = useSeasonDigest({ enabled: tab === 'season', leagueId: tournament.league_id })
   const stage = getCompetitionStage(tournament, segments, now)
 
   const names = useMemo(() => new Map(story.standings.map((row) => [row.entryId, row.teamName])), [story.standings])
@@ -517,7 +517,7 @@ function ShoreHeat({
 }: {
   heat: { zone: Zone; sector: number; grams: number }[]
   picked: { zone: Zone; sector: number } | null
-  history: { tour: 1 | 2; mini: number; entryId: string; teamName: string; grams: number | null }[]
+  history: { tour: number; mini: number; entryId: string; teamName: string; grams: number | null }[]
   onPick: (pick: { zone: Zone; sector: number }) => void
 }) {
   const gramsOf = new Map(heat.map((cell) => [`${cell.zone}:${cell.sector}`, cell.grams]))

@@ -59,8 +59,8 @@ export function ScheduleEditor({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.segments(tournamentId) })
       await invalidateTournamentCard(queryClient, tournamentId)
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.active })
-      await queryClient.invalidateQueries({ queryKey: tournamentKeys.list })
+      await queryClient.invalidateQueries({ queryKey: ['tournament', 'active'] })
+      await queryClient.invalidateQueries({ queryKey: ['tournaments'] })
     },
   })
 

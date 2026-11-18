@@ -1,4 +1,5 @@
 import { Stack, Text } from '@mantine/core'
+import { useDefaultLeague } from '../../features/tournament/hooks'
 import { useSeasonDigest } from '../../features/tournament/season'
 import { fameFromBundles, gramsLabel } from '../../features/tournament/spectator'
 import { slotTitle } from '../../features/tournament/schedule'
@@ -6,7 +7,8 @@ import { EmptyState, Panel } from '../../ui'
 import { useMemo } from 'react'
 
 export function V2Fame() {
-  const { data: bundles = [], isLoading } = useSeasonDigest()
+  const { data: defaultLeague } = useDefaultLeague()
+  const { data: bundles = [], isLoading } = useSeasonDigest({ leagueId: defaultLeague?.id })
   const fame = useMemo(() => fameFromBundles(bundles), [bundles])
   if (isLoading) return <Text c="dimmed">Собираем зал славы…</Text>
   if (bundles.length === 0) return <EmptyState title="Пока не из чего собрать зал" />
