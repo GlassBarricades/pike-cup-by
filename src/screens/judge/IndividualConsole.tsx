@@ -327,7 +327,7 @@ export function IndividualConsole() {
               disabled={!activeZone}
               onClick={() => {
                 if (!weighingDone) {
-                  if (!globalThis.confirm(`Отметить взвешивание зоны ${activeZone} как завершённое?`)) return
+                  if (!window.confirm(`Отметить взвешивание зоны ${activeZone} как завершённое?`)) return
                 }
                 setSelectedMemberId(null)
                 weighDoneMutation.mutate(!weighingDone)

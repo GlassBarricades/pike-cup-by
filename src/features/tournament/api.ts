@@ -1226,9 +1226,11 @@ export async function setAthleteDrawSlip(input: {
     .eq('id', rosterMemberId)
     .single()
   if (memberError) throw memberError
-  const memberEntry = Array.isArray(member.entry) ? member.entry[0] : member.entry
-  const entryTournamentId = (memberEntry as { tournament_id: string } | null | undefined)?.tournament_id
-  if (entryTournamentId !== tournamentId) {
+  const memberEntry = (
+    Array.isArray(member.entry) ? member.entry[0] : member.entry
+  ) as { tournament_id: string } | null
+  const entryTournamentId = memberEntry?.tournament_id
+  if (!entryTournamentId || entryTournamentId !== tournamentId) {
     throw new Error('Спортсмен не из этого турнира')
   }
 
@@ -1264,8 +1266,10 @@ export async function setAthleteDrawSlip(input: {
     .neq('id', rosterMemberId)
   if (takenError) throw takenError
   const conflict = (taken ?? []).some((row) => {
-    const entry = Array.isArray(row.entry) ? row.entry[0] : row.entry
-    return (entry as { tournament_id: string } | null | undefined)?.tournament_id === tournamentId
+    const entry = (Array.isArray(row.entry) ? row.entry[0] : row.entry) as {
+      tournament_id: string
+    } | null
+    return entry?.tournament_id === tournamentId
   })
   if (conflict) {
     throw new Error('Эта бумажка уже выдана другому спортсмену')
