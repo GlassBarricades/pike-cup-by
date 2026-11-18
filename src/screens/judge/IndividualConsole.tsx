@@ -29,7 +29,7 @@ import {
 import type { ZoneCode } from '../../features/tournament/types'
 import { useNow } from '../../features/tournament/useNow'
 import { entryTeamColumn, type CatchRow } from '../../features/tournament/types'
-import { EmptyState } from '../../ui'
+import { EmptyState, VenueMapView } from '../../ui'
 
 function WeightNumpad({
   athleteName,
@@ -133,6 +133,7 @@ export function IndividualConsole() {
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null)
   const [selectedTour, setSelectedTour] = useState(1)
   const [stepBack, setStepBack] = useState(false)
+  const [showVenueMap, setShowVenueMap] = useState(false)
 
   const myZones = useMemo(() => {
     if (!user) return [] as string[]
@@ -311,6 +312,20 @@ export function IndividualConsole() {
             onChange={setZone}
             data={myZones.map((z) => ({ value: z, label: `Зона ${z}` }))}
           />
+        )}
+        {tournament.map_mode === 'geo' && tournament.venue_map && (
+          <Stack gap={6}>
+            <Button
+              size="compact-xs"
+              variant="light"
+              onClick={() => setShowVenueMap((v) => !v)}
+            >
+              {showVenueMap ? 'Скрыть карту площадки' : 'Карта площадки'}
+            </Button>
+            {showVenueMap && (
+              <VenueMapView venueMap={tournament.venue_map} height={220} />
+            )}
+          </Stack>
         )}
         {fishingDone && (
           <Group justify="space-between" align="center" wrap="wrap" gap="xs">

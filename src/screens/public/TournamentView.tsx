@@ -25,6 +25,7 @@ import {
   StageBadge,
   TabsBar,
   Timeline,
+  VenueMapView,
 } from '../../ui'
 import { ResultsTab } from './ResultsTab'
 import { CatchLogTab } from './CatchLogTab'
@@ -142,11 +143,14 @@ export function TournamentView({
     [entries],
   )
 
+  const useGeoMap = tournament.map_mode === 'geo'
+  const showMapTab = useGeoMap || isPikecup(format)
+
   const tabs = [
     { value: 'results', label: 'Таблица' },
     { value: 'catches', label: 'Уловы' },
     { value: 'teams', label: `Команды (${teamsSorted.length})` },
-    ...(isPikecup(format) ? [{ value: 'map', label: 'Карта' }] : []),
+    ...(showMapTab ? [{ value: 'map', label: 'Карта' }] : []),
     { value: 'schedule', label: 'Расписание' },
     { value: 'rules', label: 'Регламент' },
   ]
@@ -299,15 +303,19 @@ export function TournamentView({
                 </SimpleGrid>
               ))}
 
-            {active === 'map' && isPikecup(format) && (
-              <LakeBoard
-                tournament={tournament}
-                segments={segments}
-                entries={entries}
-                catches={catches}
-                miniTours={miniTours}
-                followCatches={stage === 'live'}
-              />
+            {active === 'map' && showMapTab && (
+              useGeoMap ? (
+                <VenueMapView venueMap={tournament.venue_map} height={420} />
+              ) : (
+                <LakeBoard
+                  tournament={tournament}
+                  segments={segments}
+                  entries={entries}
+                  catches={catches}
+                  miniTours={miniTours}
+                  followCatches={stage === 'live'}
+                />
+              )
             )}
 
             {active === 'schedule' && (

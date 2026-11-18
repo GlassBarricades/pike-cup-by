@@ -1,4 +1,7 @@
 import type { TournamentFormat } from './formats/types'
+import type { TournamentMapMode, VenueMap } from './venueMap'
+
+export type { TournamentMapMode }
 
 export type ZoneCode = 'A' | 'B'
 export type TeamQuota = 'open' | 'prize' | 'org'
@@ -45,6 +48,10 @@ export type Tournament = {
   live_phase_override: string | null
   /** @deprecated используйте format.ranking.zeroPlace; оставлено для совместимости с БД */
   zero_place_is_group_size_plus_one: boolean
+  /** Leaflet: точка сбора и полигоны зон; null если не задано */
+  venue_map: VenueMap | null
+  /** Какую карту показывать зрителям и судьям */
+  map_mode: TournamentMapMode
 }
 
 export type TournamentListFilter = {

@@ -22,7 +22,12 @@ import {
   useSegments,
 } from '../../features/tournament/hooks'
 import { getCompetitionStage, getCurrentPhase } from '../../features/tournament/schedule'
-import type { ScheduleSegment, Tournament, TournamentStatus } from '../../features/tournament/types'
+import type {
+  ScheduleSegment,
+  Tournament,
+  TournamentMapMode,
+  TournamentStatus,
+} from '../../features/tournament/types'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { useNow } from '../../features/tournament/useNow'
@@ -32,6 +37,7 @@ import { FormatEditPanel } from './FormatEditPanel'
 import { JudgesScreen } from './JudgesScreen'
 import { RulesEditScreen } from './RulesEditScreen'
 import { ScheduleEditor } from './ScheduleEditor'
+import { VenueMapEditor } from './VenueMapEditor'
 import {
   BOOR_INDIVIDUAL_TEAM_FORMAT,
   defaultFormatForLeague,
@@ -71,6 +77,7 @@ export function TournamentScreen() {
   const [status, setStatus] = useState<TournamentStatus>('published')
   const [organizers, setOrganizers] = useState('')
   const [zeroPlacePlusOne, setZeroPlacePlusOne] = useState(true)
+  const [mapMode, setMapMode] = useState<TournamentMapMode>('schematic')
   /** FESTIVAL_VALUE = фестиваль */
   const [leagueId, setLeagueId] = useState<string>(FESTIVAL_VALUE)
   const { data: leagues = [] } = useLeagues()
@@ -113,6 +120,7 @@ export function TournamentScreen() {
     setStatus(selected.status)
     setOrganizers(selected.organizers.join(', '))
     setZeroPlacePlusOne(selected.zero_place_is_group_size_plus_one !== false)
+    setMapMode(selected.map_mode === 'geo' ? 'geo' : 'schematic')
     setLeagueId(selected.league_id ?? FESTIVAL_VALUE)
   }, [selected])
 
@@ -129,6 +137,7 @@ export function TournamentScreen() {
           .map((s) => s.trim())
           .filter(Boolean),
         zero_place_is_group_size_plus_one: zeroPlacePlusOne,
+        map_mode: mapMode,
       }),
     onSuccess: async () => {
       await invalidateTournamentLists(queryClient)
@@ -212,6 +221,7 @@ export function TournamentScreen() {
         tabs={[
           { value: 'card', label: 'Карточка' },
           { value: 'format', label: 'Формат' },
+          { value: 'venue', label: 'Площадка' },
           { value: 'slips', label: 'Бумажки' },
           { value: 'rules', label: 'Регламент' },
           { value: 'schedule', label: 'Расписание' },
@@ -222,6 +232,8 @@ export function TournamentScreen() {
         {(active) =>
           active === 'format' ? (
             <FormatEditPanel tournament={selected} />
+          ) : active === 'venue' ? (
+            <VenueMapEditor tournament={selected} />
           ) : active === 'slips' ? (
             <DrawSlipsPanel tournament={selected} />
           ) : active === 'rules' ? (
@@ -267,6 +279,16 @@ export function TournamentScreen() {
                     description="Если выключено — ноль даёт место равное размеру группы"
                     checked={zeroPlacePlusOne}
                     onChange={(e) => setZeroPlacePlusOne(e.currentTarget.checked)}
+                  />
+                  <Select
+                    label="Карта"
+                    description="Схема озера PikeCup или настоящая карта OSM (точка сбора и зоны на вкладке «Площадка»)."
+                    data={[
+                      { value: 'schematic', label: 'Схема озера (как на PikeCup)' },
+                      { value: 'geo', label: 'Настоящая карта (OSM)' },
+                    ]}
+                    value={mapMode}
+                    onChange={(v) => setMapMode(v === 'geo' ? 'geo' : 'schematic')}
                   />
                   <Button color="signal" loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
                     Сохранить

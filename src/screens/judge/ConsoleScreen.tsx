@@ -22,7 +22,7 @@ import {
 } from '../../features/tournament/schedule'
 import { useNow } from '../../features/tournament/useNow'
 import { entryTeamName, type CatchRow, type MiniTour, type ZoneCode } from '../../features/tournament/types'
-import { EmptyState } from '../../ui'
+import { EmptyState, VenueMapView } from '../../ui'
 
 type Panel = 'console' | 'results'
 
@@ -216,6 +216,7 @@ function PikecupConsole() {
     const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
     const [failedSave, setFailedSave] = useState<{ grams: number; entryId: string; miniTourId: string } | null>(null)
     const [savedNote, setSavedNote] = useState(false)
+    const [showVenueMap, setShowVenueMap] = useState(false)
     const swipeLocked = Boolean(editingEntryId)
 
     const zoneEntries = useMemo(() => {
@@ -387,6 +388,20 @@ function PikecupConsole() {
                     <Text size="sm" c="dimmed">
                         Турнир завершён. Взвешивание закрыто до перезапуска.
                     </Text>
+                )}
+                {tournament.map_mode === 'geo' && tournament.venue_map && (
+                    <Stack gap={6}>
+                        <Button
+                            size="compact-xs"
+                            variant="light"
+                            onClick={() => setShowVenueMap((v) => !v)}
+                        >
+                            {showVenueMap ? 'Скрыть карту площадки' : 'Карта площадки'}
+                        </Button>
+                        {showVenueMap && (
+                            <VenueMapView venueMap={tournament.venue_map} height={220} />
+                        )}
+                    </Stack>
                 )}
                 {fishingDone && !closed && (
                     <Group justify="space-between" align="center" wrap="wrap" gap="xs">

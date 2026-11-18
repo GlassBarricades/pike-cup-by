@@ -12,6 +12,12 @@ import { FISHING_KEYS, type ScheduleWriteRow } from './scheduleEdit'
 import { oppositeZone } from './schedule'
 import { slipPackForFormat, type SlipPackCard } from './slipPacks'
 import {
+  defaultMapModeForFormat,
+  parseMapMode,
+  parseVenueMap,
+  type VenueMap,
+} from './venueMap'
+import {
   type ActiveTournamentScope,
   type Athlete,
   type AthleteDraw,
@@ -37,7 +43,7 @@ import {
 
 /** Карточка турнира без тяжёлого rules_content (экономия egress для списков и LIVE). */
 const TOURNAMENT_CARD_SELECT =
-  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, league_id, format, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one'
+  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, league_id, format, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one, venue_map, map_mode'
 
 const LEAGUE_SELECT =
   'id, slug, name, short_name, kind, region_code, description, brand_color, is_active, default_format, created_at, updated_at'
@@ -50,6 +56,8 @@ function asTournamentCard(row: Record<string, unknown> | null): Tournament | nul
     format,
     rules_content: '',
     zero_place_is_group_size_plus_one: zeroPlacePlusOne(format),
+    venue_map: parseVenueMap(row.venue_map),
+    map_mode: parseMapMode(row.map_mode),
   }
 }
 
@@ -371,6 +379,7 @@ export async function createTournament(input: {
       organizers: input.organizers ?? [],
       rules_content: input.rulesContent?.trim() || DEFAULT_RULES_STUB,
       zero_place_is_group_size_plus_one: zeroPlusOne,
+      map_mode: defaultMapModeForFormat(formatPayload),
     })
     .select(TOURNAMENT_CARD_SELECT)
     .single()
@@ -1428,6 +1437,8 @@ export async function updateTournamentMeta(
       | 'league_id'
       | 'format'
       | 'zero_place_is_group_size_plus_one'
+      | 'venue_map'
+      | 'map_mode'
     >
   >,
 ): Promise<void> {
@@ -1436,6 +1447,14 @@ export async function updateTournamentMeta(
     payload.zero_place_is_group_size_plus_one = zeroPlacePlusOne(patch.format)
   }
   const { error } = await supabase.from('tournaments').update(payload).eq('id', tournamentId)
+  if (error) throw error
+}
+
+export async function updateVenueMap(tournamentId: string, venueMap: VenueMap | null): Promise<void> {
+  const { error } = await supabase
+    .from('tournaments')
+    .update({ venue_map: venueMap })
+    .eq('id', tournamentId)
   if (error) throw error
 }
 
