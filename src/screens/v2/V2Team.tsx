@@ -4,14 +4,23 @@ import { setPrimaryCheer, toggleCheer, useCheer, useCheerCounts } from '../../fe
 import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone, slotTitle } from '../../features/tournament/schedule'
-import { bestWorstSlot, gapLine, gramsLabel, sumGap, zoneGap } from '../../features/tournament/spectator'
+import {
+  bestWorstSlot,
+  gapLine,
+  gramsLabel,
+  isIndividualSumBoardOpen,
+  isPlaceSumOpenForStart,
+  startGroupToursOpened,
+  sumGap,
+  zoneGap,
+} from '../../features/tournament/spectator'
 import { entryTeamName } from '../../features/tournament/types'
 import { FanLikes, Panel } from '../../ui'
 import { useV2Tournament } from './context'
 
 export function V2Team() {
   const { entryId } = useParams()
-  const { tournament, entries, story, results, draws } = useV2Tournament()
+  const { tournament, entries, catches, miniTours, story, results, draws } = useV2Tournament()
   const individual = isIndividual(getFormat(tournament))
   const cheer = useCheer(tournament.id)
   const { data: fanCounts } = useCheerCounts(tournament.id)
@@ -54,6 +63,9 @@ export function V2Team() {
   const placeSum = teamResult?.placeSum ?? standing?.placeSum ?? 0
   const totalWeight = teamResult?.totalWeight ?? standing?.totalWeight ?? 0
   const finalPlace = teamResult?.finalPlace ?? standing?.finalPlace ?? 0
+  const opened = startGroupToursOpened(entries, catches, miniTours)
+  const pikeSumOpen = standing ? isPlaceSumOpenForStart(standing.startZone, opened) : false
+  const individualSumOpen = isIndividualSumBoardOpen(catches, miniTours, tournament.status)
 
   return (
     <Stack gap="md">
@@ -114,14 +126,24 @@ export function V2Team() {
               hint={`${t.zone ?? '—'} · ${gramsLabel(t.weight)}`}
             />
           ))}
-          <Stat label="Сумма мест" value={formatPlace(placeSum)} hint={gramsLabel(totalWeight)} />
-          <Stat label="Место" value={formatPlace(finalPlace)} hint="" />
+          {individualSumOpen ? (
+            <>
+              <Stat label="Сумма мест" value={formatPlace(placeSum)} hint={gramsLabel(totalWeight)} />
+              <Stat label="Место" value={formatPlace(finalPlace)} hint="" />
+            </>
+          ) : (
+            <Stat label="Сумма мест" value="—" hint="после обоих туров" />
+          )}
         </Group>
       ) : standing ? (
         <Group grow align="stretch">
           <Stat label="Зона A" value={formatPlace(standing.zoneAPlace)} hint={gramsLabel(standing.zoneAWeight)} />
           <Stat label="Зона B" value={formatPlace(standing.zoneBPlace)} hint={gramsLabel(standing.zoneBWeight)} />
-          <Stat label="Сумма мест" value={formatPlace(standing.placeSum)} hint={gramsLabel(standing.totalWeight)} />
+          <Stat
+            label="Сумма мест"
+            value={pikeSumOpen ? formatPlace(standing.placeSum) : '—'}
+            hint={pikeSumOpen ? gramsLabel(standing.totalWeight) : 'после обеих зон'}
+          />
         </Group>
       ) : null}
       {gap && gapLine(gap) ? <Text size="sm">{gapLine(gap)}</Text> : null}
@@ -149,7 +171,13 @@ export function V2Team() {
                       {athlete.junior ? ' · Юн.' : ''}
                     </Text>
                     <Text size="xs" c="dimmed">
-                      {draw ? `Зона ${draw.zone} · сектор ${draw.sector}` : 'Сектор —'}
+                      {draw
+                        ? tournament.draw_zones_only
+                          ? `Зона ${draw.zone}`
+                          : `Зона ${draw.zone} · сектор ${draw.sector}`
+                        : tournament.draw_zones_only
+                          ? 'Зона —'
+                          : 'Сектор —'}
                       {` · место ${formatPlace(athlete.finalPlace)}`}
                     </Text>
                   </div>
@@ -219,7 +247,7 @@ export function V2Team() {
               <Text size="sm">
                 {slotTitle(item)}
                 {cell?.zone ? ` · зона ${cell.zone}` : ''}
-                {cell?.sector != null ? ` · сектор ${cell.sector}` : ''}
+                {cell?.sector != null && !tournament.draw_zones_only ? ` · сектор ${cell.sector}` : ''}
               </Text>
               <Text size="sm" className="pc-tabular" fw={700}>
                 {cell?.grams == null ? '—' : gramsLabel(cell.grams)}

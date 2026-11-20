@@ -733,6 +733,72 @@ export function entryZonesWithCatch(entry: TournamentEntry, catches: CatchRow[],
   return opened
 }
 
+/** По стартовой группе: был ли хоть один улов в туре 1/2 (как в ResultsTab). */
+export type StartGroupTourOpened = Record<ZoneCode, Record<1 | 2, boolean>>
+
+export function startGroupToursOpened(
+  entries: { id: string; start_zone: ZoneCode | null }[],
+  catches: { entry_id: string; mini_tour_id: string }[],
+  miniTours: { id: string; tour_number: number }[],
+): StartGroupTourOpened {
+  const flags: StartGroupTourOpened = {
+    A: { 1: false, 2: false },
+    B: { 1: false, 2: false },
+  }
+  const byEntry = new Map(entries.map((entry) => [entry.id, entry.start_zone]))
+  const tourOf = new Map(miniTours.map((mini) => [mini.id, mini.tour_number]))
+  for (const row of catches) {
+    const start = byEntry.get(row.entry_id)
+    if (start !== 'A' && start !== 'B') continue
+    const tour = tourOf.get(row.mini_tour_id)
+    if (tour !== 1 && tour !== 2) continue
+    flags[start][tour] = true
+  }
+  return flags
+}
+
+/** Сумма мест для стартовой группы осмысленна, когда взвешены обе зоны. */
+export function isPlaceSumOpenForStart(
+  startZone: ZoneCode | null | undefined,
+  opened: StartGroupTourOpened,
+): boolean {
+  if (startZone !== 'A' && startZone !== 'B') return false
+  return opened[startZone][1] && opened[startZone][2]
+}
+
+/** Показывать общий зачёт (сумма) на табло: финиш или хотя бы одна группа закрыла обе зоны. */
+export function isPlaceSumBoardOpen(
+  opened: StartGroupTourOpened,
+  tournamentStatus?: string | null,
+): boolean {
+  if (tournamentStatus === 'finished') return true
+  return isPlaceSumOpenForStart('A', opened) || isPlaceSumOpenForStart('B', opened)
+}
+
+/** Individual: туры, в которых уже есть хотя бы один улов. */
+export function toursWithCatches(
+  catches: { mini_tour_id: string }[],
+  miniTours: { id: string; tour_number: number }[],
+): Set<number> {
+  const tourOf = new Map(miniTours.map((mini) => [mini.id, mini.tour_number]))
+  const set = new Set<number>()
+  for (const row of catches) {
+    const tour = tourOf.get(row.mini_tour_id)
+    if (tour != null) set.add(tour)
+  }
+  return set
+}
+
+export function isIndividualSumBoardOpen(
+  catches: { mini_tour_id: string }[],
+  miniTours: { id: string; tour_number: number }[],
+  tournamentStatus?: string | null,
+): boolean {
+  if (tournamentStatus === 'finished') return true
+  const tours = toursWithCatches(catches, miniTours)
+  return tours.has(1) && tours.has(2)
+}
+
 function gapFromSorted(sorted: StandingRow[], entryId: string, weightOf: (row: StandingRow) => number, placeOf: (row: StandingRow) => number): GapInfo {
   const index = sorted.findIndex((row) => row.entryId === entryId)
   const row = sorted[index]

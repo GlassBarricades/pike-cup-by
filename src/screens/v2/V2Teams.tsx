@@ -5,16 +5,18 @@ import { setPrimaryCheer, toggleCheer, useCheer, useCheerCounts } from '../../fe
 import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { physicalZone } from '../../features/tournament/schedule'
 import { slipSector } from '../../features/tournament/slips'
+import { isIndividualSumBoardOpen } from '../../features/tournament/spectator'
 import { EmptyState, FanLikes } from '../../ui'
 import { useV2Tournament } from './context'
 
 export function V2Teams() {
-  const { tournament, entries, story, draws, results } = useV2Tournament()
+  const { tournament, entries, catches, miniTours, story, draws, results } = useV2Tournament()
   const individual = isIndividual(getFormat(tournament))
   const [query, setQuery] = useState('')
   const cheer = useCheer(tournament.id)
   const { data: fanCounts } = useCheerCounts(tournament.id)
   const slot = story.clock
+  const individualSumOpen = isIndividualSumBoardOpen(catches, miniTours, tournament.status)
 
   const rows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('ru')
@@ -131,12 +133,16 @@ export function V2Teams() {
                   {row.rosterNames.join(' · ')}
                 </Text>
                 <Text size="sm" mt={2}>
-                  {row.sectorNote
-                    ? row.sectorNote
-                    : row.zone && row.sector != null
-                      ? `Зона ${row.zone} · сектор ${row.sector}`
-                      : 'Сектор ещё не открыт'}
-                  {individual ? ` · Σ ${row.placeSum}` : ''}
+                  {tournament.draw_zones_only
+                    ? row.zone
+                      ? `Зона ${row.zone}`
+                      : 'Зона ещё не назначена'
+                    : row.sectorNote
+                      ? row.sectorNote
+                      : row.zone && row.sector != null
+                        ? `Зона ${row.zone} · сектор ${row.sector}`
+                        : 'Сектор ещё не открыт'}
+                  {individual && individualSumOpen ? ` · Σ ${row.placeSum}` : ''}
                 </Text>
               </div>
               {cheer.primaryId === row.entryId ? (

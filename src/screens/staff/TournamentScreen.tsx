@@ -78,6 +78,7 @@ export function TournamentScreen() {
   const [organizers, setOrganizers] = useState('')
   const [zeroPlacePlusOne, setZeroPlacePlusOne] = useState(true)
   const [mapMode, setMapMode] = useState<TournamentMapMode>('schematic')
+  const [drawZonesOnly, setDrawZonesOnly] = useState(false)
   /** FESTIVAL_VALUE = фестиваль */
   const [leagueId, setLeagueId] = useState<string>(FESTIVAL_VALUE)
   const { data: leagues = [] } = useLeagues()
@@ -121,6 +122,7 @@ export function TournamentScreen() {
     setOrganizers(selected.organizers.join(', '))
     setZeroPlacePlusOne(selected.zero_place_is_group_size_plus_one !== false)
     setMapMode(selected.map_mode === 'geo' ? 'geo' : 'schematic')
+    setDrawZonesOnly(Boolean(selected.draw_zones_only))
     setLeagueId(selected.league_id ?? FESTIVAL_VALUE)
   }, [selected])
 
@@ -138,6 +140,7 @@ export function TournamentScreen() {
           .filter(Boolean),
         zero_place_is_group_size_plus_one: zeroPlacePlusOne,
         map_mode: mapMode,
+        draw_zones_only: drawZonesOnly,
       }),
     onSuccess: async () => {
       await invalidateTournamentLists(queryClient)
@@ -290,6 +293,14 @@ export function TournamentScreen() {
                     value={mapMode}
                     onChange={(v) => setMapMode(v === 'geo' ? 'geo' : 'schematic')}
                   />
+                  {getFormat(selected).draw === 'per_athlete_sectors' ? (
+                    <Checkbox
+                      label="Жеребьёвка только по зонам"
+                      description="Без бумажек и секторов: участник тянет A/B, напарник автоматически получает другую зону."
+                      checked={drawZonesOnly}
+                      onChange={(e) => setDrawZonesOnly(e.currentTarget.checked)}
+                    />
+                  ) : null}
                   <Button color="signal" loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
                     Сохранить
                   </Button>

@@ -531,7 +531,9 @@ export function IndividualConsole({
                       {row.member.is_junior ? ' · Юн.' : ''}
                     </Text>
                     <Text size="xs" c="dimmed" ta="center" mt={2} lineClamp={1}>
-                      {row.teamName} · сектор {row.sector || '—'}
+                      {tournament.draw_zones_only
+                        ? row.teamName
+                        : `${row.teamName} · сектор ${row.sector || '—'}`}
                     </Text>
                     <Text
                       className="pc-tabular"
@@ -583,7 +585,9 @@ export function IndividualConsole({
                           {row.member.full_name_snapshot}
                         </Text>
                         <Text size="xs" c="dimmed" lineClamp={1}>
-                          {row.teamName} · сектор {row.sector || '—'}
+                          {tournament.draw_zones_only
+                            ? row.teamName
+                            : `${row.teamName} · сектор ${row.sector || '—'}`}
                         </Text>
                       </UnstyledButton>
                       <Text fw={800} className="pc-tabular" size="lg">

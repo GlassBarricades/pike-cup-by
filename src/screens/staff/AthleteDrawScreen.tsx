@@ -5,6 +5,7 @@ import {
   clearAthleteDraws,
   generateAthleteDraws,
   setAthleteDrawSlip,
+  setAthleteZoneDraw,
   upsertAthleteDraws,
 } from '../../features/tournament/api'
 import { getFormat } from '../../features/tournament/formats'
@@ -18,13 +19,14 @@ import { useStaffTournament } from '../../features/tournament/StaffTournamentCon
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { oppositeZone } from '../../features/tournament/schedule'
 import { formatSlipCode, slipOptionLabel } from '../../features/tournament/slips'
-import { entryTeamColumn } from '../../features/tournament/types'
+import { entryTeamColumn, type ZoneCode } from '../../features/tournament/types'
 import { ClosedDayNotice, EmptyState, PageHero, Panel, SectionTitle } from '../../ui'
 
 export function AthleteDrawScreen() {
   const { selected: tournament } = useStaffTournament()
   const closed = useTournamentDayClosed()
   const format = tournament ? getFormat(tournament) : null
+  const zonesOnly = Boolean(tournament?.draw_zones_only)
   const { data: entries = [] } = useEntries(tournament?.id)
   const { data: draws = [] } = useAthleteDraws(tournament?.id)
   const { data: slips = [] } = useDrawSlips(tournament?.id)
@@ -66,6 +68,16 @@ export function AthleteDrawScreen() {
     return map
   }, [draws])
 
+  /** Зона тура 1 для спортсмена (любой мини). */
+  const tour1ZoneByMember = useMemo(() => {
+    const map = new Map<string, ZoneCode>()
+    for (const row of draws) {
+      if (row.tour_number !== 1) continue
+      if (!map.has(row.roster_member_id)) map.set(row.roster_member_id, row.zone as ZoneCode)
+    }
+    return map
+  }, [draws])
+
   const takenSlipIds = useMemo(
     () =>
       new Set(
@@ -94,7 +106,6 @@ export function AthleteDrawScreen() {
 
   const randomMutation = useMutation({
     mutationFn: async () => {
-      // Случайные сектора без привязки к печатным бумажкам
       for (const { member } of athletes) {
         if (member.draw_slip_id) {
           await setAthleteDrawSlip({
@@ -109,9 +120,22 @@ export function AthleteDrawScreen() {
         rosterMemberIds: athletes.map((a) => a.member.id),
         entryAthleteIds,
         sectorsPerZone,
+        zonesOnly,
       })
       await clearAthleteDraws(tournament!.id)
       await upsertAthleteDraws(tournament!.id, rows)
+    },
+    onSuccess: invalidate,
+  })
+
+  const zoneMutation = useMutation({
+    mutationFn: async ({ rosterMemberId, zone }: { rosterMemberId: string; zone: ZoneCode }) => {
+      await setAthleteZoneDraw({
+        tournamentId: tournament!.id,
+        rosterMemberId,
+        zone,
+        format: format!,
+      })
     },
     onSuccess: invalidate,
   })
@@ -163,6 +187,127 @@ export function AthleteDrawScreen() {
         title="Жеребьёвка по секторам не нужна"
         description="Для этого формата используется другой тип жеребьёвки (бумажки PikeCup)."
       />
+    )
+  }
+
+  if (zonesOnly) {
+    return (
+      <Stack gap="lg">
+        <PageHero
+          title="Жеребьёвка по зонам"
+          subtitle="Участник тянет зону A или B; напарник из пары автоматически получает другую. Сектора и бумажки не используются."
+        />
+        {closed && <ClosedDayNotice />}
+
+        <Panel>
+          <Stack gap="md">
+            <SectionTitle>Случайная жеребьёвка</SectionTitle>
+            <Text size="sm" c="dimmed">
+              Пары получают разные зоны в I туре; одиночки — с балансом по зонам. Во II туре зоны зеркалятся.
+            </Text>
+            <Button
+              color="signal"
+              loading={randomMutation.isPending}
+              disabled={closed || athletes.length === 0}
+              onClick={() => {
+                if (!window.confirm('Перезаписать текущую жеребьёвку случайной?')) return
+                randomMutation.mutate()
+              }}
+            >
+              Разыграть зоны
+            </Button>
+            {randomMutation.isError && (
+              <Text c="red" size="sm">
+                {(randomMutation.error as Error).message}
+              </Text>
+            )}
+          </Stack>
+        </Panel>
+
+        <Panel>
+          <Stack gap="sm">
+            <SectionTitle>Спортсмены</SectionTitle>
+            {zoneMutation.isError && (
+              <Text c="red" size="sm">
+                {(zoneMutation.error as Error).message}
+              </Text>
+            )}
+            {athletes.length === 0 ? (
+              <Text c="dimmed" size="sm">
+                Нет спортсменов в заявках.
+              </Text>
+            ) : (
+              <Table.ScrollContainer minWidth={560}>
+                <Table striped highlightOnHover withTableBorder>
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>Спортсмен</Table.Th>
+                      <Table.Th>Команда</Table.Th>
+                      <Table.Th>Зона I тура</Table.Th>
+                      <Table.Th>II тур</Table.Th>
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {athletes.map(({ member, teamName, partners }) => {
+                      const zone = tour1ZoneByMember.get(member.id) ?? null
+                      const partnerZone =
+                        partners.length === 1
+                          ? (tour1ZoneByMember.get(partners[0]!.id) ?? null)
+                          : null
+                      const assigning =
+                        zoneMutation.isPending &&
+                        zoneMutation.variables?.rosterMemberId === member.id
+                      return (
+                        <Table.Tr key={member.id}>
+                          <Table.Td>
+                            <Group gap={6} wrap="nowrap">
+                              <Text>{member.full_name_snapshot}</Text>
+                              {member.is_junior && (
+                                <Badge size="xs" color="teal" variant="light">
+                                  Юниор
+                                </Badge>
+                              )}
+                            </Group>
+                          </Table.Td>
+                          <Table.Td>{teamName}</Table.Td>
+                          <Table.Td style={{ minWidth: 160 }}>
+                            <Select
+                              size="xs"
+                              data={[
+                                { value: 'A', label: 'Зона A' },
+                                { value: 'B', label: 'Зона B' },
+                              ]}
+                              value={zone}
+                              placeholder={assigning ? 'Сохраняем…' : 'Выбрать'}
+                              disabled={closed || zoneMutation.isPending}
+                              rightSection={assigning ? <Loader size={14} /> : undefined}
+                              rightSectionPointerEvents={assigning ? 'none' : undefined}
+                              onChange={(value) => {
+                                if (value === 'A' || value === 'B') {
+                                  zoneMutation.mutate({ rosterMemberId: member.id, zone: value })
+                                }
+                              }}
+                            />
+                            {partners.length === 1 ? (
+                              <Text size="xs" c="dimmed" mt={4}>
+                                Напарник → {zone ? oppositeZone(zone) : 'другая зона'}
+                                {partnerZone ? ` (сейчас ${partnerZone})` : ''}
+                              </Text>
+                            ) : null}
+                          </Table.Td>
+                          <Table.Td>
+                            {zone ? oppositeZone(zone) ?? '—' : '—'}
+                          </Table.Td>
+                        </Table.Tr>
+                      )
+                    })}
+                  </Table.Tbody>
+                </Table>
+              </Table.ScrollContainer>
+            )}
+          </Stack>
+        </Panel>
+      </Stack>
     )
   }
 

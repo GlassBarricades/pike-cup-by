@@ -40,6 +40,7 @@ function V2GeoMap() {
   const { tournament, entries, catches, miniTours, story, draws } = useV2Tournament()
   const [zoneFilter, setZoneFilter] = useState<ZoneCode | 'all'>('all')
   const slot = story.clock ?? story.closedWindow?.slot ?? null
+  const zonesOnly = Boolean(tournament.draw_zones_only)
 
   const roster = useMemo(() => {
     if (!slot) return []
@@ -56,25 +57,30 @@ function V2GeoMap() {
   const bySector = useMemo(() => {
     const map = new Map<string, typeof roster>()
     for (const row of roster) {
-      const key = `${row.zone}:${row.sector}`
+      const key = zonesOnly ? row.zone : `${row.zone}:${row.sector}`
       const list = map.get(key) ?? []
       list.push(row)
       map.set(key, list)
     }
     return [...map.entries()]
       .map(([key, rows]) => {
-        const [zone, sector] = key.split(':') as [ZoneCode, string]
+        const zone = (zonesOnly ? key : key.split(':')[0]) as ZoneCode
+        const sector = zonesOnly ? 1 : Number(key.split(':')[1])
         const weighed = rows.filter((r) => r.grams != null)
         const leader = weighed.sort((a, b) => (b.grams ?? 0) - (a.grams ?? 0))[0]
         return {
           zone,
-          sector: Number(sector),
-          rows: rows.sort((a, b) => a.sector - b.sector || a.name.localeCompare(b.name, 'ru')),
+          sector,
+          rows: rows.sort((a, b) =>
+            zonesOnly
+              ? a.name.localeCompare(b.name, 'ru')
+              : a.sector - b.sector || a.name.localeCompare(b.name, 'ru'),
+          ),
           leader,
         }
       })
       .sort((a, b) => a.zone.localeCompare(b.zone) || a.sector - b.sector)
-  }, [roster])
+  }, [roster, zonesOnly])
 
   if (!tournament.venue_map) {
     return (
@@ -126,10 +132,10 @@ function V2GeoMap() {
       ) : (
         <Stack gap="xs">
           {bySector.map((block) => (
-            <Panel key={`${block.zone}-${block.sector}`} p="sm">
+            <Panel key={zonesOnly ? block.zone : `${block.zone}-${block.sector}`} p="sm">
               <Group justify="space-between" align="flex-start">
                 <Text fw={700}>
-                  Зона {block.zone} · сектор {block.sector}
+                  {zonesOnly ? `Зона ${block.zone}` : `Зона ${block.zone} · сектор ${block.sector}`}
                 </Text>
                 {block.leader?.grams != null ? (
                   <Text size="sm" className="pc-tabular" c="var(--pc-signal)">

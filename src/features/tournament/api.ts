@@ -44,7 +44,7 @@ import {
 
 /** Карточка турнира без тяжёлого rules_content (экономия egress для списков и LIVE). */
 const TOURNAMENT_CARD_SELECT =
-  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, league_id, format, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one, venue_map, map_mode'
+  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, league_id, format, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one, venue_map, map_mode, draw_zones_only'
 
 const LEAGUE_SELECT =
   'id, slug, name, short_name, kind, region_code, description, brand_color, is_active, default_format, created_at, updated_at'
@@ -59,6 +59,7 @@ function asTournamentCard(row: Record<string, unknown> | null): Tournament | nul
     zero_place_is_group_size_plus_one: zeroPlacePlusOne(format),
     venue_map: parseVenueMap(row.venue_map),
     map_mode: parseMapMode(row.map_mode),
+    draw_zones_only: Boolean(row.draw_zones_only),
   }
 }
 
@@ -992,8 +993,11 @@ export function generateAthleteDraws(input: {
   /** Группы athlete id по заявке; пара из 2 → opposite zones в туре 1. */
   entryAthleteIds?: string[][]
   sectorsPerZone?: number
+  /** Только зоны: sector всегда 1, без пула секторов. */
+  zonesOnly?: boolean
 }): Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[] {
   const sectorsPerZone = input.sectorsPerZone ?? 40
+  const zonesOnly = Boolean(input.zonesOnly)
   const zones = input.format.zones
   if (zones.length === 0) throw new Error('В формате нет зон')
   const ids = [...input.rosterMemberIds]
@@ -1046,22 +1050,114 @@ export function generateAthleteDraws(input: {
 
     for (const zone of zones) {
       const inZone = ids.filter((id) => zoneOf.get(id) === zone)
-      const sectors = Array.from({ length: Math.max(sectorsPerZone, inZone.length) }, (_, i) => i + 1)
+      const sectors = zonesOnly
+        ? null
+        : Array.from({ length: Math.max(sectorsPerZone, inZone.length) }, (_, i) => i + 1)
       for (let mini = 1; mini <= tour.minis; mini += 1) {
-        const sectorPool = [...sectors].sort(() => Math.random() - 0.5)
+        const sectorPool = sectors ? [...sectors].sort(() => Math.random() - 0.5) : null
         inZone.forEach((rosterMemberId, index) => {
           result.push({
             roster_member_id: rosterMemberId,
             tour_number: tour.number,
             mini_number: mini,
             zone,
-            sector: sectorPool[index] ?? index + 1,
+            sector: zonesOnly ? 1 : (sectorPool![index] ?? index + 1),
           })
         })
       }
     }
   }
   return result
+}
+
+/** Строки athlete_draws на все tour×mini: тур 1 = startZone, дальше opposite (A/B). */
+export function buildZoneOnlyDrawRows(
+  format: TournamentFormat,
+  rosterMemberId: string,
+  startZone: ZoneCode,
+): Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[] {
+  const rows: Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[] = []
+  for (const tour of format.tours) {
+    const zone =
+      tour.number === 1 || format.zones.length !== 2
+        ? startZone
+        : ((oppositeZone(startZone) as ZoneCode) ?? startZone)
+    for (let mini = 1; mini <= tour.minis; mini += 1) {
+      rows.push({
+        roster_member_id: rosterMemberId,
+        tour_number: tour.number,
+        mini_number: mini,
+        zone,
+        sector: 1,
+      })
+    }
+  }
+  return rows
+}
+
+/**
+ * Zones-only: назначить зону спортсмену; напарник из пары (2 athlete) получает opposite.
+ * Сбрасывает draw_slip_id и пишет athlete_draws с sector=1.
+ */
+export async function setAthleteZoneDraw(input: {
+  tournamentId: string
+  rosterMemberId: string
+  zone: ZoneCode
+  format: TournamentFormat
+}): Promise<void> {
+  const { tournamentId, rosterMemberId, zone, format } = input
+
+  const { data: member, error: memberError } = await supabase
+    .from('tournament_roster_members')
+    .select('id, entry_id, role, entry:tournament_entries!inner(id, tournament_id)')
+    .eq('id', rosterMemberId)
+    .single()
+  if (memberError) throw memberError
+  const memberEntry = (
+    Array.isArray(member.entry) ? member.entry[0] : member.entry
+  ) as { tournament_id: string } | null
+  if (!memberEntry || memberEntry.tournament_id !== tournamentId) {
+    throw new Error('Спортсмен не из этого турнира')
+  }
+  if (member.role !== 'athlete') {
+    throw new Error('Жеребьёвка только для спортсменов')
+  }
+
+  const { data: athletes, error: athletesError } = await supabase
+    .from('tournament_roster_members')
+    .select('id')
+    .eq('entry_id', member.entry_id)
+    .eq('role', 'athlete')
+  if (athletesError) throw athletesError
+
+  const athleteIds = (athletes ?? []).map((row) => row.id as string)
+  const assignments = new Map<string, ZoneCode>()
+  assignments.set(rosterMemberId, zone)
+
+  if (athleteIds.length === 2) {
+    const partnerId = athleteIds.find((id) => id !== rosterMemberId)
+    const partnerZone = oppositeZone(zone)
+    if (partnerId && partnerZone) assignments.set(partnerId, partnerZone)
+  }
+
+  const clearIds = [...assignments.keys()]
+  const { error: slipClearError } = await supabase
+    .from('tournament_roster_members')
+    .update({ draw_slip_id: null })
+    .in('id', clearIds)
+  if (slipClearError) throw slipClearError
+
+  const { error: drawClearError } = await supabase
+    .from('athlete_draws')
+    .delete()
+    .eq('tournament_id', tournamentId)
+    .in('roster_member_id', clearIds)
+  if (drawClearError) throw drawClearError
+
+  const rows = [...assignments.entries()].flatMap(([id, startZone]) =>
+    buildZoneOnlyDrawRows(format, id, startZone),
+  )
+  await upsertAthleteDraws(tournamentId, rows)
 }
 
 export async function updateEntryZone(entryId: string, startZone: ZoneCode): Promise<void> {
@@ -1440,6 +1536,7 @@ export async function updateTournamentMeta(
       | 'zero_place_is_group_size_plus_one'
       | 'venue_map'
       | 'map_mode'
+      | 'draw_zones_only'
     >
   >,
 ): Promise<void> {

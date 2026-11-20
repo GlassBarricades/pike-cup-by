@@ -52,6 +52,8 @@ export type Tournament = {
   venue_map: VenueMap | null
   /** Какую карту показывать зрителям и судьям */
   map_mode: TournamentMapMode
+  /** Individual: жеребьёвка только зоны A/B, без секторов/бумажек */
+  draw_zones_only: boolean
 }
 
 export type TournamentListFilter = {

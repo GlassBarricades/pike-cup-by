@@ -6,6 +6,11 @@ import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { computeResults } from '../../features/tournament/formats/results'
 import { getCompetitionStage, getCurrentPhase, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../../features/tournament/scoring'
+import {
+  isPlaceSumBoardOpen,
+  isPlaceSumOpenForStart,
+  startGroupToursOpened,
+} from '../../features/tournament/spectator'
 import { useNow } from '../../features/tournament/useNow'
 import {
   type AthleteDraw,
@@ -64,11 +69,12 @@ export function ResultsTab({
   const frameRef = useRef<HTMLDivElement>(null)
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
   const knownCatches = useRef<Set<string>>(new Set())
-  const [view, setView] = useState<BoardView>('sum')
+  const [view, setView] = useState<BoardView>('A')
   const [groupMode, setGroupMode] = useState<GroupMode>('now')
   const [search, setSearch] = useState('')
   const [fullscreen, setFullscreen] = useState<'off' | 'native' | 'page'>('off')
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
+  const defaultViewApplied = useRef(false)
   const cheer = useCheer(tournament.id)
   const cheerId = cheer.primaryId
   const format = getFormat(tournament)
@@ -89,22 +95,21 @@ export function ResultsTab({
     [entries, catches, miniTours, tournament.zero_place_is_group_size_plus_one],
   )
 
-  const opened = useMemo(() => {
-    const flags: Record<ZoneCode, Record<number, boolean>> = {
-      A: { 1: false, 2: false },
-      B: { 1: false, 2: false },
-    }
-    const byEntry = new Map(entries.map((entry) => [entry.id, entry.start_zone]))
-    for (const mini of miniTours) {
-      if (!catches.some((catchRow) => catchRow.mini_tour_id === mini.id)) continue
-      for (const catchRow of catches) {
-        if (catchRow.mini_tour_id !== mini.id) continue
-        const start = byEntry.get(catchRow.entry_id)
-        if (start === 'A' || start === 'B') flags[start][mini.tour_number] = true
-      }
-    }
-    return flags
-  }, [entries, catches, miniTours])
+  const opened = useMemo(
+    () => startGroupToursOpened(entries, catches, miniTours),
+    [entries, catches, miniTours],
+  )
+  const sumBoardOpen = useMemo(
+    () => isPlaceSumBoardOpen(opened, tournament.status),
+    [opened, tournament.status],
+  )
+
+  useEffect(() => {
+    if (defaultViewApplied.current) return
+    if (standings.length === 0 && tournament.status !== 'finished') return
+    defaultViewApplied.current = true
+    setView(sumBoardOpen ? 'sum' : 'A')
+  }, [sumBoardOpen, standings.length, tournament.status])
 
   const zoneGroups = useMemo(() => {
     if (view === 'sum') return null
@@ -142,7 +147,7 @@ export function ResultsTab({
         zoneWeight,
         placeA,
         placeB,
-        sum: placeA != null && placeB != null ? row.placeSum : null,
+        sum: isPlaceSumOpenForStart(row.startZone, opened) ? row.placeSum : null,
       }
     })
 
@@ -268,6 +273,9 @@ export function ResultsTab({
         teams={individualResults.teams}
         athletes={individualResults.athletes}
         juniors={individualResults.juniors}
+        catches={catches}
+        miniTours={miniTours}
+        tournamentStatus={tournament.status}
       />
     )
   }
@@ -330,6 +338,11 @@ export function ResultsTab({
             Таблица обновляется сама
           </Text>
         ) : null}
+        {!sumBoardOpen ? (
+          <Text size="sm" c="dimmed">
+            Пока идёт первая зона — смотрите зачёт по берегам. Сумма мест откроется после взвешивания обеих зон.
+          </Text>
+        ) : null}
         <Group justify="space-between" align="center" wrap="wrap" gap="xs">
           <Group gap={6}>
             {(
@@ -339,7 +352,13 @@ export function ResultsTab({
                 ['sum', 'Сумма мест'],
               ] as const
             ).map(([value, label]) => (
-              <Button key={value} size="xs" variant={view === value ? 'filled' : 'default'} onClick={() => setView(value)}>
+              <Button
+                key={value}
+                size="xs"
+                variant={view === value ? 'filled' : 'default'}
+                disabled={value === 'sum' && !sumBoardOpen}
+                onClick={() => setView(value)}
+              >
                 {label}
               </Button>
             ))}
