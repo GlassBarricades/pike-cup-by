@@ -79,6 +79,8 @@ export const tournamentKeys = {
  * Invalidate только из staff/judge мутаций (или F5).
  */
 const STALE_UNTIL_MUTATION = Number.POSITIVE_INFINITY
+/** Расписание и сдвиг дня: судьи/LIVE должны подхватывать правки штаба без перезагрузки. */
+const SCHEDULE_REFETCH_MS = 30_000
 
 /** byId = ['tournament', id] — без exact матчит ещё catches/entries/segments/... */
 export function invalidateTournamentCard(queryClient: QueryClient, tournamentId: string) {
@@ -140,6 +142,9 @@ export function useTournament(tournamentId: string | undefined) {
     queryFn: () => fetchTournamentById(tournamentId!),
     enabled: Boolean(tournamentId),
     staleTime: STALE_UNTIL_MUTATION,
+    // delay / pause / status — иначе пульт держит снимок из назначений
+    refetchInterval: SCHEDULE_REFETCH_MS,
+    refetchIntervalInBackground: false,
   })
 }
 
@@ -179,6 +184,8 @@ export function useSegments(tournamentId: string | undefined) {
     queryFn: () => fetchSegments(tournamentId!),
     enabled: Boolean(tournamentId),
     staleTime: STALE_UNTIL_MUTATION,
+    refetchInterval: SCHEDULE_REFETCH_MS,
+    refetchIntervalInBackground: false,
   })
 }
 

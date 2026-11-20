@@ -121,21 +121,22 @@ export function LeagueDetailScreen() {
           {league.description ? ` · ${league.description}` : ''}
         </Text>
 
-        {active && active.status === 'live' && (
-          <SurfaceCard
-            to={`/live/t/${active.id}`}
-            title={active.name}
-            featured
-            stage="live"
-            lines={[`${formatTournamentDate(active.event_date)} · ${active.location}`, 'LIVE']}
-          />
-        )}
-
         {tournaments.filter((t) => t.status !== 'draft').length === 0 ? (
           <EmptyState title="Этапов пока нет" description="Соревнования лиги появятся здесь после публикации." />
         ) : (
           <Stack gap="lg">
-            {featured && <TournamentCard row={featured} featured />}
+            {featured &&
+              (active?.id === featured.tournament.id && active.status === 'live' ? (
+                <SurfaceCard
+                  to={`/live/t/${active.id}`}
+                  title={active.name}
+                  featured
+                  stage="live"
+                  lines={[`${formatTournamentDate(active.event_date)} · ${active.location}`, 'LIVE']}
+                />
+              ) : (
+                <TournamentCard row={featured} featured />
+              ))}
             {restOpen.map((row) => (
               <TournamentCard key={row.tournament.id} row={row} />
             ))}

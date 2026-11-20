@@ -15,6 +15,7 @@ import {
   useMiniTours,
   useRefreshTournament,
   useSegments,
+  useTournament,
   useZoneJudges,
 } from '../../features/tournament/hooks'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
@@ -63,9 +64,11 @@ export function IndividualConsole({
 }) {
   const { user, role } = useAuth()
   const isOrg = canManageTournament(role)
-  const closed = useTournamentDayClosed(tournament)
-  const format = getFormat(tournament)
   const tournamentId = tournament.id
+  const { data: liveTournament } = useTournament(tournamentId)
+  const activeTournament = liveTournament ?? tournament
+  const closed = useTournamentDayClosed(activeTournament)
+  const format = getFormat(activeTournament)
   const now = useNow()
 
   const { data: entries = [] } = useEntries(tournamentId)
@@ -91,7 +94,7 @@ export function IndividualConsole({
   const zone: ZoneCode | null =
     myZones.length === 0 ? null : orgZone && myZones.includes(orgZone) ? orgZone : myZones[0]!
 
-  const phase = tournament ? getCurrentPhase(tournament, segments, now) : null
+  const phase = getCurrentPhase(activeTournament, segments, now)
   const scheduleTour = tourNumberFromPhase(phase)
   const [manualTour, setManualTour] = useState<number | null>(null)
   const tourNumber: number = manualTour ?? scheduleTour ?? 1
@@ -113,7 +116,7 @@ export function IndividualConsole({
   const [showVenueMap, setShowVenueMap] = useState(false)
   const swipeLocked = Boolean(editingMemberId)
 
-  const mapWindow = tournament ? resolveMapWindow(tournament, segments, now) : null
+  const mapWindow = resolveMapWindow(activeTournament, segments, now)
   const clockKey = mapWindow
     ? `${mapWindow.state}-${mapWindow.state === 'off' ? mapWindow.label : `${mapWindow.tour}-${mapWindow.mini}`}-${phase?.kind ?? ''}-${tourNumber}`
     : 'none'
@@ -222,7 +225,7 @@ export function IndividualConsole({
     ? memberMiniWeight(editing.member.id, weighMiniId, catches)
     : 0
 
-  const fishingDone = tournament ? isFishingComplete(tournament, segments, now) : false
+  const fishingDone = isFishingComplete(activeTournament, segments, now)
   const weighingDone = isZoneWeighingCompleted(zoneJudges, zone)
   const inputLocked = closed || weighingDone
 
@@ -346,12 +349,12 @@ export function IndividualConsole({
             Турнир завершён. Взвешивание закрыто до перезапуска.
           </Text>
         )}
-        {tournament.map_mode === 'geo' && tournament.venue_map && (
+        {activeTournament.map_mode === 'geo' && activeTournament.venue_map && (
           <Stack gap={6}>
             <Button size="compact-xs" variant="light" onClick={() => setShowVenueMap((v) => !v)}>
               {showVenueMap ? 'Скрыть карту площадки' : 'Карта площадки'}
             </Button>
-            {showVenueMap && <VenueMapView venueMap={tournament.venue_map} height={220} />}
+            {showVenueMap && <VenueMapView venueMap={activeTournament.venue_map} height={220} />}
           </Stack>
         )}
         {fishingDone && !closed && (
@@ -443,11 +446,15 @@ export function IndividualConsole({
             )}
           </Group>
         )}
-        {(tournament.schedule_paused_at || tournament.schedule_delay_minutes > 0) && (
+        {(activeTournament.schedule_paused_at || activeTournament.schedule_delay_minutes > 0) && (
           <Text size="xs" c="dimmed">
-            {tournament.schedule_paused_at ? 'Пауза' : null}
-            {tournament.schedule_paused_at && tournament.schedule_delay_minutes > 0 ? ' · ' : null}
-            {tournament.schedule_delay_minutes > 0 ? `+${tournament.schedule_delay_minutes} мин` : null}
+            {activeTournament.schedule_paused_at ? 'Пауза' : null}
+            {activeTournament.schedule_paused_at && activeTournament.schedule_delay_minutes > 0
+              ? ' · '
+              : null}
+            {activeTournament.schedule_delay_minutes > 0
+              ? `+${activeTournament.schedule_delay_minutes} мин`
+              : null}
           </Text>
         )}
         <Group justify="space-between" align="center" wrap="nowrap" gap="xs">
@@ -531,7 +538,7 @@ export function IndividualConsole({
                       {row.member.is_junior ? ' · Юн.' : ''}
                     </Text>
                     <Text size="xs" c="dimmed" ta="center" mt={2} lineClamp={1}>
-                      {tournament.draw_zones_only
+                      {activeTournament.draw_zones_only
                         ? row.teamName
                         : `${row.teamName} · сектор ${row.sector || '—'}`}
                     </Text>
@@ -585,7 +592,7 @@ export function IndividualConsole({
                           {row.member.full_name_snapshot}
                         </Text>
                         <Text size="xs" c="dimmed" lineClamp={1}>
-                          {tournament.draw_zones_only
+                          {activeTournament.draw_zones_only
                             ? row.teamName
                             : `${row.teamName} · сектор ${row.sector || '—'}`}
                         </Text>

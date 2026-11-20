@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react'
-import { Badge, Group, SegmentedControl, Stack, Table, Text, TextInput } from '@mantine/core'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Badge, Button, Group, SegmentedControl, Stack, Table, Text, TextInput } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
+import { useCheer } from '../../features/tournament/cheer'
 import { formatPlace } from '../../features/tournament/scoring'
 import { isIndividualSumBoardOpen } from '../../features/tournament/spectator'
 import type { AthleteStandingRow, TeamStandingRow } from '../../features/tournament/formats/individual/scoring'
-import type { CatchRow, MiniTour } from '../../features/tournament/types'
+import type { CatchRow, MiniTour, ZoneCode } from '../../features/tournament/types'
+
+type ZoneFilter = 'all' | ZoneCode
 
 function AthleteName({ row }: { row: AthleteStandingRow }) {
   return (
@@ -19,14 +22,37 @@ function AthleteName({ row }: { row: AthleteStandingRow }) {
   )
 }
 
+/** Зона спортсмена для фильтра по правилам среза. */
+function athleteMatchesZone(
+  row: AthleteStandingRow,
+  zone: ZoneCode,
+  showSum: boolean,
+  liveTour: number | null,
+): boolean {
+  if (!showSum) {
+    const t1 = row.tours.find((t) => t.tour === 1) ?? row.tours[0]
+    return t1?.zone === zone
+  }
+  if (liveTour != null) {
+    return row.tours.find((t) => t.tour === liveTour)?.zone === zone
+  }
+  return row.tours.some((t) => t.zone === zone)
+}
+
 function AthleteTable({
   rows,
   tourHeaders,
   sumOpen,
+  rowRefs,
+  flashIds,
+  emptyLabel,
 }: {
   rows: AthleteStandingRow[]
   tourHeaders: number[]
   sumOpen: boolean
+  rowRefs: { current: Map<string, HTMLTableRowElement> }
+  flashIds: Set<string>
+  emptyLabel: string
 }) {
   const sorted = useMemo(() => {
     if (sumOpen) return rows
@@ -65,8 +91,18 @@ function AthleteTable({
             const liveWeight = sumOpen
               ? row.totalWeight
               : (row.tours.find((t) => t.tour === firstTour)?.weight ?? 0)
+            const flash = flashIds.has(row.entryId) || flashIds.has(row.rosterMemberId)
             return (
-              <Table.Tr key={row.rosterMemberId}>
+              <Table.Tr
+                key={row.rosterMemberId}
+                ref={(el) => {
+                  if (el) {
+                    rowRefs.current.set(row.rosterMemberId, el)
+                    rowRefs.current.set(`entry:${row.entryId}`, el)
+                  }
+                }}
+                className={flash ? 'pc-catch-flash' : undefined}
+              >
                 <Table.Td>{formatPlace(livePlace)}</Table.Td>
                 <Table.Td>
                   <AthleteName row={row} />
@@ -94,7 +130,7 @@ function AthleteTable({
             <Table.Tr>
               <Table.Td colSpan={3 + tourHeaders.length + (sumOpen ? 1 : 0)}>
                 <Text c="dimmed" size="sm">
-                  Нет участников
+                  {emptyLabel}
                 </Text>
               </Table.Td>
             </Table.Tr>
@@ -112,6 +148,8 @@ export function IndividualResults({
   catches,
   miniTours,
   tournamentStatus,
+  tournamentId,
+  liveTour = null,
 }: {
   teams: TeamStandingRow[]
   athletes: AthleteStandingRow[]
@@ -119,25 +157,44 @@ export function IndividualResults({
   catches?: CatchRow[]
   miniTours?: MiniTour[]
   tournamentStatus?: string | null
+  tournamentId?: string
+  liveTour?: number | null
 }) {
   const showJuniors = juniors.length > 0
   const [tab, setTab] = useState<'team' | 'individual' | 'juniors'>('team')
   const [filter, setFilter] = useState('')
+  const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('all')
+  const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
+  const rowRefs = useRef(new Map<string, HTMLTableRowElement>())
   const needle = filter.trim().toLocaleLowerCase('ru')
+  const cheer = useCheer(tournamentId)
+  const cheerId = cheer.primaryId
 
-  // Without catches/miniTours keep previous behaviour (always show sum).
   const showSum =
     catches == null || miniTours == null
       ? true
       : isIndividualSumBoardOpen(catches, miniTours, tournamentStatus)
 
+  const athletesById = useMemo(() => {
+    const map = new Map<string, AthleteStandingRow>()
+    for (const row of athletes) map.set(row.rosterMemberId, row)
+    for (const row of juniors) map.set(row.rosterMemberId, row)
+    return map
+  }, [athletes, juniors])
+
   const teamRows = useMemo(() => {
     const filtered = teams.filter((row) => {
-      if (!needle) return true
-      return (
-        row.teamName.toLocaleLowerCase('ru').includes(needle) ||
-        row.athleteNames.some((n) => n.toLocaleLowerCase('ru').includes(needle))
-      )
+      if (needle) {
+        const hit =
+          row.teamName.toLocaleLowerCase('ru').includes(needle) ||
+          row.athleteNames.some((n) => n.toLocaleLowerCase('ru').includes(needle))
+        if (!hit) return false
+      }
+      if (zoneFilter === 'all') return true
+      return row.athleteIds.some((id) => {
+        const athlete = athletesById.get(id)
+        return athlete ? athleteMatchesZone(athlete, zoneFilter, showSum, liveTour) : false
+      })
     })
     if (showSum) return filtered
     const firstTour = filtered[0]?.tours[0]?.tour
@@ -149,19 +206,28 @@ export function IndividualResults({
       const weightB = b.tours.find((t) => t.tour === firstTour)?.weight ?? 0
       return placeA - placeB || weightB - weightA
     })
-  }, [teams, needle, showSum])
+  }, [teams, needle, showSum, zoneFilter, athletesById, liveTour])
 
   const filterAthletes = (rows: AthleteStandingRow[]) =>
     rows.filter((row) => {
-      if (!needle) return true
-      return (
-        row.athleteName.toLocaleLowerCase('ru').includes(needle) ||
-        row.teamName.toLocaleLowerCase('ru').includes(needle)
-      )
+      if (needle) {
+        const hit =
+          row.athleteName.toLocaleLowerCase('ru').includes(needle) ||
+          row.teamName.toLocaleLowerCase('ru').includes(needle)
+        if (!hit) return false
+      }
+      if (zoneFilter === 'all') return true
+      return athleteMatchesZone(row, zoneFilter, showSum, liveTour)
     })
 
-  const athleteRows = useMemo(() => filterAthletes(athletes), [athletes, needle])
-  const juniorRows = useMemo(() => filterAthletes(juniors), [juniors, needle])
+  const athleteRows = useMemo(
+    () => filterAthletes(athletes),
+    [athletes, needle, zoneFilter, showSum, liveTour],
+  )
+  const juniorRows = useMemo(
+    () => filterAthletes(juniors),
+    [juniors, needle, zoneFilter, showSum, liveTour],
+  )
 
   const tourHeaders = (
     teams[0]?.tours ??
@@ -171,6 +237,45 @@ export function IndividualResults({
   ).map((t) => t.tour)
 
   const activeTab = tab === 'juniors' && !showJuniors ? 'individual' : tab
+  const emptyLabel = zoneFilter === 'all' ? 'Нет участников' : 'В этой зоне никого'
+
+  const cheerInView = useMemo(() => {
+    if (!cheerId) return false
+    if (activeTab === 'team') return teamRows.some((row) => row.entryId === cheerId)
+    const pool = activeTab === 'juniors' ? juniorRows : athleteRows
+    return pool.some((row) => row.entryId === cheerId)
+  }, [cheerId, activeTab, teamRows, athleteRows, juniorRows])
+
+  useEffect(() => {
+    if (flashIds.size === 0) return
+    const timer = window.setTimeout(() => setFlashIds(new Set()), 1600)
+    return () => window.clearTimeout(timer)
+  }, [flashIds])
+
+  function scrollToCheer() {
+    if (!cheerId) return
+    if (!cheerInView && zoneFilter !== 'all') setZoneFilter('all')
+    const run = () => {
+      let el: HTMLTableRowElement | undefined
+      if (activeTab === 'team') {
+        el = rowRefs.current.get(cheerId)
+      } else {
+        const pool = [...athletes, ...juniors].filter((row) => row.entryId === cheerId)
+        const first = pool[0]
+        el = first
+          ? rowRefs.current.get(first.rosterMemberId)
+          : rowRefs.current.get(`entry:${cheerId}`)
+      }
+      if (!el) return
+      const flashKey =
+        activeTab === 'team'
+          ? cheerId
+          : ([...athletes, ...juniors].find((r) => r.entryId === cheerId)?.rosterMemberId ?? cheerId)
+      setFlashIds(new Set([flashKey, cheerId]))
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }
+    requestAnimationFrame(() => requestAnimationFrame(run))
+  }
 
   return (
     <Stack gap="md">
@@ -185,16 +290,43 @@ export function IndividualResults({
         onChange={(v) => setTab(v as 'team' | 'individual' | 'juniors')}
         data={[
           { value: 'team', label: 'Командный' },
-          { value: 'individual', label: showJuniors ? 'Личный' : 'Личный' },
+          { value: 'individual', label: 'Личный' },
           ...(showJuniors ? [{ value: 'juniors', label: `Юниоры (${juniors.length})` }] : []),
         ]}
       />
-      <TextInput
-        placeholder="Поиск"
-        leftSection={<IconSearch size={16} />}
-        value={filter}
-        onChange={(e) => setFilter(e.currentTarget.value)}
-      />
+      <Group gap={6} wrap="wrap">
+        {(
+          [
+            ['all', 'Все'],
+            ['A', 'A'],
+            ['B', 'B'],
+          ] as const
+        ).map(([value, label]) => (
+          <Button
+            key={value}
+            size="xs"
+            variant={zoneFilter === value ? 'filled' : 'default'}
+            color={value === 'A' ? 'zoneA' : value === 'B' ? 'zoneB' : undefined}
+            onClick={() => setZoneFilter(value)}
+          >
+            {label === 'Все' ? 'Все' : `Зона ${label}`}
+          </Button>
+        ))}
+      </Group>
+      <Group gap="xs" align="flex-end" wrap="wrap">
+        <TextInput
+          placeholder="Поиск"
+          leftSection={<IconSearch size={16} />}
+          value={filter}
+          onChange={(e) => setFilter(e.currentTarget.value)}
+          style={{ flex: '1 1 180px' }}
+        />
+        {cheerId ? (
+          <Button size="xs" variant="light" color="signal" onClick={scrollToCheer}>
+            {cheerInView ? 'К моей команде' : 'Показать мою команду'}
+          </Button>
+        ) : null}
+      </Group>
 
       {activeTab === 'team' ? (
         <Table.ScrollContainer minWidth={640}>
@@ -220,7 +352,13 @@ export function IndividualResults({
                   ? row.totalWeight
                   : (row.tours.find((t) => t.tour === firstTour)?.weight ?? 0)
                 return (
-                  <Table.Tr key={row.entryId}>
+                  <Table.Tr
+                    key={row.entryId}
+                    ref={(el) => {
+                      if (el) rowRefs.current.set(row.entryId, el)
+                    }}
+                    className={flashIds.has(row.entryId) ? 'pc-catch-flash' : undefined}
+                  >
                     <Table.Td>{formatPlace(livePlace)}</Table.Td>
                     <Table.Td>
                       <Text fw={600}>{row.teamName}</Text>
@@ -242,13 +380,36 @@ export function IndividualResults({
                   </Table.Tr>
                 )
               })}
+              {teamRows.length === 0 && (
+                <Table.Tr>
+                  <Table.Td colSpan={3 + tourHeaders.length + (showSum ? 1 : 0)}>
+                    <Text c="dimmed" size="sm">
+                      {emptyLabel}
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              )}
             </Table.Tbody>
           </Table>
         </Table.ScrollContainer>
       ) : activeTab === 'juniors' ? (
-        <AthleteTable rows={juniorRows} tourHeaders={tourHeaders} sumOpen={showSum} />
+        <AthleteTable
+          rows={juniorRows}
+          tourHeaders={tourHeaders}
+          sumOpen={showSum}
+          rowRefs={rowRefs}
+          flashIds={flashIds}
+          emptyLabel={emptyLabel}
+        />
       ) : (
-        <AthleteTable rows={athleteRows} tourHeaders={tourHeaders} sumOpen={showSum} />
+        <AthleteTable
+          rows={athleteRows}
+          tourHeaders={tourHeaders}
+          sumOpen={showSum}
+          rowRefs={rowRefs}
+          flashIds={flashIds}
+          emptyLabel={emptyLabel}
+        />
       )}
     </Stack>
   )

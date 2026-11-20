@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import {
   Badge,
+  Button,
   Group,
   Loader,
   SegmentedControl,
@@ -12,7 +13,7 @@ import {
 } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { setEntryDrawSlip } from '../../features/tournament/api'
+import { resetTournamentDraw, setEntryDrawSlip } from '../../features/tournament/api'
 import { tournamentKeys, useDrawSlips, useEntries } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
@@ -244,6 +245,17 @@ export function DrawScreen() {
     },
   })
 
+  const resetMutation = useMutation({
+    mutationFn: () => resetTournamentDraw(tournament!.id),
+    onSuccess: async () => {
+      if (!tournament) return
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.entries(tournament.id) })
+      await queryClient.invalidateQueries({ queryKey: tournamentKeys.drawSlips(tournament.id) })
+    },
+  })
+
+  const hasDraw = entries.some((entry) => Boolean(entry.draw_slip_id) || Boolean(entry.start_zone))
+
   const takenSlipIds = useMemo(
     () => new Set(entries.map((entry) => entry.draw_slip_id).filter((id): id is string => Boolean(id))),
     [entries],
@@ -285,7 +297,33 @@ export function DrawScreen() {
 
       <Panel>
         <Stack gap="md">
-          <SectionTitle>Прикрепить бумажку</SectionTitle>
+          <Group justify="space-between" align="flex-start" wrap="wrap">
+            <SectionTitle>Прикрепить бумажку</SectionTitle>
+            <Button
+              size="xs"
+              variant="outline"
+              color="red"
+              loading={resetMutation.isPending}
+              disabled={closed || !hasDraw}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    'Сбросить всю жеребьёвку? Бумажки и стартовые зоны у всех команд будут очищены.',
+                  )
+                ) {
+                  return
+                }
+                resetMutation.mutate()
+              }}
+            >
+              Сбросить жеребьёвку
+            </Button>
+          </Group>
+          {resetMutation.isError && (
+            <Text c="red" size="sm">
+              {(resetMutation.error as Error).message}
+            </Text>
+          )}
           {sorted.length === 0 ? (
             <Text size="sm" c="dimmed">
               Сначала добавьте заявки

@@ -99,6 +99,8 @@ export function V2Table() {
         catches={catches}
         miniTours={miniTours}
         tournamentStatus={tournament.status}
+        tournamentId={tournament.id}
+        liveTour={story?.clock?.tour ?? null}
       />
     )
   }

@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   clearAthleteDraws,
   generateAthleteDraws,
+  resetTournamentDraw,
   setAthleteDrawSlip,
   setAthleteZoneDraw,
   upsertAthleteDraws,
@@ -140,6 +141,14 @@ export function AthleteDrawScreen() {
     onSuccess: invalidate,
   })
 
+  const resetMutation = useMutation({
+    mutationFn: () => resetTournamentDraw(tournament!.id),
+    onSuccess: invalidate,
+  })
+
+  const hasDraw =
+    draws.length > 0 || athletes.some((a) => Boolean(a.member.draw_slip_id))
+
   const slipMutation = useMutation({
     mutationFn: async ({
       rosterMemberId,
@@ -205,20 +214,45 @@ export function AthleteDrawScreen() {
             <Text size="sm" c="dimmed">
               Пары получают разные зоны в I туре; одиночки — с балансом по зонам. Во II туре зоны зеркалятся.
             </Text>
-            <Button
-              color="signal"
-              loading={randomMutation.isPending}
-              disabled={closed || athletes.length === 0}
-              onClick={() => {
-                if (!window.confirm('Перезаписать текущую жеребьёвку случайной?')) return
-                randomMutation.mutate()
-              }}
-            >
-              Разыграть зоны
-            </Button>
+            <Group gap="sm">
+              <Button
+                color="signal"
+                loading={randomMutation.isPending}
+                disabled={closed || athletes.length === 0}
+                onClick={() => {
+                  if (!window.confirm('Перезаписать текущую жеребьёвку случайной?')) return
+                  randomMutation.mutate()
+                }}
+              >
+                Разыграть зоны
+              </Button>
+              <Button
+                variant="outline"
+                color="red"
+                loading={resetMutation.isPending}
+                disabled={closed || !hasDraw}
+                onClick={() => {
+                  if (
+                    !window.confirm(
+                      'Сбросить всю жеребьёвку? Зоны и бумажки у всех спортсменов будут очищены.',
+                    )
+                  ) {
+                    return
+                  }
+                  resetMutation.mutate()
+                }}
+              >
+                Сбросить жеребьёвку
+              </Button>
+            </Group>
             {randomMutation.isError && (
               <Text c="red" size="sm">
                 {(randomMutation.error as Error).message}
+              </Text>
+            )}
+            {resetMutation.isError && (
+              <Text c="red" size="sm">
+                {(resetMutation.error as Error).message}
               </Text>
             )}
           </Stack>
@@ -348,20 +382,45 @@ export function AthleteDrawScreen() {
             onChange={(v) => setSectorsPerZone(Number(v) || 40)}
             disabled={closed}
           />
-          <Button
-            color="signal"
-            loading={randomMutation.isPending}
-            disabled={closed || athletes.length === 0}
-            onClick={() => {
-              if (!window.confirm('Перезаписать текущую жеребьёвку случайной?')) return
-              randomMutation.mutate()
-            }}
-          >
-            Разыграть
-          </Button>
+          <Group gap="sm">
+            <Button
+              color="signal"
+              loading={randomMutation.isPending}
+              disabled={closed || athletes.length === 0}
+              onClick={() => {
+                if (!window.confirm('Перезаписать текущую жеребьёвку случайной?')) return
+                randomMutation.mutate()
+              }}
+            >
+              Разыграть
+            </Button>
+            <Button
+              variant="outline"
+              color="red"
+              loading={resetMutation.isPending}
+              disabled={closed || !hasDraw}
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    'Сбросить всю жеребьёвку? Зоны, сектора и бумажки у всех спортсменов будут очищены.',
+                  )
+                ) {
+                  return
+                }
+                resetMutation.mutate()
+              }}
+            >
+              Сбросить жеребьёвку
+            </Button>
+          </Group>
           {randomMutation.isError && (
             <Text c="red" size="sm">
               {(randomMutation.error as Error).message}
+            </Text>
+          )}
+          {resetMutation.isError && (
+            <Text c="red" size="sm">
+              {(resetMutation.error as Error).message}
             </Text>
           )}
         </Stack>

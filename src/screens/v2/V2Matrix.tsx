@@ -5,10 +5,25 @@ import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { formatPlace } from '../../features/tournament/scoring'
 import { slotTitle } from '../../features/tournament/schedule'
 import { gramsLabel, type MatrixCell, type MatrixRow } from '../../features/tournament/spectator'
+import type { ZoneCode } from '../../features/tournament/types'
 import { useV2Tournament } from './context'
 
 type Scope = 'personal' | 'team'
 type JuniorFilter = 'open' | 'juniors' | 'all'
+type ZoneFilter = 'all' | ZoneCode
+
+function rowMatchesZone(
+  row: MatrixRow,
+  zone: ZoneCode,
+  slots: { tour: number; mini: number }[],
+  clock: { tour: number; mini: number } | null,
+): boolean {
+  if (clock) {
+    const index = slots.findIndex((s) => s.tour === clock.tour && s.mini === clock.mini)
+    if (index >= 0) return row.cells[index]?.zone === zone
+  }
+  return row.cells.some((cell) => cell.zone === zone)
+}
 
 export function V2Matrix() {
   const { tournament, story } = useV2Tournament()
@@ -17,16 +32,31 @@ export function V2Matrix() {
   const [scope, setScope] = useState<Scope>(individual ? 'personal' : 'team')
   const hasJuniors = story.matrix.some((row) => row.junior)
   const [juniorFilter, setJuniorFilter] = useState<JuniorFilter>('all')
+  const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('all')
+  const clock = story.clock
 
   const rows = useMemo(() => {
-    const source: MatrixRow[] =
+    let source: MatrixRow[] =
       individual && scope === 'team' ? story.matrixTeams : story.matrix
-    if (!individual || scope !== 'personal' || !hasJuniors || juniorFilter === 'all') {
-      return source
+    if (individual && scope === 'personal' && hasJuniors && juniorFilter !== 'all') {
+      source =
+        juniorFilter === 'juniors'
+          ? source.filter((row) => row.junior)
+          : source.filter((row) => !row.junior)
     }
-    if (juniorFilter === 'juniors') return source.filter((row) => row.junior)
-    return source.filter((row) => !row.junior)
-  }, [individual, scope, story.matrix, story.matrixTeams, hasJuniors, juniorFilter])
+    if (zoneFilter === 'all') return source
+    return source.filter((row) => rowMatchesZone(row, zoneFilter, story.slots, clock))
+  }, [
+    individual,
+    scope,
+    story.matrix,
+    story.matrixTeams,
+    story.slots,
+    hasJuniors,
+    juniorFilter,
+    zoneFilter,
+    clock,
+  ])
 
   const maxWeight = Math.max(1, ...rows.flatMap((row) => row.cells.map((cell) => cell.grams ?? 0)))
   const worstPlace = Math.max(1, ...rows.flatMap((row) => row.cells.map((cell) => cell.place ?? 0)))
@@ -58,6 +88,23 @@ export function V2Matrix() {
             ]}
           />
         )}
+        {(
+          [
+            ['all', 'Все'],
+            ['A', 'A'],
+            ['B', 'B'],
+          ] as const
+        ).map(([value, label]) => (
+          <Button
+            key={value}
+            size="xs"
+            variant={zoneFilter === value ? 'filled' : 'default'}
+            color={value === 'A' ? 'zoneA' : value === 'B' ? 'zoneB' : undefined}
+            onClick={() => setZoneFilter(value)}
+          >
+            {label === 'Все' ? 'Все' : `Зона ${label}`}
+          </Button>
+        ))}
         <Button size="xs" variant={mode === 'weight' ? 'filled' : 'default'} onClick={() => setMode('weight')}>
           Цвет по весу
         </Button>
@@ -82,51 +129,61 @@ export function V2Matrix() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
-            const label =
-              individual && scope === 'personal'
-                ? row.athleteName ?? row.rosterNames[0] ?? row.teamName
-                : row.teamName
-            const key = row.rosterMemberId ?? row.entryId
-            return (
-              <tr key={key}>
-                <td style={stickyCell}>
-                  <Link
-                    to={`/live/t/${tournament.id}/team/${row.entryId}`}
-                    style={{ color: 'inherit', fontWeight: 700, textDecoration: 'none' }}
-                  >
-                    {label}
-                    {row.junior ? (
-                      <Text span size="xs" c="teal" ml={6} fw={700}>
-                        Юн.
-                      </Text>
-                    ) : null}
-                  </Link>
-                  {individual && scope === 'personal' && row.teamName ? (
-                    <Text size="xs" c="dimmed">
-                      {row.teamName}
-                    </Text>
-                  ) : null}
-                </td>
-                {row.cells.map((cell, index) => (
-                  <td
-                    key={index}
-                    style={{
-                      ...bodyCell,
-                      background: cellColor(cell, mode, maxWeight, worstPlace),
-                    }}
-                  >
-                    {cell.grams == null ? '—' : gramsLabel(cell.grams)}
-                    {cell.place != null ? (
-                      <Text size="xs" c="dimmed" style={{ display: 'block' }}>
-                        {formatPlace(cell.place)}
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={1 + story.slots.length} style={{ ...bodyCell, textAlign: 'left' }}>
+                <Text size="sm" c="dimmed">
+                  {zoneFilter === 'all' ? 'Нет строк' : 'В этой зоне никого'}
+                </Text>
+              </td>
+            </tr>
+          ) : (
+            rows.map((row) => {
+              const label =
+                individual && scope === 'personal'
+                  ? row.athleteName ?? row.rosterNames[0] ?? row.teamName
+                  : row.teamName
+              const key = row.rosterMemberId ?? row.entryId
+              return (
+                <tr key={key}>
+                  <td style={stickyCell}>
+                    <Link
+                      to={`/live/t/${tournament.id}/team/${row.entryId}`}
+                      style={{ color: 'inherit', fontWeight: 700, textDecoration: 'none' }}
+                    >
+                      {label}
+                      {row.junior ? (
+                        <Text span size="xs" c="teal" ml={6} fw={700}>
+                          Юн.
+                        </Text>
+                      ) : null}
+                    </Link>
+                    {individual && scope === 'personal' && row.teamName ? (
+                      <Text size="xs" c="dimmed">
+                        {row.teamName}
                       </Text>
                     ) : null}
                   </td>
-                ))}
-              </tr>
-            )
-          })}
+                  {row.cells.map((cell, index) => (
+                    <td
+                      key={index}
+                      style={{
+                        ...bodyCell,
+                        background: cellColor(cell, mode, maxWeight, worstPlace),
+                      }}
+                    >
+                      {cell.grams == null ? '—' : gramsLabel(cell.grams)}
+                      {cell.place != null ? (
+                        <Text size="xs" c="dimmed" style={{ display: 'block' }}>
+                          {formatPlace(cell.place)}
+                        </Text>
+                      ) : null}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })
+          )}
         </tbody>
       </table>
     </div>

@@ -979,6 +979,38 @@ export async function clearAthleteDraws(tournamentId: string): Promise<void> {
   if (error) throw error
 }
 
+/** Полный сброс жеребьёвки: athlete_draws, бумажки у roster/entries, start_zone. */
+export async function resetTournamentDraw(tournamentId: string): Promise<void> {
+  await clearAthleteDraws(tournamentId)
+
+  const { data: entries, error: entriesError } = await supabase
+    .from('tournament_entries')
+    .select('id')
+    .eq('tournament_id', tournamentId)
+  if (entriesError) throw entriesError
+  const entryIds = (entries ?? []).map((row) => row.id as string)
+
+  if (entryIds.length > 0) {
+    const { error: rosterError } = await supabase
+      .from('tournament_roster_members')
+      .update({ draw_slip_id: null })
+      .in('entry_id', entryIds)
+    if (rosterError) throw rosterError
+  }
+
+  const { error: entryError } = await supabase
+    .from('tournament_entries')
+    .update({ draw_slip_id: null, start_zone: null })
+    .eq('tournament_id', tournamentId)
+  if (entryError) throw entryError
+}
+
+/** Удалить все заявки турнира (составы и уловы — по каскаду БД). */
+export async function deleteAllEntries(tournamentId: string): Promise<void> {
+  const { error } = await supabase.from('tournament_entries').delete().eq('tournament_id', tournamentId)
+  if (error) throw error
+}
+
 /**
  * Случайная жеребьёвка: в каждом туре спортсмен получает одну зону на все мини-туры;
  * секторы внутри зоны тура не повторяются.

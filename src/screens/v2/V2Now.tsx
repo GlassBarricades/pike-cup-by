@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Anchor, Group, SimpleGrid, Stack, Text } from '@mantine/core'
+import { Anchor, Button, Group, SimpleGrid, Stack, Text } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { formatCatchClock } from '../../features/tournament/catchLog'
 import { useRefreshTournament } from '../../features/tournament/hooks'
@@ -9,10 +9,13 @@ import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { formatPlaceShift, gramsLabel, shoreLeaders, sumGap, zoneGap, gapLine } from '../../features/tournament/spectator'
 import { useCheer } from '../../features/tournament/cheer'
 import { slipSector } from '../../features/tournament/slips'
+import type { ZoneCode } from '../../features/tournament/types'
 import { useRulesSeen } from '../../features/tournament/v2Store'
 import { PhaseClock, Panel } from '../../ui'
 import { useV2Tournament, type V2TournamentValue } from './context'
 import { RulesComic } from './RulesComic'
+
+type ZoneFilter = 'all' | ZoneCode
 
 export function V2Now() {
   const { tournament, entries, story, results } = useV2Tournament()
@@ -21,11 +24,16 @@ export function V2Now() {
   const { newCatchIds, hasRefreshed } = useRefreshTournament(tournament.id)
   const seen = useRulesSeen()
   const [comic, setComic] = useState(!seen && !individual)
+  const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('all')
   const delta = useMemo(() => {
     if (newCatchIds.length === 0) return []
     const ids = new Set(newCatchIds)
-    return story.moments.filter((moment) => ids.has(moment.id))
-  }, [story.moments, newCatchIds])
+    return story.moments.filter((moment) => {
+      if (!ids.has(moment.id)) return false
+      if (zoneFilter === 'all') return true
+      return moment.zone === zoneFilter
+    })
+  }, [story.moments, newCatchIds, zoneFilter])
   const tour = story.clock?.tour ?? (story.mapWindow.state === 'moving' ? story.mapWindow.tour : 1)
   const closesMs = story.progress?.closesAt ? story.progress.closesAt.getTime() - story.phase.effectiveNow.getTime() : null
   const closesMin = closesMs == null ? null : Math.max(0, Math.ceil(closesMs / 60_000))
@@ -61,6 +69,26 @@ export function V2Now() {
         </Panel>
       ) : null}
       <CheerStrip entries={entries} story={story} cheer={cheer} tournamentId={tournament.id} />
+
+      <Group gap={6} wrap="wrap">
+        {(
+          [
+            ['all', 'Все'],
+            ['A', 'A'],
+            ['B', 'B'],
+          ] as const
+        ).map(([value, label]) => (
+          <Button
+            key={value}
+            size="xs"
+            variant={zoneFilter === value ? 'filled' : 'default'}
+            color={value === 'A' ? 'zoneA' : value === 'B' ? 'zoneB' : undefined}
+            onClick={() => setZoneFilter(value)}
+          >
+            {label === 'Все' ? 'Все' : `Зона ${label}`}
+          </Button>
+        ))}
+      </Group>
 
       <Panel p="sm">
         <Text size="xs" c="dimmed" tt="uppercase">
@@ -114,16 +142,33 @@ export function V2Now() {
           <Text size="sm" c="dimmed">
             {slotTitle(story.progress.slot)}
           </Text>
-          {story.progress.pending.length > 0 ? (
-            <Text size="sm" mt={6}>
-              Ещё не взвешены:{' '}
-              {story.progress.pending.map((row) => `${row.teamName} (${row.zone}${row.sector})`).join(', ')}
-            </Text>
-          ) : (
-            <Text size="sm" mt={6}>
-              Окно закрыто по весам
-            </Text>
-          )}
+          {(() => {
+            const pending =
+              zoneFilter === 'all'
+                ? story.progress.pending
+                : story.progress.pending.filter((row) => row.zone === zoneFilter)
+            if (pending.length > 0) {
+              return (
+                <Text size="sm" mt={6}>
+                  Ещё не взвешены:{' '}
+                  {pending
+                    .map((row) =>
+                      tournament.draw_zones_only
+                        ? `${row.teamName} (${row.zone})`
+                        : `${row.teamName} (${row.zone}${row.sector})`,
+                    )
+                    .join(', ')}
+                </Text>
+              )
+            }
+            return (
+              <Text size="sm" mt={6}>
+                {zoneFilter === 'all' || story.progress.pending.length === 0
+                  ? 'Окно закрыто по весам'
+                  : 'В этой зоне все взвешены'}
+              </Text>
+            )
+          })()}
         </Panel>
       ) : null}
 
@@ -131,7 +176,9 @@ export function V2Now() {
         <Stack gap={6}>
           <Text fw={700}>Итог {slotTitle(story.closedWindow.slot)}</Text>
           <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
-            {story.closedWindow.zones.map((zone) => (
+            {story.closedWindow.zones
+              .filter((zone) => zoneFilter === 'all' || zone.zone === zoneFilter)
+              .map((zone) => (
               <Panel key={zone.zone} p="sm">
                 <Text size="xs" c="dimmed" tt="uppercase">
                   Зона {zone.zone}
@@ -153,8 +200,10 @@ export function V2Now() {
         </Stack>
       ) : null}
 
-      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
-        {(['A', 'B'] as const).map((zone) => {
+      <SimpleGrid cols={{ base: 1, sm: zoneFilter === 'all' ? 2 : 1 }} spacing="xs">
+        {(['A', 'B'] as const)
+          .filter((zone) => zoneFilter === 'all' || zone === zoneFilter)
+          .map((zone) => {
           if (individual) {
             const leaders = athleteLeaders[zone]
             return (

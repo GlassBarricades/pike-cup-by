@@ -276,6 +276,8 @@ export function ResultsTab({
         catches={catches}
         miniTours={miniTours}
         tournamentStatus={tournament.status}
+        tournamentId={tournament.id}
+        liveTour={liveTour}
       />
     )
   }

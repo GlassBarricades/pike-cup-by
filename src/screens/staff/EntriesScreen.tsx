@@ -1,7 +1,13 @@
 import { useState } from 'react'
 import { Badge, Button, Checkbox, Group, MultiSelect, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createEntryFromTeam, createSoloEntry, deleteEntry, lockAllRosters } from '../../features/tournament/api'
+import {
+  createEntryFromTeam,
+  createSoloEntry,
+  deleteAllEntries,
+  deleteEntry,
+  lockAllRosters,
+} from '../../features/tournament/api'
 import { getFormat } from '../../features/tournament/formats'
 import { tournamentKeys, useEntries, useTeamsCatalog } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
@@ -116,6 +122,17 @@ export function EntriesScreen() {
     onSuccess: async () => {
       if (tournament) {
         await queryClient.invalidateQueries({ queryKey: tournamentKeys.entries(tournament.id) })
+      }
+    },
+  })
+
+  const deleteAllMutation = useMutation({
+    mutationFn: () => deleteAllEntries(tournament!.id),
+    onSuccess: async () => {
+      if (tournament) {
+        await queryClient.invalidateQueries({ queryKey: tournamentKeys.entries(tournament.id) })
+        await queryClient.invalidateQueries({ queryKey: tournamentKeys.athleteDraws(tournament.id) })
+        await queryClient.invalidateQueries({ queryKey: tournamentKeys.catches(tournament.id) })
       }
     },
   })
@@ -279,10 +296,36 @@ export function EntriesScreen() {
       )}
 
       <div>
-        <SectionTitle>Заявки ({entries.length})</SectionTitle>
+        <Group justify="space-between" align="center" wrap="wrap" mb="xs">
+          <SectionTitle>Заявки ({entries.length})</SectionTitle>
+          <Button
+            size="xs"
+            variant="outline"
+            color="red"
+            disabled={closed || entries.length === 0}
+            loading={deleteAllMutation.isPending}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Удалить все заявки (${entries.length})? Составы, жеребьёвка и уловы этих заявок на турнире тоже будут удалены. Команды в справочнике останутся.`,
+                )
+              ) {
+                return
+              }
+              deleteAllMutation.mutate()
+            }}
+          >
+            Удалить все заявки
+          </Button>
+        </Group>
         {deleteMutation.isError && (
           <Text c="red" size="sm" mb="sm">
             {(deleteMutation.error as Error).message}
+          </Text>
+        )}
+        {deleteAllMutation.isError && (
+          <Text c="red" size="sm" mb="sm">
+            {(deleteAllMutation.error as Error).message}
           </Text>
         )}
         <Panel p={0}>

@@ -103,7 +103,13 @@ export function useCatchRefresh(tournamentId: string | undefined) {
       if (!tournamentId) return false
       const key = query.queryKey
       if (!Array.isArray(key) || key[0] !== 'tournament' || key[1] !== tournamentId) return false
-      return key.length === 2 || key[2] === 'catches' || key[2] === 'cheerCounts'
+      return (
+        key.length === 2 ||
+        key[2] === 'catches' ||
+        key[2] === 'segments' ||
+        key[2] === 'miniTours' ||
+        key[2] === 'cheerCounts'
+      )
     },
   })
 
@@ -115,6 +121,8 @@ export function useCatchRefresh(tournamentId: string | undefined) {
     await Promise.all([
       queryClient.refetchQueries({ queryKey: byIdKey(tournamentId), exact: true }),
       queryClient.refetchQueries({ queryKey: catchesKey(tournamentId) }),
+      queryClient.refetchQueries({ queryKey: ['tournament', tournamentId, 'segments'] }),
+      queryClient.refetchQueries({ queryKey: ['tournament', tournamentId, 'miniTours'] }),
       queryClient.refetchQueries({ queryKey: ['tournament', tournamentId, 'cheerCounts'] }),
     ])
 
