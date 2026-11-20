@@ -17,7 +17,7 @@ import { useV2Tournament } from './context'
 type Pick = { zone: ZoneCode; sector: number }
 
 export function V2Map() {
-  const { tournament, entries, catches, miniTours, segments, story, draws } = useV2Tournament()
+  const { tournament, entries, catches, miniTours, segments, story } = useV2Tournament()
   const individual = isIndividual(getFormat(tournament))
 
   if (individual || tournament.map_mode === 'geo') {
