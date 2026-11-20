@@ -37,7 +37,7 @@ function startGroupOnZone(zone: 'A' | 'B', tour: number): ZoneCode {
   return zone === 'A' ? 'B' : 'A'
 }
 
-function tourForZone(startZone: ZoneCode, zone: 'A' | 'B'): number {
+function tourForZone(startZone: ZoneCode, zone: 'A' | 'B'): 1 | 2 {
   return startZone === zone ? 1 : 2
 }
 
