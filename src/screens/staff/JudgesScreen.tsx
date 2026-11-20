@@ -47,6 +47,7 @@ function ZoneJudgeColumn({
     onSuccess: async () => {
       setUserId(null)
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.zoneJudges(tournamentId) })
+      await queryClient.invalidateQueries({ queryKey: ['zoneJudges', 'mine'] })
       onAssigned()
     },
   })
@@ -55,6 +56,7 @@ function ZoneJudgeColumn({
     mutationFn: (id: string) => removeZoneJudge(id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: tournamentKeys.zoneJudges(tournamentId) })
+      await queryClient.invalidateQueries({ queryKey: ['zoneJudges', 'mine'] })
     },
   })
 

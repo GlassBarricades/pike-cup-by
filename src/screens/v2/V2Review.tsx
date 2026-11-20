@@ -598,6 +598,7 @@ function SectorsPane({
   const { story, entries, catches, miniTours } = useV2Tournament()
   const [shorePick, setShorePick] = useState<{ zone: Zone; sector: number } | null>(null)
   if (!weighed) return <EmptyState title="Весов ещё нет" />
+  const individual = story.engine === 'individual'
   const averages = sectorAverages(story)
   const route = entryId ? slipPoints(story, entryId) : []
   const luck = entryId ? sectorLuck(story, entryId) : []
@@ -608,18 +609,30 @@ function SectorsPane({
   if (averages.length === 0) {
     return (
       <Panel p="sm">
-        <Text size="sm" c="dimmed">В бумажках этого турнира нет номеров секторов, поэтому карта берега, удача номера и соседи не из чего сложиться.</Text>
+        <Text size="sm" c="dimmed">
+          {individual
+            ? 'В жеребьёвке нет секторов с весом — разбор берега пока пуст.'
+            : 'В бумажках этого турнира нет номеров секторов, поэтому карта берега, удача номера и соседи не из чего сложиться.'}
+        </Text>
       </Panel>
     )
   }
   return (
     <Stack gap="sm">
-      <ShoreHeat
-        heat={story.heatDay}
-        picked={shorePick}
-        history={shorePick ? sectorHistory(entries, catches, miniTours, story.slots, shorePick.zone, shorePick.sector) : []}
-        onPick={setShorePick}
-      />
+      {!individual ? (
+        <ShoreHeat
+          heat={story.heatDay}
+          picked={shorePick}
+          history={shorePick ? sectorHistory(entries, catches, miniTours, story.slots, shorePick.zone, shorePick.sector) : []}
+          onPick={setShorePick}
+        />
+      ) : (
+        <Panel p="sm">
+          <Text size="sm" c="dimmed">
+            Схема озера PikeCup здесь не используется. Секторы дня — на вкладке «Карта» LIVE (площадка + список по жеребьёвке).
+          </Text>
+        </Panel>
+      )}
       <Frame title="Средний вес номера сектора">
         <BarChart data={averages}>
           <CartesianGrid stroke="var(--pc-line)" />
@@ -629,7 +642,14 @@ function SectorsPane({
           <Bar dataKey="avg" name="Средний вес" fill="var(--pc-signal)" />
         </BarChart>
       </Frame>
-      <Frame title="Маршрут бумажки" note="Точка — сектор и вес окна выбранной команды.">
+      <Frame
+        title={individual ? 'Маршрут по секторам' : 'Маршрут бумажки'}
+        note={
+          individual
+            ? 'Точка — сектор и вес окна выбранной команды (сумма атлетов).'
+            : 'Точка — сектор и вес окна выбранной команды.'
+        }
+      >
         <ScatterChart>
           <CartesianGrid stroke="var(--pc-line)" />
           <XAxis dataKey="sector" name="Сектор" tick={tick} />

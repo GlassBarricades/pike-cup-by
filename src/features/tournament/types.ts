@@ -244,6 +244,15 @@ export type ZoneJudgeRow = {
   profile?: { id: string; full_name: string | null; role: string }
 }
 
+/** Назначение судьи на зону с карточкой турнира (пульт без глобального Select). */
+export type ZoneJudgeAssignment = {
+  id: string
+  tournament_id: string
+  user_id: string
+  zone: ZoneCode
+  tournament: Tournament
+}
+
 export type JudgeCandidate = {
   id: string
   full_name: string | null

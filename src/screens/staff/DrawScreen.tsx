@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   Badge,
   Group,
+  Loader,
   SegmentedControl,
   Select,
   Stack,
@@ -234,9 +235,8 @@ export function DrawScreen() {
   const unassigned = sorted.filter((entry) => !entry.start_zone)
 
   const slipMutation = useMutation({
-    mutationFn: ({ entryId, slipId }: { entryId: string; slipId: string | null }) =>
-      setEntryDrawSlip(entryId, slipId),
-    onSuccess: async () => {
+    mutationFn: async ({ entryId, slipId }: { entryId: string; slipId: string | null }) => {
+      await setEntryDrawSlip(entryId, slipId)
       if (tournament) {
         await queryClient.invalidateQueries({ queryKey: tournamentKeys.entries(tournament.id) })
         await queryClient.invalidateQueries({ queryKey: tournamentKeys.drawSlips(tournament.id) })
@@ -325,6 +325,7 @@ export function DrawScreen() {
                       .filter((slip) => slip.id === entry.draw_slip_id || !takenSlipIds.has(slip.id))
                       .map((slip) => ({ value: slip.id, label: slipOptionLabel(slip) }))
                     const open = openEntryId === entry.id
+                    const assigning = slipMutation.isPending && slipMutation.variables?.entryId === entry.id
                     return (
                       <Stack key={entry.id} gap={6}>
                         <Group gap="sm" align="flex-end" wrap="wrap">
@@ -339,10 +340,18 @@ export function DrawScreen() {
                               if (slipId) setOpenEntryId(entry.id)
                             }}
                             searchable
-                            clearable
-                            placeholder={slips.length === 0 ? 'Нет бумажек у турнира' : 'Бумажка'}
+                            clearable={!assigning}
+                            placeholder={
+                              assigning
+                                ? 'Сохраняем…'
+                                : slips.length === 0
+                                  ? 'Нет бумажек у турнира'
+                                  : 'Бумажка'
+                            }
                             nothingFoundMessage="Нет свободных бумажек"
                             disabled={closed || slips.length === 0 || slipMutation.isPending}
+                            rightSection={assigning ? <Loader size={16} /> : undefined}
+                            rightSectionPointerEvents={assigning ? 'none' : undefined}
                             style={{ flex: '1 1 14rem' }}
                           />
                         </Group>

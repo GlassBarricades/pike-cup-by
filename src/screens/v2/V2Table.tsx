@@ -46,7 +46,13 @@ export function V2Table() {
   }, [story, mode, cheer, tour, query])
 
   if (isIndividual(getFormat(tournament)) && results.engine === 'individual') {
-    return <IndividualResults teams={results.teams} athletes={results.athletes} />
+    return (
+      <IndividualResults
+        teams={results.teams}
+        athletes={results.athletes}
+        juniors={results.juniors}
+      />
+    )
   }
 
   if (!story) return <EmptyState title="Нет данных" />

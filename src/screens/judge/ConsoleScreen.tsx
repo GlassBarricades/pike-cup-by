@@ -1,14 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActionIcon, Badge, Button, Group, SegmentedControl, Stack, Text, TextInput, UnstyledButton } from '@mantine/core'
-import { IconArrowLeft, IconBackspace, IconSearch } from '@tabler/icons-react'
+import { Badge, Button, Group, SegmentedControl, Select, Stack, Text, TextInput, UnstyledButton } from '@mantine/core'
+import { IconSearch } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { addCatch, deleteCatch, isZoneWeighingCompleted, setZoneWeighingCompleted } from '../../features/tournament/api'
 import { getFormat, isIndividual } from '../../features/tournament/formats'
-import { tournamentKeys, useCatchAuthors, useCatches, useEntries, useMiniTours, useRefreshTournament, useSegments, useZoneJudges } from '../../features/tournament/hooks'
-import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
+import { formatTournamentDate, statusLabel } from '../../features/tournament/date'
+import {
+    tournamentKeys,
+    useCatchAuthors,
+    useCatches,
+    useEntries,
+    useMiniTours,
+    useMyZoneAssignments,
+    useRefreshTournament,
+    useSegments,
+    useTournaments,
+    useZoneJudges,
+} from '../../features/tournament/hooks'
 import { IndividualConsole } from './IndividualConsole'
+import { WeightNumpad } from './WeightNumpad'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import {
     getCurrentPhase,
@@ -21,10 +33,36 @@ import {
     tourNumberFromPhase,
 } from '../../features/tournament/schedule'
 import { useNow } from '../../features/tournament/useNow'
-import { entryTeamName, type CatchRow, type MiniTour, type ZoneCode } from '../../features/tournament/types'
+import {
+    entryTeamName,
+    type CatchRow,
+    type MiniTour,
+    type Tournament,
+    type ZoneCode,
+    type ZoneJudgeAssignment,
+} from '../../features/tournament/types'
 import { EmptyState, VenueMapView } from '../../ui'
 
 type Panel = 'console' | 'results'
+
+const CONSOLE_TOURNAMENT_KEY = 'pikecup.judgeConsoleTournamentId'
+
+function readConsoleTournamentId(): string | null {
+    try {
+        return sessionStorage.getItem(CONSOLE_TOURNAMENT_KEY)
+    } catch {
+        return null
+    }
+}
+
+function writeConsoleTournamentId(id: string | null) {
+    try {
+        if (id) sessionStorage.setItem(CONSOLE_TOURNAMENT_KEY, id)
+        else sessionStorage.removeItem(CONSOLE_TOURNAMENT_KEY)
+    } catch {
+        /* ignore */
+    }
+}
 
 function tourWeight(entryId: string, tourNumber: number, catches: CatchRow[], miniTours: MiniTour[]): number {
     const miniIds = new Set(miniTours.filter((m) => m.tour_number === tourNumber).map((m) => m.id))
@@ -45,162 +83,162 @@ function formatLogTime(iso: string): string {
     })
 }
 
-function WeightNumpad({
-    teamName,
-    recordedGrams,
-    targetLabel,
-    saving,
-    error,
-    onSave,
-    onClose,
-}: {
-    teamName: string
-    recordedGrams: number
-    targetLabel: string | null
-    saving: boolean
-    error: string | null
-    onSave: (grams: number) => void
-    onClose: () => void
-}) {
-    const [digits, setDigits] = useState('')
+export function ConsoleScreen() {
+    const { user, role, loading: authLoading } = useAuth()
+    const isOrg = canManageTournament(role)
+    const {
+        data: assignments = [],
+        isPending: assignmentsPending,
+        isFetched: assignmentsFetched,
+    } = useMyZoneAssignments(user?.id)
+    const needsOrgFallback = Boolean(isOrg && assignmentsFetched && assignments.length === 0)
+    const { data: allTournaments = [], isPending: tournamentsPending } = useTournaments(
+        undefined,
+        Boolean(isOrg),
+    )
+    const [pickedId, setPickedId] = useState<string | null>(() => readConsoleTournamentId())
 
-    const value = Number(digits) || 0
-    const canSave = value > 0
+    const orgOptions = useMemo(
+        () => allTournaments.filter((t) => t.status === 'live' || t.status === 'published'),
+        [allTournaments],
+    )
 
-    const press = (d: string) => {
-        if (saving) return
-        setDigits((prev) => {
-            if (prev.length >= 6) return prev
-            if (prev === '0') return d
-            return prev + d
-        })
+    const pickTournament = useCallback((id: string) => {
+        setPickedId(id)
+        writeConsoleTournamentId(id)
+    }, [])
+
+    const assignmentByTournament = useMemo(() => {
+        const map = new Map<string, ZoneJudgeAssignment>()
+        for (const row of assignments) map.set(row.tournament_id, row)
+        return map
+    }, [assignments])
+
+    const selectable = useMemo(() => {
+        if (assignments.length > 0) {
+            return assignments.map((a) => ({
+                id: a.tournament_id,
+                label: `${formatTournamentDate(a.tournament.event_date)} · ${a.tournament.name} · зона ${a.zone}`,
+                tournament: a.tournament,
+                zone: a.zone as ZoneCode | null,
+            }))
+        }
+        return orgOptions.map((t) => ({
+            id: t.id,
+            label: `${formatTournamentDate(t.event_date)} · ${t.name} (${statusLabel[t.status]})`,
+            tournament: t,
+            zone: null as ZoneCode | null,
+        }))
+    }, [assignments, orgOptions])
+
+    const activeId =
+        (pickedId && selectable.some((s) => s.id === pickedId) ? pickedId : null) ??
+        selectable[0]?.id ??
+        null
+    const active = selectable.find((s) => s.id === activeId) ?? null
+
+    useEffect(() => {
+        if (active && pickedId !== active.id) {
+            writeConsoleTournamentId(active.id)
+        }
+    }, [active, pickedId])
+
+    const loading =
+        authLoading || !user || assignmentsPending || (needsOrgFallback && tournamentsPending)
+
+    if (loading) {
+        return (
+            <Text size="sm" c="dimmed" p="md">
+                Загрузка пульта…
+            </Text>
+        )
     }
 
-    const backspace = () => {
-        if (saving) return
-        setDigits((prev) => prev.slice(0, -1))
-    }
-    const clear = () => {
-        if (saving) return
-        setDigits('')
+    if (!isOrg && assignments.length === 0) {
+        return (
+            <EmptyState
+                title="Пульт судьи"
+                description="Вас ещё не назначили на зону ни в одном текущем турнире. Попросите организатора добавить вас в «Судьи зон»."
+            />
+        )
     }
 
-    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'clear', '0', 'back'] as const
+    if (isOrg && assignments.length === 0 && orgOptions.length === 0) {
+        return (
+            <EmptyState
+                title="Пульт судьи"
+                description="Нет опубликованных или идущих турниров."
+            />
+        )
+    }
+
+    if (!active) {
+        return (
+            <EmptyState title="Пульт судьи" description="Нет доступных турниров для пульта." />
+        )
+    }
+
+    const assignedZone =
+        assignmentByTournament.get(active.id)?.zone ?? active.zone
 
     return (
-        <div className="pc-judge-numpad-overlay" role="dialog" aria-label="Ввод веса">
-            <Stack gap="md" className="pc-judge-numpad" p="md">
-                <Group justify="space-between" align="flex-start">
-                    <div>
-                        <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
-                            Новое взвешивание
-                        </Text>
-                        <Text fw={800} size="lg" lineClamp={2}>
-                            {teamName}
-                        </Text>
-                    </div>
-                    <ActionIcon variant="subtle" color="gray" size="lg" onClick={onClose} disabled={saving} aria-label="Назад">
-                        <IconArrowLeft size={22} />
-                    </ActionIcon>
-                </Group>
-
-                <Text size="sm" ta="center" c={targetLabel ? undefined : 'dimmed'}>
-                    {targetLabel ? `Запишется в ${targetLabel}` : 'Сейчас некуда записать улов'}
-                </Text>
-
-                <Text className="pc-judge-weight-display pc-tabular" ta="center">
-                    {digits || '0'}
-                    <Text span size="sm" c="dimmed" ml={6}>
-                        г
-                    </Text>
-                </Text>
-                {recordedGrams > 0 && (
-                    <Text size="sm" c="dimmed" ta="center">
-                        Уже записано {recordedGrams} г — эта фиксация прибавится к сумме
-                    </Text>
-                )}
-
-                <div className="pc-judge-keypad">
-                    {keys.map((k) => {
-                        if (k === 'clear') {
-                            return (
-                                <UnstyledButton key={k} className="pc-judge-key pc-judge-key-muted" onClick={clear}>
-                                    C
-                                </UnstyledButton>
-                            )
-                        }
-                        if (k === 'back') {
-                            return (
-                                <UnstyledButton key={k} className="pc-judge-key pc-judge-key-muted" onClick={backspace} aria-label="Стереть">
-                                    <IconBackspace size={28} />
-                                </UnstyledButton>
-                            )
-                        }
-                        return (
-                            <UnstyledButton key={k} className="pc-judge-key" onClick={() => press(k)}>
-                                {k}
-                            </UnstyledButton>
-                        )
-                    })}
-                </div>
-
-                {error && (
-                    <Text c="red" size="sm" ta="center">
-                        {error}
-                    </Text>
-                )}
-
-                <Button
-                    color="signal"
-                    size="xl"
-                    h={56}
-                    disabled={!canSave || saving || !targetLabel}
-                    loading={saving}
-                    loaderProps={{ color: 'white', type: 'oval' }}
-                    onClick={() => onSave(value)}
-                >
-                    {saving ? 'Сохранение' : 'Записать'}
-                </Button>
-
-                <Button variant="subtle" color="gray" onClick={onClose} disabled={saving}>
-                    Назад
-                </Button>
-            </Stack>
-        </div>
+        <Stack gap="sm">
+            {selectable.length > 1 && (
+                <Select
+                    label="Турнир"
+                    data={selectable.map((s) => ({ value: s.id, label: s.label }))}
+                    value={active.id}
+                    onChange={(v) => {
+                        if (v) pickTournament(v)
+                    }}
+                    searchable
+                    size="sm"
+                />
+            )}
+            {isIndividual(getFormat(active.tournament)) ? (
+                <IndividualConsole tournament={active.tournament} assignedZone={assignedZone} />
+            ) : (
+                <PikecupConsole tournament={active.tournament} assignedZone={assignedZone} />
+            )}
+        </Stack>
     )
 }
 
-export function ConsoleScreen() {
-    const { selected: tournament } = useStaffTournament()
-    if (tournament && isIndividual(getFormat(tournament))) {
-        return <IndividualConsole />
-    }
-    return <PikecupConsole />
-}
-
-function PikecupConsole() {
+function PikecupConsole({
+    tournament,
+    assignedZone,
+}: {
+    tournament: Tournament
+    assignedZone: ZoneCode | null
+}) {
     const { user, role } = useAuth()
     const isOrg = canManageTournament(role)
-    const { selected: tournament } = useStaffTournament()
-    const closed = useTournamentDayClosed()
-    const tournamentId = tournament?.id
+    const closed = useTournamentDayClosed(tournament)
+    const tournamentId = tournament.id
     const now = useNow()
 
     const { data: entries = [] } = useEntries(tournamentId)
     const { data: miniTours = [] } = useMiniTours(tournamentId)
     const { data: catches = [] } = useCatches(tournamentId)
     const { data: segments = [] } = useSegments(tournamentId)
-    const { data: zoneJudges = [] } = useZoneJudges(tournamentId)
+    const { data: zoneJudges = [], isPending: zoneJudgesPending } = useZoneJudges(tournamentId)
     const { data: authors } = useCatchAuthors(catches)
     const { refresh, isFetching: refreshing } = useRefreshTournament(tournamentId)
 
     const queryClient = useQueryClient()
     const scrollerRef = useRef<HTMLDivElement>(null)
 
-    const myAssignment = useMemo(() => zoneJudges.find((j) => j.user_id === user?.id) ?? null, [zoneJudges, user?.id])
+    const myAssignment = useMemo(
+        () =>
+            assignedZone
+                ? ({ zone: assignedZone } as { zone: ZoneCode })
+                : (zoneJudges.find((j) => j.user_id === user?.id) ?? null),
+        [assignedZone, zoneJudges, user?.id],
+    )
 
     const [orgZone, setOrgZone] = useState<ZoneCode>('A')
-    const zone: ZoneCode | null = isOrg ? orgZone : (myAssignment?.zone ?? null)
+    const zone: ZoneCode | null = myAssignment?.zone ?? (isOrg ? orgZone : null)
+    const showOrgZonePicker = isOrg && !myAssignment?.zone
 
     const phase = tournament ? getCurrentPhase(tournament, segments, now) : null
     const scheduleTour = tourNumberFromPhase(phase)
@@ -373,12 +411,21 @@ function PikecupConsole() {
         el.scrollTo({ left: panel === 'results' ? el.clientWidth : 0, behavior: 'auto' })
     }, [swipeLocked, panel])
 
-    if (!tournament) {
-        return <EmptyState title="Пульт судьи" description="Выберите турнир сверху." />
+    if (!isOrg && !assignedZone && zoneJudgesPending) {
+        return (
+            <Text size="sm" c="dimmed" p="md">
+                Загрузка зоны…
+            </Text>
+        )
     }
 
     if (!isOrg && !myAssignment) {
-        return <EmptyState title="Пульт судьи" description="Вас ещё не назначили на зону этого турнира. Попросите организатора добавить вас в «Судьи зон»." />
+        return (
+            <EmptyState
+                title="Пульт судьи"
+                description="Вас ещё не назначили на зону этого турнира. Попросите организатора добавить вас в «Судьи зон»."
+            />
+        )
     }
 
     return (
@@ -512,7 +559,7 @@ function PikecupConsole() {
                     </Button>
                 </Group>
 
-                {isOrg && (
+                {showOrgZonePicker && (
                     <SegmentedControl
                         fullWidth
                         value={orgZone}
@@ -664,7 +711,7 @@ function PikecupConsole() {
             {editingEntry && user && !inputLocked && (
                 <WeightNumpad
                     key={editingEntry.id}
-                    teamName={entryTeamName(editingEntry)}
+                    subjectName={entryTeamName(editingEntry)}
                     recordedGrams={editingWeight}
                     targetLabel={weighLabel}
                     saving={saveMutation.isPending}

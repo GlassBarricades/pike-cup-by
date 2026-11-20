@@ -97,11 +97,17 @@ export function V2Feed() {
                 {moment.tour && moment.mini ? ` · ${slotTitle({ tour: moment.tour, mini: moment.mini })}` : ''}
               </Text>
               <Anchor component={Link} to={`/live/t/${tournament.id}/team/${moment.entryId}`} fw={700} c="inherit" underline="never">
-                {moment.teamName}
+                {moment.athleteName ?? moment.teamName}
               </Anchor>
+              {moment.athleteName ? (
+                <Text size="sm" c="dimmed">
+                  {moment.teamName}
+                </Text>
+              ) : null}
               <Text size="sm" c="dimmed">
-                {shift}
-                {sumShift ? ` · сумма ${sumShift}` : ''}
+                {shift ? `личное ${shift}` : ''}
+                {shift && sumShift ? ' · ' : ''}
+                {sumShift ? `команда ${sumShift}` : !shift ? '—' : ''}
               </Text>
               {sectorQuery ? (
                 <Anchor component={Link} to={`/live/t/${tournament.id}/map${sectorQuery}`} size="xs" c="dimmed">

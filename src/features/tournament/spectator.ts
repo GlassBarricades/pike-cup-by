@@ -14,6 +14,7 @@ import {
 import { slipSector } from './slips'
 import {
   entryTeamName,
+  type AthleteDraw,
   type CatchRow,
   type MiniTour,
   type ScheduleSegment,
@@ -21,6 +22,12 @@ import {
   type TournamentEntry,
   type ZoneCode,
 } from './types'
+import {
+  athleteGramsForSlot,
+  listAthletesOnZone,
+} from './formats/individual/race'
+
+export { buildIndividualRace } from './formats/individual/race'
 
 export function gramsLabel(value: number): string {
   return `${value.toLocaleString('ru-RU')} г`
@@ -39,6 +46,9 @@ export type CatchMoment = {
   entryId: string
   teamName: string
   rosterNames: string[]
+  /** Individual / Кордон */
+  rosterMemberId?: string | null
+  athleteName?: string | null
   grams: number
   tour: number | null
   mini: number | null
@@ -62,6 +72,10 @@ export type MatrixRow = {
   teamName: string
   rosterNames: string[]
   startZone: ZoneCode | null
+  /** Individual: строка спортсмена */
+  rosterMemberId?: string | null
+  athleteName?: string | null
+  junior?: boolean
   cells: MatrixCell[]
 }
 
@@ -83,6 +97,8 @@ export type PendingTeam = {
   teamName: string
   zone: ZoneCode
   sector: number
+  rosterMemberId?: string
+  athleteName?: string
 }
 
 export type WindowProgress = {
@@ -164,12 +180,16 @@ export type RaceData = {
   slots: FishingSlot[]
   moments: CatchMoment[]
   records: DayRecords
+  /** Личная матрица (PikeCup = команды; individual = спортсмены) */
   matrix: MatrixRow[]
+  /** Командная матрица (individual); у PikeCup совпадает с matrix */
+  matrixTeams: MatrixRow[]
   slotReports: ZoneWindowReport[][]
   afterSlot: StandingRow[][]
   heatBySlot: HeatCell[][]
   heatDay: HeatCell[]
   zeroPlusOne: boolean
+  engine?: 'pikecup' | 'individual'
 }
 
 export type DayStory = RaceData & {
@@ -421,11 +441,13 @@ export function buildRace(
     moments,
     records,
     matrix,
+    matrixTeams: matrix,
     slotReports,
     afterSlot,
     heatBySlot,
     heatDay: heatFor(entries, slots, catches, miniTours),
     zeroPlusOne: options.zeroPlaceIsGroupSizePlusOne !== false,
+    engine: 'pikecup',
   }
 }
 
@@ -529,6 +551,7 @@ export function projectStory(
   miniTours: MiniTour[],
   segments: ScheduleSegment[],
   now: Date,
+  draws: AthleteDraw[] = [],
 ): DayStory {
   const phase = getCurrentPhase(tournament, segments, now)
   const mapWindow = resolveMapWindow(tournament, segments, now)
@@ -539,21 +562,43 @@ export function projectStory(
   const baseline = done.length >= 3 ? done[done.length - 3] : null
   const baselineIndex = slotIndex(race.slots, baseline)
   const moved = baselineIndex >= 0 ? moversBetween(race.afterSlot[baselineIndex] ?? [], race.standings) : { chasers: [], dropped: [] }
+  const individual = race.engine === 'individual'
 
   let progress: WindowProgress | null = null
   if (mapWindow.state === 'fishing' && clock) {
     const pending: PendingTeam[] = []
     let expected = 0
     let weighed = 0
-    for (const zone of ['A', 'B'] as const) {
-      for (const entry of teamsOnZone(entries, clock, zone)) {
-        expected += 1
-        const grams = slotGrams(entry.id, clock, catches, miniTours)
-        const sector = slipSector(entry.draw_slip, clock.tour, clock.mini)
-        if (grams == null) {
-          if (sector != null) pending.push({ entryId: entry.id, teamName: entryTeamName(entry), zone, sector })
-        } else {
-          weighed += 1
+    if (individual) {
+      for (const zone of ['A', 'B'] as const) {
+        for (const row of listAthletesOnZone(entries, draws, clock, zone)) {
+          expected += 1
+          const grams = athleteGramsForSlot(row.memberId, clock, catches, miniTours)
+          if (grams == null) {
+            pending.push({
+              entryId: row.entry.id,
+              teamName: row.name,
+              zone,
+              sector: row.sector,
+              rosterMemberId: row.memberId,
+              athleteName: row.name,
+            })
+          } else {
+            weighed += 1
+          }
+        }
+      }
+    } else {
+      for (const zone of ['A', 'B'] as const) {
+        for (const entry of teamsOnZone(entries, clock, zone)) {
+          expected += 1
+          const grams = slotGrams(entry.id, clock, catches, miniTours)
+          const sector = slipSector(entry.draw_slip, clock.tour, clock.mini)
+          if (grams == null) {
+            if (sector != null) pending.push({ entryId: entry.id, teamName: entryTeamName(entry), zone, sector })
+          } else {
+            weighed += 1
+          }
         }
       }
     }
@@ -566,8 +611,11 @@ export function projectStory(
     }
   }
 
-  const shoreNote =
-    clock?.tour === 2 && clock.mini === 1
+  const shoreNote = individual
+    ? clock?.tour === 2 && clock.mini === 1
+      ? 'II тур: спортсмены меняют берег по жеребьёвке.'
+      : null
+    : clock?.tour === 2 && clock.mini === 1
       ? 'Стартовая группа A теперь на зоне B — места зоны A уже зафиксированы. Стартовая группа B теперь на зоне A.'
       : mapWindow.state === 'moving' && mapWindow.tour === 2 && mapWindow.mini === 1 && mapWindow.from?.tour === 1
         ? 'Стартовая группа A теперь на зоне B — места зоны A уже зафиксированы. Стартовая группа B теперь на зоне A.'
@@ -590,7 +638,13 @@ export function projectStory(
         title: segment.title,
         current,
         passed,
-        note: crossing ? 'Переход на другой берег' : 'Переход по сектору',
+        note: individual
+          ? crossing
+            ? 'Смена берега по жеребьёвке'
+            : 'Переход к следующему мини-туру'
+          : crossing
+            ? 'Переход на другой берег'
+            : 'Переход по сектору',
       })
       continue
     }

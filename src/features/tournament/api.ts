@@ -38,6 +38,7 @@ import {
   type TournamentListFilter,
   type TournamentRosterMember,
   type ZoneCode,
+  type ZoneJudgeAssignment,
   type ZoneJudgeRow,
 } from './types'
 
@@ -1668,6 +1669,38 @@ export async function fetchZoneJudges(tournamentId: string): Promise<ZoneJudgeRo
     const r = row as ZoneJudgeRow & { profile?: ZoneJudgeRow['profile'] | ZoneJudgeRow['profile'][] }
     const profile = Array.isArray(r.profile) ? r.profile[0] : r.profile
     return { ...r, profile }
+  })
+}
+
+/** Назначения текущего судьи на live/published турниры. */
+export async function fetchMyZoneAssignments(userId: string): Promise<ZoneJudgeAssignment[]> {
+  const { data, error } = await supabase
+    .from('tournament_zone_judges')
+    .select(`id, tournament_id, user_id, zone, tournament:tournaments!inner(${TOURNAMENT_CARD_SELECT})`)
+    .eq('user_id', userId)
+    .in('tournament.status', ['live', 'published'])
+    .order('event_date', { ascending: false, foreignTable: 'tournaments' })
+  if (error) throw error
+  return (data ?? []).flatMap((row) => {
+    const raw = row as {
+      id: string
+      tournament_id: string
+      user_id: string
+      zone: ZoneCode
+      tournament: Record<string, unknown> | Record<string, unknown>[] | null
+    }
+    const tournamentRow = Array.isArray(raw.tournament) ? raw.tournament[0] : raw.tournament
+    const tournament = asTournamentCard(tournamentRow ?? null)
+    if (!tournament) return []
+    return [
+      {
+        id: raw.id,
+        tournament_id: raw.tournament_id,
+        user_id: raw.user_id,
+        zone: raw.zone,
+        tournament,
+      },
+    ]
   })
 }
 

@@ -209,8 +209,17 @@ export function sectorAverages(race: RaceData) {
     .map(([sector, bucket]) => ({ sector: String(sector), avg: Math.round(bucket.sum / bucket.count) }))
 }
 
+function matrixRowForEntry(race: RaceData, entryId: string) {
+  return (
+    race.matrixTeams.find((item) => item.entryId === entryId && !item.rosterMemberId) ??
+    race.matrix.find((item) => item.entryId === entryId && !item.rosterMemberId) ??
+    race.matrixTeams.find((item) => item.entryId === entryId) ??
+    race.matrix.find((item) => item.entryId === entryId)
+  )
+}
+
 export function slipPoints(race: RaceData, entryId: string) {
-  const row = race.matrix.find((item) => item.entryId === entryId)
+  const row = matrixRowForEntry(race, entryId)
   return race.slots.flatMap((slot, index) => {
     const cell = row?.cells[index]
     if (!cell || cell.sector == null || cell.grams == null) return []
@@ -350,7 +359,7 @@ export function sectorLuck(race: RaceData, entryId: string) {
       others.set(cell.sector, bucket)
     }
   }
-  const row = race.matrix.find((item) => item.entryId === entryId)
+  const row = matrixRowForEntry(race, entryId)
   return race.slots.flatMap((slot, index) => {
     const cell = row?.cells[index]
     if (!cell || cell.sector == null || cell.grams == null) return []
@@ -361,17 +370,30 @@ export function sectorLuck(race: RaceData, entryId: string) {
 }
 
 export function neighborBars(race: RaceData, entryId: string, slotIndex: number, span = 2) {
-  const row = race.matrix.find((item) => item.entryId === entryId)
+  const source = race.matrix
+  const row =
+    source.find((item) => item.entryId === entryId && item.rosterMemberId) ??
+    matrixRowForEntry(race, entryId)
   const cell = row?.cells[slotIndex]
   if (!row || !cell || cell.sector == null || !cell.zone) return []
   const mine = cell.sector
   const zone = cell.zone
-  return race.matrix
+  return source
     .flatMap((item) => {
       const other = item.cells[slotIndex]
       if (!other || other.zone !== zone || other.sector == null || other.grams == null) return []
       if (Math.abs(other.sector - mine) > span) return []
-      return [{ sector: String(other.sector), grams: other.grams, name: item.teamName, entryId: item.entryId, mine: item.entryId === entryId, zone }]
+      const name = item.athleteName ?? item.teamName
+      return [
+        {
+          sector: String(other.sector),
+          grams: other.grams,
+          name,
+          entryId: item.entryId,
+          mine: (item.rosterMemberId ?? item.entryId) === (row.rosterMemberId ?? row.entryId),
+          zone,
+        },
+      ]
     })
     .sort((a, b) => Number(a.sector) - Number(b.sector) || a.name.localeCompare(b.name, 'ru'))
 }

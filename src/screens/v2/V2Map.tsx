@@ -2,24 +2,26 @@ import { useMemo, useState } from 'react'
 import { Button, Group, SimpleGrid, Stack, Text } from '@mantine/core'
 import { Link, useSearchParams } from 'react-router-dom'
 import { formatCatchClock } from '../../features/tournament/catchLog'
+import { getFormat, isIndividual } from '../../features/tournament/formats'
+import {
+  athleteGramsForSlot,
+  listAthletesOnZone,
+} from '../../features/tournament/formats/individual/race'
 import { formatPlace } from '../../features/tournament/scoring'
 import { slotTitle } from '../../features/tournament/schedule'
 import { gramsLabel, sectorHistory, shoreLeaders, slipRoute, teamAtSector } from '../../features/tournament/spectator'
 import type { Tournament, ZoneCode } from '../../features/tournament/types'
-import { LakeBoard, Panel, VenueMapView } from '../../ui'
+import { EmptyState, LakeBoard, Panel, VenueMapView } from '../../ui'
 import { useV2Tournament } from './context'
 
 type Pick = { zone: ZoneCode; sector: number }
 
 export function V2Map() {
-  const { tournament, entries, catches, miniTours, segments, story } = useV2Tournament()
+  const { tournament, entries, catches, miniTours, segments, story, draws } = useV2Tournament()
+  const individual = isIndividual(getFormat(tournament))
 
-  if (tournament.map_mode === 'geo') {
-    return (
-      <Stack gap="sm">
-        <VenueMapView venueMap={tournament.venue_map} height={420} />
-      </Stack>
-    )
+  if (individual || tournament.map_mode === 'geo') {
+    return <V2GeoMap />
   }
 
   return (
@@ -31,6 +33,135 @@ export function V2Map() {
       segments={segments}
       story={story}
     />
+  )
+}
+
+function V2GeoMap() {
+  const { tournament, entries, catches, miniTours, story, draws } = useV2Tournament()
+  const [zoneFilter, setZoneFilter] = useState<ZoneCode | 'all'>('all')
+  const slot = story.clock ?? story.closedWindow?.slot ?? null
+
+  const roster = useMemo(() => {
+    if (!slot) return []
+    const zones: ZoneCode[] = zoneFilter === 'all' ? ['A', 'B'] : [zoneFilter]
+    return zones.flatMap((zone) =>
+      listAthletesOnZone(entries, draws, slot, zone).map((row) => ({
+        ...row,
+        zone,
+        grams: athleteGramsForSlot(row.memberId, slot, catches, miniTours),
+      })),
+    )
+  }, [slot, zoneFilter, entries, draws, catches, miniTours])
+
+  const bySector = useMemo(() => {
+    const map = new Map<string, typeof roster>()
+    for (const row of roster) {
+      const key = `${row.zone}:${row.sector}`
+      const list = map.get(key) ?? []
+      list.push(row)
+      map.set(key, list)
+    }
+    return [...map.entries()]
+      .map(([key, rows]) => {
+        const [zone, sector] = key.split(':') as [ZoneCode, string]
+        const weighed = rows.filter((r) => r.grams != null)
+        const leader = weighed.sort((a, b) => (b.grams ?? 0) - (a.grams ?? 0))[0]
+        return {
+          zone,
+          sector: Number(sector),
+          rows: rows.sort((a, b) => a.sector - b.sector || a.name.localeCompare(b.name, 'ru')),
+          leader,
+        }
+      })
+      .sort((a, b) => a.zone.localeCompare(b.zone) || a.sector - b.sector)
+  }, [roster])
+
+  if (!tournament.venue_map) {
+    return (
+      <EmptyState
+        title="Карта площадки не задана"
+        description="Организатор может загрузить схему во вкладке «Турнир → Карта площадки»."
+      />
+    )
+  }
+
+  return (
+    <Stack gap="sm">
+      <VenueMapView venueMap={tournament.venue_map} height={360} />
+      <Group gap={6} wrap="wrap">
+        <Button
+          size="xs"
+          variant={zoneFilter === 'all' ? 'filled' : 'default'}
+          onClick={() => setZoneFilter('all')}
+        >
+          Все
+        </Button>
+        <Button
+          size="xs"
+          variant={zoneFilter === 'A' ? 'filled' : 'default'}
+          color="zoneA"
+          onClick={() => setZoneFilter('A')}
+        >
+          Зона A
+        </Button>
+        <Button
+          size="xs"
+          variant={zoneFilter === 'B' ? 'filled' : 'default'}
+          color="zoneB"
+          onClick={() => setZoneFilter('B')}
+        >
+          Зона B
+        </Button>
+      </Group>
+      <Text size="sm" c="dimmed">
+        {slot ? `Сейчас: ${slotTitle(slot)}` : 'Нет активного окна ловли'}
+        {story.progress
+          ? ` · взвешено ${story.progress.weighed}/${story.progress.expected}`
+          : ''}
+      </Text>
+      {bySector.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          В этом окне на карте никого нет по жеребьёвке.
+        </Text>
+      ) : (
+        <Stack gap="xs">
+          {bySector.map((block) => (
+            <Panel key={`${block.zone}-${block.sector}`} p="sm">
+              <Group justify="space-between" align="flex-start">
+                <Text fw={700}>
+                  Зона {block.zone} · сектор {block.sector}
+                </Text>
+                {block.leader?.grams != null ? (
+                  <Text size="sm" className="pc-tabular" c="var(--pc-signal)">
+                    лидер {gramsLabel(block.leader.grams)}
+                  </Text>
+                ) : null}
+              </Group>
+              <Stack gap={4} mt={6}>
+                {block.rows.map((row) => (
+                  <Group key={row.memberId} justify="space-between" wrap="nowrap">
+                    <div style={{ minWidth: 0 }}>
+                      <Link
+                        to={`/live/t/${tournament.id}/team/${row.entry.id}`}
+                        style={{ fontWeight: 600, color: 'inherit', textDecoration: 'none' }}
+                      >
+                        {row.name}
+                      </Link>
+                      <Text size="xs" c="dimmed">
+                        {row.entry.team_name_snapshot || 'личный'}
+                      </Text>
+                    </div>
+                    <Text size="sm" fw={700} className="pc-tabular">
+                      {row.grams == null ? '—' : gramsLabel(row.grams)}
+                    </Text>
+                  </Group>
+                ))}
+              </Stack>
+            </Panel>
+          ))}
+        </Stack>
+      )}
+    </Stack>
   )
 }
 
@@ -149,7 +280,7 @@ function V2SchematicMap({
               {ticker
                 .map(
                   (moment) =>
-                    `${formatCatchClock(moment.createdAt)} ${moment.teamName} ${gramsLabel(moment.grams)}`,
+                    `${formatCatchClock(moment.createdAt)} ${moment.athleteName ?? moment.teamName} ${gramsLabel(moment.grams)}`,
                 )
                 .join('   ·   ')}
             </Text>
@@ -261,7 +392,7 @@ function V2SchematicMap({
           {ticker
             .map(
               (moment) =>
-                `${formatCatchClock(moment.createdAt)} ${moment.teamName} ${gramsLabel(moment.grams)}`,
+                `${formatCatchClock(moment.createdAt)} ${moment.athleteName ?? moment.teamName} ${gramsLabel(moment.grams)}`,
             )
             .join(' · ')}
         </Text>

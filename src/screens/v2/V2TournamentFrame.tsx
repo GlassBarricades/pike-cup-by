@@ -21,8 +21,11 @@ const pikecupLinks = [
 ]
 
 const individualLinks = [
-  { to: '/table', label: 'Таблица', end: false },
+  { to: '/now', label: 'Сейчас', end: true },
   { to: '/feed', label: 'Лента', end: true },
+  { to: '/map', label: 'Карта', end: false },
+  { to: '/table', label: 'Таблица', end: false },
+  { to: '/matrix', label: 'Матрица', end: false },
   { to: '/schedule', label: 'День', end: false },
   { to: '/teams', label: 'Команды', end: false },
 ]

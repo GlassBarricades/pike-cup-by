@@ -1,15 +1,17 @@
 import { useSegments } from './hooks'
 import { getCompetitionStage } from './schedule'
 import { useStaffTournament } from './StaffTournamentContext'
+import type { Tournament } from './types'
 import { useNow } from './useNow'
 
 /** День закрыт: расписание уже кончилось или турнир помечен архивом. */
-export function useTournamentDayClosed() {
+export function useTournamentDayClosed(tournament?: Tournament | null) {
   const { selected } = useStaffTournament()
-  const { data: segments = [], isSuccess } = useSegments(selected?.id)
+  const active = tournament !== undefined ? tournament : selected
+  const { data: segments = [], isSuccess } = useSegments(active?.id)
   const now = useNow(15_000)
-  if (!selected) return false
-  if (selected.status === 'finished') return true
+  if (!active) return false
+  if (active.status === 'finished') return true
   if (!isSuccess) return false
-  return getCompetitionStage(selected, segments, now) === 'completed'
+  return getCompetitionStage(active, segments, now) === 'completed'
 }

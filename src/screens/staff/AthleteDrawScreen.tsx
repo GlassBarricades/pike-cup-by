@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Badge, Button, Group, NumberInput, Select, Stack, Table, Text, TextInput } from '@mantine/core'
+import { Badge, Button, Group, Loader, NumberInput, Select, Stack, Table, Text, TextInput } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   clearAthleteDraws,
@@ -117,13 +117,20 @@ export function AthleteDrawScreen() {
   })
 
   const slipMutation = useMutation({
-    mutationFn: ({ rosterMemberId, slipId }: { rosterMemberId: string; slipId: string | null }) =>
-      setAthleteDrawSlip({
+    mutationFn: async ({
+      rosterMemberId,
+      slipId,
+    }: {
+      rosterMemberId: string
+      slipId: string | null
+    }) => {
+      await setAthleteDrawSlip({
         tournamentId: tournament!.id,
         rosterMemberId,
         slipId,
-      }),
-    onSuccess: invalidate,
+      })
+      await invalidate()
+    },
   })
 
   const saveEditMutation = useMutation({
@@ -266,6 +273,9 @@ export function AthleteDrawScreen() {
                         value: slip.id,
                         label: slipOptionLabel(slip),
                       }))
+                    const assigning =
+                      slipMutation.isPending &&
+                      slipMutation.variables?.rosterMemberId === member.id
                     return (
                       <Table.Tr key={member.id}>
                         <Table.Td>
@@ -282,14 +292,20 @@ export function AthleteDrawScreen() {
                         <Table.Td style={{ minWidth: 220 }}>
                           <Select
                             size="xs"
-                            clearable
+                            clearable={!assigning}
                             searchable
                             placeholder={
-                              requiredZone ? `Зона ${requiredZone}` : 'Выбрать'
+                              assigning
+                                ? 'Сохраняем…'
+                                : requiredZone
+                                  ? `Зона ${requiredZone}`
+                                  : 'Выбрать'
                             }
                             data={slipOptions}
                             value={member.draw_slip_id ?? null}
-                            disabled={closed || slips.length === 0}
+                            disabled={closed || slips.length === 0 || slipMutation.isPending}
+                            rightSection={assigning ? <Loader size={14} /> : undefined}
+                            rightSectionPointerEvents={assigning ? 'none' : undefined}
                             onChange={(value) =>
                               slipMutation.mutate({
                                 rosterMemberId: member.id,

@@ -130,26 +130,32 @@ function StaffChrome() {
           <div>
             <Text size="xs" c="dimmed" mb={4}>
               {role ? roleLabel[role] : '—'}
-              {selected ? ` · ${selected.name}` : ''}
+              {isOrg && selected ? ` · ${selected.name}` : ''}
             </Text>
-            {loading ? (
-              <Text size="sm" c="dimmed">
-                Загрузка турниров…
-              </Text>
+            {isOrg ? (
+              loading ? (
+                <Text size="sm" c="dimmed">
+                  Загрузка турниров…
+                </Text>
+              ) : (
+                <Select
+                  label="Турнир"
+                  placeholder={tournaments.length ? 'Выберите турнир' : 'Нет турниров'}
+                  data={tournaments.map((t) => ({
+                    value: t.id,
+                    label: `${formatTournamentDate(t.event_date)} · ${t.name} (${statusLabel[t.status]})`,
+                  }))}
+                  value={selectedId}
+                  onChange={(v) => setSelectedId(v)}
+                  searchable
+                  clearable={false}
+                  size="xs"
+                />
+              )
             ) : (
-              <Select
-                label="Турнир"
-                placeholder={tournaments.length ? 'Выберите турнир' : 'Нет турниров'}
-                data={tournaments.map((t) => ({
-                  value: t.id,
-                  label: `${formatTournamentDate(t.event_date)} · ${t.name} (${statusLabel[t.status]})`,
-                }))}
-                value={selectedId}
-                onChange={(v) => setSelectedId(v)}
-                searchable
-                clearable={false}
-                size="xs"
-              />
+              <Text size="sm" c="dimmed">
+                Пульт открывает турниры, куда вас назначили судьёй зоны.
+              </Text>
             )}
           </div>
 

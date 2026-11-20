@@ -29,6 +29,7 @@ import {
   fetchTournamentById,
   fetchTournamentRulesContent,
   fetchTournaments,
+  fetchMyZoneAssignments,
   fetchZoneJudges,
 } from './api'
 import { pickCurrentTournament } from './date'
@@ -65,6 +66,7 @@ export const tournamentKeys = {
   cheerCounts: (id: string) => ['tournament', id, 'cheerCounts'] as const,
   revisions: (id: string) => ['tournament', id, 'revisions'] as const,
   zoneJudges: (id: string) => ['tournament', id, 'zoneJudges'] as const,
+  myZoneAssignments: (userId: string) => ['zoneJudges', 'mine', userId] as const,
   athleteDraws: (id: string) => ['tournament', id, 'athleteDraws'] as const,
   drawSlips: (tournamentId: string) => ['tournament', tournamentId, 'drawSlips'] as const,
   judgeCandidates: ['judgeCandidates'] as const,
@@ -370,6 +372,15 @@ export function useZoneJudges(tournamentId: string | undefined) {
     queryKey: tournamentKeys.zoneJudges(tournamentId ?? ''),
     queryFn: () => fetchZoneJudges(tournamentId!),
     enabled: Boolean(tournamentId),
+    staleTime: STALE_UNTIL_MUTATION,
+  })
+}
+
+export function useMyZoneAssignments(userId: string | undefined) {
+  return useQuery({
+    queryKey: tournamentKeys.myZoneAssignments(userId ?? ''),
+    queryFn: () => fetchMyZoneAssignments(userId!),
+    enabled: Boolean(userId),
     staleTime: STALE_UNTIL_MUTATION,
   })
 }

@@ -1,6 +1,7 @@
 import { Button, Group, Stack, Text, Title } from '@mantine/core'
 import { Link, useParams } from 'react-router-dom'
 import { setPrimaryCheer, toggleCheer, useCheer, useCheerCounts } from '../../features/tournament/cheer'
+import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone, slotTitle } from '../../features/tournament/schedule'
 import { bestWorstSlot, gapLine, gramsLabel, sumGap, zoneGap } from '../../features/tournament/spectator'
@@ -10,22 +11,49 @@ import { useV2Tournament } from './context'
 
 export function V2Team() {
   const { entryId } = useParams()
-  const { tournament, entries, story } = useV2Tournament()
+  const { tournament, entries, story, results, draws } = useV2Tournament()
+  const individual = isIndividual(getFormat(tournament))
   const cheer = useCheer(tournament.id)
   const { data: fanCounts } = useCheerCounts(tournament.id)
   const entry = entries.find((item) => item.id === entryId)
   const cheerOn = Boolean(entry && cheer.entryIds.includes(entry.id))
   const primary = Boolean(entry && cheer.primaryId === entry.id)
   const fans = entry ? (fanCounts?.get(entry.id) ?? 0) : 0
+
+  const teamResult =
+    individual && results.engine === 'individual'
+      ? results.teams.find((row) => row.entryId === entryId)
+      : null
   const standing = story.standings.find((row) => row.entryId === entryId)
-  const matrix = story.matrix.find((row) => row.entryId === entryId)
+  const matrix =
+    (individual ? story.matrixTeams.find((row) => row.entryId === entryId) : null) ??
+    story.matrix.find((row) => row.entryId === entryId && !row.rosterMemberId) ??
+    story.matrixTeams.find((row) => row.entryId === entryId)
+  const athleteRows =
+    individual && results.engine === 'individual'
+      ? [...results.athletes, ...results.juniors].filter((row) => row.entryId === entryId)
+      : []
   const ends = bestWorstSlot(matrix)
   const tour = story.clock?.tour ?? 1
   const shore = entry ? physicalZone(entry.start_zone ?? entry.draw_slip?.start_zone, tour) : null
-  const gap = standing ? (shore ? zoneGap(standing, story.standings, shore) : sumGap(standing, story.standings)) : null
+  const gap =
+    standing && !individual
+      ? shore
+        ? zoneGap(standing, story.standings, shore)
+        : sumGap(standing, story.standings)
+      : standing
+        ? sumGap(standing, story.standings)
+        : null
   const max = Math.max(1, ...(matrix?.cells.map((cell) => cell.grams ?? 0) ?? [1]))
+  const slot = story.clock
 
-  if (!entry || !standing) return <Text>Команда в этом турнире не найдена</Text>
+  if (!entry) return <Text>Команда в этом турнире не найдена</Text>
+  if (!individual && !standing) return <Text>Команда в этом турнире не найдена</Text>
+  if (individual && !teamResult && !standing) return <Text>Команда в этом турнире не найдена</Text>
+
+  const placeSum = teamResult?.placeSum ?? standing?.placeSum ?? 0
+  const totalWeight = teamResult?.totalWeight ?? standing?.totalWeight ?? 0
+  const finalPlace = teamResult?.finalPlace ?? standing?.finalPlace ?? 0
 
   return (
     <Stack gap="md">
@@ -40,7 +68,10 @@ export function V2Team() {
           />
         </Group>
         <Text size="sm" c="dimmed">
-          {(entry.roster ?? []).map((member) => member.full_name_snapshot).join(' · ') || 'Состав не указан'}
+          {(entry.roster ?? [])
+            .filter((m) => m.role === 'athlete')
+            .map((member) => member.full_name_snapshot)
+            .join(' · ') || 'Состав не указан'}
         </Text>
       </div>
       <Group gap={8} wrap="wrap" align="center">
@@ -57,9 +88,15 @@ export function V2Team() {
         <Button component={Link} to={`/live/t/${tournament.id}/compare?a=${entry.id}`} size="xs" variant="default">
           Сравнить
         </Button>
-        <Button component={Link} to={`/live/t/${tournament.id}/map?slip=${entry.id}`} size="xs" variant="default">
-          Бумажка на карте
-        </Button>
+        {individual ? (
+          <Button component={Link} to={`/live/t/${tournament.id}/map`} size="xs" variant="default">
+            Карта площадки
+          </Button>
+        ) : (
+          <Button component={Link} to={`/live/t/${tournament.id}/map?slip=${entry.id}`} size="xs" variant="default">
+            Бумажка на карте
+          </Button>
+        )}
         {entry.team_id ? (
           <Button component={Link} to={`/live/teams/${entry.team_id}`} size="xs" variant="default">
             Пара за сезоны
@@ -67,25 +104,84 @@ export function V2Team() {
         ) : null}
       </Group>
 
-      <Group grow align="stretch">
-        <Stat label="Зона A" value={formatPlace(standing.zoneAPlace)} hint={gramsLabel(standing.zoneAWeight)} />
-        <Stat label="Зона B" value={formatPlace(standing.zoneBPlace)} hint={gramsLabel(standing.zoneBWeight)} />
-        <Stat label="Сумма мест" value={formatPlace(standing.placeSum)} hint={gramsLabel(standing.totalWeight)} />
-      </Group>
+      {individual && teamResult ? (
+        <Group grow align="stretch">
+          {teamResult.tours.map((t) => (
+            <Stat
+              key={t.tour}
+              label={`Тур ${t.tour}`}
+              value={formatPlace(t.place)}
+              hint={`${t.zone ?? '—'} · ${gramsLabel(t.weight)}`}
+            />
+          ))}
+          <Stat label="Сумма мест" value={formatPlace(placeSum)} hint={gramsLabel(totalWeight)} />
+          <Stat label="Место" value={formatPlace(finalPlace)} hint="" />
+        </Group>
+      ) : standing ? (
+        <Group grow align="stretch">
+          <Stat label="Зона A" value={formatPlace(standing.zoneAPlace)} hint={gramsLabel(standing.zoneAWeight)} />
+          <Stat label="Зона B" value={formatPlace(standing.zoneBPlace)} hint={gramsLabel(standing.zoneBWeight)} />
+          <Stat label="Сумма мест" value={formatPlace(standing.placeSum)} hint={gramsLabel(standing.totalWeight)} />
+        </Group>
+      ) : null}
       {gap && gapLine(gap) ? <Text size="sm">{gapLine(gap)}</Text> : null}
+
+      {individual && athleteRows.length > 0 ? (
+        <Panel p="sm">
+          <Text size="xs" c="dimmed" tt="uppercase">
+            Состав
+          </Text>
+          <Stack gap={6} mt={6}>
+            {athleteRows.map((athlete) => {
+              const draw = slot
+                ? draws.find(
+                    (d) =>
+                      d.roster_member_id === athlete.rosterMemberId &&
+                      d.tour_number === slot.tour &&
+                      d.mini_number === slot.mini,
+                  )
+                : null
+              return (
+                <Group key={athlete.rosterMemberId} justify="space-between" wrap="nowrap">
+                  <div>
+                    <Text fw={600}>
+                      {athlete.athleteName}
+                      {athlete.junior ? ' · Юн.' : ''}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      {draw ? `Зона ${draw.zone} · сектор ${draw.sector}` : 'Сектор —'}
+                      {` · место ${formatPlace(athlete.finalPlace)}`}
+                    </Text>
+                  </div>
+                  <Text fw={700} className="pc-tabular">
+                    {gramsLabel(athlete.totalWeight)}
+                  </Text>
+                </Group>
+              )
+            })}
+          </Stack>
+        </Panel>
+      ) : null}
 
       <Panel p="sm">
         <Text size="xs" c="dimmed" tt="uppercase">
           Траектория дня
         </Text>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 172, marginTop: 12 }}>
-          {story.slots.map((slot, index) => {
+          {story.slots.map((item, index) => {
             const cell = matrix?.cells[index]
             const grams = cell?.grams ?? 0
             return (
               <div
-                key={`${slot.tour}-${slot.mini}`}
-                style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}
+                key={`${item.tour}-${item.mini}`}
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'flex-end',
+                  height: '100%',
+                }}
               >
                 <Text ta="center" className="pc-tabular" style={{ fontSize: 11, lineHeight: 1.1 }}>
                   {cell?.grams == null ? '—' : cell.grams.toLocaleString('ru-RU')}
@@ -99,25 +195,29 @@ export function V2Team() {
                   }}
                 />
                 <Text size="xs" c="dimmed" ta="center" mt={4}>
-                  {slot.tour}.{slot.mini}
+                  {item.tour}.{item.mini}
                 </Text>
               </div>
             )
           })}
         </div>
         <Text size="sm" mt="sm">
-          {ends.best?.grams != null ? `Лучший слот: ${slotTitle(story.slots[ends.best.index])} · ${gramsLabel(ends.best.grams)}` : 'Взвешиваний нет'}
-          {ends.worst?.grams != null ? ` · худший: ${slotTitle(story.slots[ends.worst.index])} · ${gramsLabel(ends.worst.grams)}` : ''}
+          {ends.best?.grams != null
+            ? `Лучший слот: ${slotTitle(story.slots[ends.best.index]!)} · ${gramsLabel(ends.best.grams)}`
+            : 'Взвешиваний нет'}
+          {ends.worst?.grams != null
+            ? ` · худший: ${slotTitle(story.slots[ends.worst.index]!)} · ${gramsLabel(ends.worst.grams)}`
+            : ''}
         </Text>
       </Panel>
 
       <Stack gap={4}>
-        {story.slots.map((slot, index) => {
+        {story.slots.map((item, index) => {
           const cell = matrix?.cells[index]
           return (
-            <Group key={`${slot.tour}-${slot.mini}`} justify="space-between">
+            <Group key={`${item.tour}-${item.mini}`} justify="space-between">
               <Text size="sm">
-                {slotTitle(slot)}
+                {slotTitle(item)}
                 {cell?.zone ? ` · зона ${cell.zone}` : ''}
                 {cell?.sector != null ? ` · сектор ${cell.sector}` : ''}
               </Text>
@@ -142,9 +242,11 @@ function Stat({ label, value, hint }: { label: string; value: string; hint: stri
       <Text className="pc-display" style={{ fontSize: '1.5rem' }}>
         {value}
       </Text>
-      <Text size="sm" className="pc-tabular">
-        {hint}
-      </Text>
+      {hint ? (
+        <Text size="sm" className="pc-tabular">
+          {hint}
+        </Text>
+      ) : null}
     </Panel>
   )
 }

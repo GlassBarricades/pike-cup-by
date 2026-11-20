@@ -5,6 +5,7 @@ import { formatCatchClock } from '../../features/tournament/catchLog'
 import { useRefreshTournament } from '../../features/tournament/hooks'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone, slotTitle } from '../../features/tournament/schedule'
+import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { formatPlaceShift, gramsLabel, shoreLeaders, sumGap, zoneGap, gapLine } from '../../features/tournament/spectator'
 import { useCheer } from '../../features/tournament/cheer'
 import { slipSector } from '../../features/tournament/slips'
@@ -14,11 +15,12 @@ import { useV2Tournament, type V2TournamentValue } from './context'
 import { RulesComic } from './RulesComic'
 
 export function V2Now() {
-  const { tournament, entries, story } = useV2Tournament()
+  const { tournament, entries, story, results } = useV2Tournament()
+  const individual = isIndividual(getFormat(tournament))
   const cheer = useCheer(tournament.id)
   const { newCatchIds, hasRefreshed } = useRefreshTournament(tournament.id)
   const seen = useRulesSeen()
-  const [comic, setComic] = useState(!seen)
+  const [comic, setComic] = useState(!seen && !individual)
   const delta = useMemo(() => {
     if (newCatchIds.length === 0) return []
     const ids = new Set(newCatchIds)
@@ -29,10 +31,24 @@ export function V2Now() {
   const closesMin = closesMs == null ? null : Math.max(0, Math.ceil(closesMs / 60_000))
   const leadersA = shoreLeaders(story.standings, tour, 'A')
   const leadersB = shoreLeaders(story.standings, tour, 'B')
+  const athleteLeaders = useMemo(() => {
+    if (!individual || results.engine !== 'individual') return { A: [], B: [] as typeof results.athletes }
+    const open = results.athletes
+    const byZone = (zone: 'A' | 'B') =>
+      open
+        .filter((row) => row.tours.find((t) => t.tour === tour)?.zone === zone)
+        .sort((a, b) => {
+          const pa = a.tours.find((t) => t.tour === tour)?.place ?? 999
+          const pb = b.tours.find((t) => t.tour === tour)?.place ?? 999
+          return pa - pb
+        })
+        .slice(0, 3)
+    return { A: byZone('A'), B: byZone('B') }
+  }, [individual, results, tour])
 
   return (
     <Stack gap="md">
-      {comic ? <RulesComic onClose={() => setComic(false)} /> : null}
+      {!individual && comic ? <RulesComic onClose={() => setComic(false)} /> : null}
       <PhaseClock
         phase={story.phase}
         delayMinutes={tournament.schedule_delay_minutes}
@@ -64,15 +80,21 @@ export function V2Now() {
               <Group key={moment.id} justify="space-between" align="flex-start" wrap="nowrap">
                 <div>
                   <Anchor component={Link} to={`/live/t/${tournament.id}/team/${moment.entryId}`} fw={700} c="inherit" underline="never">
-                    {moment.teamName}
+                    {moment.athleteName ?? moment.teamName}
                   </Anchor>
                   <Text size="sm" c="dimmed">
                     {formatCatchClock(moment.createdAt)}
+                    {moment.athleteName ? ` · ${moment.teamName}` : ''}
                     {moment.zone ? ` · зона ${moment.zone}` : ''}
                     {moment.sector != null ? ` · сектор ${moment.sector}` : ''}
                     {moment.tour && moment.mini ? ` · ${slotTitle({ tour: moment.tour, mini: moment.mini })}` : ''}
                   </Text>
-                  <Text size="sm">{formatPlaceShift(moment.zonePlaceBefore, moment.zonePlaceAfter)}</Text>
+                  <Text size="sm">
+                    {formatPlaceShift(moment.zonePlaceBefore, moment.zonePlaceAfter)}
+                    {moment.sumBefore != null && moment.sumAfter != null
+                      ? ` · команда ${formatPlaceShift(moment.sumBefore, moment.sumAfter)}`
+                      : ''}
+                  </Text>
                 </div>
                 <Text className="pc-display pc-tabular" c="var(--pc-signal)" style={{ fontSize: '1.5rem' }}>
                   {gramsLabel(moment.grams)}
@@ -133,6 +155,40 @@ export function V2Now() {
 
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
         {(['A', 'B'] as const).map((zone) => {
+          if (individual) {
+            const leaders = athleteLeaders[zone]
+            return (
+              <Panel key={zone} p="sm">
+                <Text size="xs" c="dimmed" tt="uppercase">
+                  Лидеры зоны {zone}
+                </Text>
+                {leaders.length === 0 ? (
+                  <Text size="sm" c="dimmed">
+                    На этом берегу ещё без веса
+                  </Text>
+                ) : (
+                  leaders.map((row) => {
+                    const tourRow = row.tours.find((t) => t.tour === tour)
+                    return (
+                      <Group key={row.rosterMemberId} justify="space-between">
+                        <Anchor
+                          component={Link}
+                          to={`/live/t/${tournament.id}/team/${row.entryId}`}
+                          c="inherit"
+                          underline="never"
+                        >
+                          {formatPlace(tourRow?.place ?? row.finalPlace)}. {row.athleteName}
+                        </Anchor>
+                        <Text size="sm" className="pc-tabular">
+                          {gramsLabel(tourRow?.weight ?? 0)}
+                        </Text>
+                      </Group>
+                    )
+                  })
+                )}
+              </Panel>
+            )
+          }
           const leaders = zone === 'A' ? leadersA : leadersB
           return (
             <Panel key={zone} p="sm">
