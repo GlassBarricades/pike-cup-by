@@ -340,11 +340,15 @@ function collectIndividualRecords(
   return { heaviestMini, heaviestSector, biggestJump, driestZone: driest }
 }
 
+/** Open-строка предпочтительнее: смешанный юниор есть в обеих личках с разными местами. */
 function allAthleteRows(results: {
   athletes: AthleteStandingRow[]
   juniors: AthleteStandingRow[]
 }): AthleteStandingRow[] {
-  return [...results.athletes, ...results.juniors]
+  const byId = new Map<string, AthleteStandingRow>()
+  for (const row of results.juniors) byId.set(row.rosterMemberId, row)
+  for (const row of results.athletes) byId.set(row.rosterMemberId, row)
+  return [...byId.values()]
 }
 
 /**

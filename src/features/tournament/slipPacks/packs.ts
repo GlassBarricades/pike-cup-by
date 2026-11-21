@@ -4008,7 +4008,7 @@ export const PIKECUP_SLIP_PACK: SlipPackCard[] = [
   }
 ]
 
-/** BOOR / Western Cordon: 2×3, 52 cards from «старты по секторам.xls». */
+/** BOOR / Western Cordon: 2×3, 74 cards (37 per zone, odd sectors 1–73) from «старты по секторам 74.xls». */
 export const BOOR_SLIP_PACK: SlipPackCard[] = [
   {
     "code": "1A",
@@ -4023,27 +4023,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 25
+        "sector_number": 73
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 49
+        "sector_number": 37
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 29
+        "sector_number": 41
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 3
+        "sector_number": 67
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 43
+        "sector_number": 3
       }
     ]
   },
@@ -4060,27 +4060,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 27
+        "sector_number": 69
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 45
+        "sector_number": 39
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 31
+        "sector_number": 43
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 5
+        "sector_number": 63
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 39
+        "sector_number": 5
       }
     ]
   },
@@ -4097,7 +4097,7 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 29
+        "sector_number": 65
       },
       {
         "tour_number": 1,
@@ -4107,17 +4107,17 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 33
+        "sector_number": 45
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 7
+        "sector_number": 59
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 35
+        "sector_number": 7
       }
     ]
   },
@@ -4134,27 +4134,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 31
+        "sector_number": 61
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 37
+        "sector_number": 43
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 35
+        "sector_number": 47
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 9
+        "sector_number": 55
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 31
+        "sector_number": 9
       }
     ]
   },
@@ -4171,27 +4171,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 33
+        "sector_number": 57
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 33
+        "sector_number": 45
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 37
+        "sector_number": 49
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 11
+        "sector_number": 51
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 27
+        "sector_number": 11
       }
     ]
   },
@@ -4208,27 +4208,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 35
+        "sector_number": 53
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 29
+        "sector_number": 47
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 39
+        "sector_number": 51
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 13
+        "sector_number": 47
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 23
+        "sector_number": 13
       }
     ]
   },
@@ -4245,27 +4245,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 37
+        "sector_number": 49
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 25
+        "sector_number": 49
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 41
+        "sector_number": 53
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 15
+        "sector_number": 43
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 19
+        "sector_number": 15
       }
     ]
   },
@@ -4282,27 +4282,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 39
+        "sector_number": 45
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 21
+        "sector_number": 51
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 43
+        "sector_number": 55
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 17
+        "sector_number": 39
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 15
+        "sector_number": 17
       }
     ]
   },
@@ -4324,22 +4324,22 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 17
+        "sector_number": 53
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 45
+        "sector_number": 57
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 19
+        "sector_number": 35
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 11
+        "sector_number": 19
       }
     ]
   },
@@ -4356,27 +4356,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 43
+        "sector_number": 37
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 13
+        "sector_number": 55
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 47
+        "sector_number": 59
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 21
+        "sector_number": 31
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 7
+        "sector_number": 21
       }
     ]
   },
@@ -4393,27 +4393,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 45
+        "sector_number": 33
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 9
+        "sector_number": 57
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 49
+        "sector_number": 61
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 23
+        "sector_number": 27
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 3
+        "sector_number": 23
       }
     ]
   },
@@ -4430,27 +4430,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 47
+        "sector_number": 29
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 5
+        "sector_number": 59
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 1
+        "sector_number": 63
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 25
+        "sector_number": 23
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 49
+        "sector_number": 25
       }
     ]
   },
@@ -4467,27 +4467,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 49
+        "sector_number": 25
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 1
+        "sector_number": 61
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 3
+        "sector_number": 65
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 27
+        "sector_number": 19
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 45
+        "sector_number": 27
       }
     ]
   },
@@ -4504,27 +4504,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 1
+        "sector_number": 21
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 47
+        "sector_number": 63
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 5
+        "sector_number": 67
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 29
+        "sector_number": 15
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 41
+        "sector_number": 29
       }
     ]
   },
@@ -4541,27 +4541,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 3
+        "sector_number": 17
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 43
+        "sector_number": 65
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 7
+        "sector_number": 69
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 31
+        "sector_number": 11
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 37
+        "sector_number": 31
       }
     ]
   },
@@ -4578,22 +4578,22 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 5
+        "sector_number": 13
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 39
+        "sector_number": 67
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 9
+        "sector_number": 71
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 33
+        "sector_number": 7
       },
       {
         "tour_number": 2,
@@ -4615,27 +4615,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 7
+        "sector_number": 9
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 35
+        "sector_number": 69
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 11
+        "sector_number": 73
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 35
+        "sector_number": 3
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 29
+        "sector_number": 35
       }
     ]
   },
@@ -4652,27 +4652,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 9
+        "sector_number": 5
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 31
+        "sector_number": 71
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 13
+        "sector_number": 1
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 37
+        "sector_number": 73
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 25
+        "sector_number": 37
       }
     ]
   },
@@ -4689,27 +4689,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 11
+        "sector_number": 1
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 27
+        "sector_number": 73
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 15
+        "sector_number": 3
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 39
+        "sector_number": 69
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 21
+        "sector_number": 39
       }
     ]
   },
@@ -4726,27 +4726,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 13
+        "sector_number": 71
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 23
+        "sector_number": 1
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 17
+        "sector_number": 5
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 41
+        "sector_number": 65
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 17
+        "sector_number": 41
       }
     ]
   },
@@ -4763,27 +4763,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 15
+        "sector_number": 67
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 19
+        "sector_number": 3
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 19
+        "sector_number": 7
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 43
+        "sector_number": 61
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 13
+        "sector_number": 43
       }
     ]
   },
@@ -4800,27 +4800,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 17
+        "sector_number": 63
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 15
+        "sector_number": 5
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 21
+        "sector_number": 9
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 45
+        "sector_number": 57
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 9
+        "sector_number": 45
       }
     ]
   },
@@ -4837,27 +4837,27 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 19
+        "sector_number": 59
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 11
+        "sector_number": 7
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 23
+        "sector_number": 11
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 47
+        "sector_number": 53
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 5
+        "sector_number": 47
       }
     ]
   },
@@ -4874,17 +4874,17 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 21
+        "sector_number": 55
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 7
+        "sector_number": 9
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 25
+        "sector_number": 13
       },
       {
         "tour_number": 2,
@@ -4894,7 +4894,7 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 1
+        "sector_number": 49
       }
     ]
   },
@@ -4911,71 +4911,478 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 23
+        "sector_number": 51
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 3
+        "sector_number": 11
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 27
+        "sector_number": 15
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 1
+        "sector_number": 45
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 47
+        "sector_number": 51
       }
     ]
   },
   {
-    "code": "6A",
+    "code": "51A",
     "start_zone": "A",
     "sort_order": 26,
     "sectors": [
       {
         "tour_number": 1,
         "mini_number": 1,
-        "sector_number": 6
+        "sector_number": 51
       },
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 26
+        "sector_number": 47
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 46
+        "sector_number": 13
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 46
+        "sector_number": 17
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 6
+        "sector_number": 41
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 26
+        "sector_number": 53
+      }
+    ]
+  },
+  {
+    "code": "53A",
+    "start_zone": "A",
+    "sort_order": 27,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 53
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 43
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 15
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 19
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 37
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 55
+      }
+    ]
+  },
+  {
+    "code": "55A",
+    "start_zone": "A",
+    "sort_order": 28,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 55
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 39
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 17
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 21
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 33
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 57
+      }
+    ]
+  },
+  {
+    "code": "57A",
+    "start_zone": "A",
+    "sort_order": 29,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 57
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 35
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 19
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 23
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 29
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 59
+      }
+    ]
+  },
+  {
+    "code": "59A",
+    "start_zone": "A",
+    "sort_order": 30,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 59
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 31
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 21
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 25
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 25
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 61
+      }
+    ]
+  },
+  {
+    "code": "61A",
+    "start_zone": "A",
+    "sort_order": 31,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 61
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 27
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 23
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 27
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 21
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 63
+      }
+    ]
+  },
+  {
+    "code": "63A",
+    "start_zone": "A",
+    "sort_order": 32,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 63
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 23
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 25
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 29
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 17
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 65
+      }
+    ]
+  },
+  {
+    "code": "65A",
+    "start_zone": "A",
+    "sort_order": 33,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 65
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 19
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 27
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 31
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 13
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 67
+      }
+    ]
+  },
+  {
+    "code": "67A",
+    "start_zone": "A",
+    "sort_order": 34,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 67
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 15
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 29
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 33
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 9
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 69
+      }
+    ]
+  },
+  {
+    "code": "69A",
+    "start_zone": "A",
+    "sort_order": 35,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 69
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 11
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 31
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 35
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 5
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 71
+      }
+    ]
+  },
+  {
+    "code": "71A",
+    "start_zone": "A",
+    "sort_order": 36,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 71
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 7
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 33
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 37
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 1
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 73
+      }
+    ]
+  },
+  {
+    "code": "73A",
+    "start_zone": "A",
+    "sort_order": 37,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 73
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 3
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 35
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 39
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 71
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 1
       }
     ]
   },
   {
     "code": "1B",
     "start_zone": "B",
-    "sort_order": 27,
+    "sort_order": 38,
     "sectors": [
       {
         "tour_number": 1,
@@ -4985,34 +5392,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 25
+        "sector_number": 73
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 49
+        "sector_number": 37
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 29
+        "sector_number": 41
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 3
+        "sector_number": 67
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 43
+        "sector_number": 3
       }
     ]
   },
   {
     "code": "3B",
     "start_zone": "B",
-    "sort_order": 28,
+    "sort_order": 39,
     "sectors": [
       {
         "tour_number": 1,
@@ -5022,34 +5429,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 27
+        "sector_number": 69
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 45
+        "sector_number": 39
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 31
+        "sector_number": 43
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 5
+        "sector_number": 63
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 39
+        "sector_number": 5
       }
     ]
   },
   {
     "code": "5B",
     "start_zone": "B",
-    "sort_order": 29,
+    "sort_order": 40,
     "sectors": [
       {
         "tour_number": 1,
@@ -5059,7 +5466,7 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 29
+        "sector_number": 65
       },
       {
         "tour_number": 1,
@@ -5069,24 +5476,24 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 33
+        "sector_number": 45
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 7
+        "sector_number": 59
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 35
+        "sector_number": 7
       }
     ]
   },
   {
     "code": "7B",
     "start_zone": "B",
-    "sort_order": 30,
+    "sort_order": 41,
     "sectors": [
       {
         "tour_number": 1,
@@ -5096,34 +5503,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 31
+        "sector_number": 61
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 37
+        "sector_number": 43
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 35
+        "sector_number": 47
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 9
+        "sector_number": 55
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 31
+        "sector_number": 9
       }
     ]
   },
   {
     "code": "9B",
     "start_zone": "B",
-    "sort_order": 31,
+    "sort_order": 42,
     "sectors": [
       {
         "tour_number": 1,
@@ -5133,34 +5540,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 33
+        "sector_number": 57
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 33
+        "sector_number": 45
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 37
+        "sector_number": 49
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 11
+        "sector_number": 51
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 27
+        "sector_number": 11
       }
     ]
   },
   {
     "code": "11B",
     "start_zone": "B",
-    "sort_order": 32,
+    "sort_order": 43,
     "sectors": [
       {
         "tour_number": 1,
@@ -5170,34 +5577,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 35
+        "sector_number": 53
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 29
+        "sector_number": 47
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 39
+        "sector_number": 51
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 13
+        "sector_number": 47
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 23
+        "sector_number": 13
       }
     ]
   },
   {
     "code": "13B",
     "start_zone": "B",
-    "sort_order": 33,
+    "sort_order": 44,
     "sectors": [
       {
         "tour_number": 1,
@@ -5207,34 +5614,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 37
+        "sector_number": 49
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 25
+        "sector_number": 49
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 41
+        "sector_number": 53
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 15
+        "sector_number": 43
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 19
+        "sector_number": 15
       }
     ]
   },
   {
     "code": "15B",
     "start_zone": "B",
-    "sort_order": 34,
+    "sort_order": 45,
     "sectors": [
       {
         "tour_number": 1,
@@ -5244,34 +5651,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 39
+        "sector_number": 45
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 21
+        "sector_number": 51
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 43
+        "sector_number": 55
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 17
+        "sector_number": 39
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 15
+        "sector_number": 17
       }
     ]
   },
   {
     "code": "17B",
     "start_zone": "B",
-    "sort_order": 35,
+    "sort_order": 46,
     "sectors": [
       {
         "tour_number": 1,
@@ -5286,29 +5693,29 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 17
+        "sector_number": 53
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 45
+        "sector_number": 57
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 19
+        "sector_number": 35
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 11
+        "sector_number": 19
       }
     ]
   },
   {
     "code": "19B",
     "start_zone": "B",
-    "sort_order": 36,
+    "sort_order": 47,
     "sectors": [
       {
         "tour_number": 1,
@@ -5318,34 +5725,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 43
+        "sector_number": 37
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 13
+        "sector_number": 55
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 47
+        "sector_number": 59
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 21
+        "sector_number": 31
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 7
+        "sector_number": 21
       }
     ]
   },
   {
     "code": "21B",
     "start_zone": "B",
-    "sort_order": 37,
+    "sort_order": 48,
     "sectors": [
       {
         "tour_number": 1,
@@ -5355,34 +5762,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 45
+        "sector_number": 33
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 9
+        "sector_number": 57
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 49
+        "sector_number": 61
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 23
+        "sector_number": 27
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 3
+        "sector_number": 23
       }
     ]
   },
   {
     "code": "23B",
     "start_zone": "B",
-    "sort_order": 38,
+    "sort_order": 49,
     "sectors": [
       {
         "tour_number": 1,
@@ -5392,34 +5799,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 47
+        "sector_number": 29
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 5
+        "sector_number": 59
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 1
+        "sector_number": 63
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 25
+        "sector_number": 23
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 49
+        "sector_number": 25
       }
     ]
   },
   {
     "code": "25B",
     "start_zone": "B",
-    "sort_order": 39,
+    "sort_order": 50,
     "sectors": [
       {
         "tour_number": 1,
@@ -5429,34 +5836,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 49
+        "sector_number": 25
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 1
+        "sector_number": 61
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 3
+        "sector_number": 65
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 27
+        "sector_number": 19
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 45
+        "sector_number": 27
       }
     ]
   },
   {
     "code": "27B",
     "start_zone": "B",
-    "sort_order": 40,
+    "sort_order": 51,
     "sectors": [
       {
         "tour_number": 1,
@@ -5466,34 +5873,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 1
+        "sector_number": 21
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 47
+        "sector_number": 63
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 5
+        "sector_number": 67
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 29
+        "sector_number": 15
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 41
+        "sector_number": 29
       }
     ]
   },
   {
     "code": "29B",
     "start_zone": "B",
-    "sort_order": 41,
+    "sort_order": 52,
     "sectors": [
       {
         "tour_number": 1,
@@ -5503,34 +5910,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 3
+        "sector_number": 17
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 43
+        "sector_number": 65
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 7
+        "sector_number": 69
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 31
+        "sector_number": 11
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 37
+        "sector_number": 31
       }
     ]
   },
   {
     "code": "31B",
     "start_zone": "B",
-    "sort_order": 42,
+    "sort_order": 53,
     "sectors": [
       {
         "tour_number": 1,
@@ -5540,22 +5947,22 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 5
+        "sector_number": 13
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 39
+        "sector_number": 67
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 9
+        "sector_number": 71
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 33
+        "sector_number": 7
       },
       {
         "tour_number": 2,
@@ -5567,7 +5974,7 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
   {
     "code": "33B",
     "start_zone": "B",
-    "sort_order": 43,
+    "sort_order": 54,
     "sectors": [
       {
         "tour_number": 1,
@@ -5577,34 +5984,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 7
+        "sector_number": 9
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 35
+        "sector_number": 69
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 11
+        "sector_number": 73
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 35
+        "sector_number": 3
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 29
+        "sector_number": 35
       }
     ]
   },
   {
     "code": "35B",
     "start_zone": "B",
-    "sort_order": 44,
+    "sort_order": 55,
     "sectors": [
       {
         "tour_number": 1,
@@ -5614,34 +6021,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 9
+        "sector_number": 5
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 31
+        "sector_number": 71
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 13
+        "sector_number": 1
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 37
+        "sector_number": 73
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 25
+        "sector_number": 37
       }
     ]
   },
   {
     "code": "37B",
     "start_zone": "B",
-    "sort_order": 45,
+    "sort_order": 56,
     "sectors": [
       {
         "tour_number": 1,
@@ -5651,34 +6058,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 11
+        "sector_number": 1
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 27
+        "sector_number": 73
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 15
+        "sector_number": 3
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 39
+        "sector_number": 69
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 21
+        "sector_number": 39
       }
     ]
   },
   {
     "code": "39B",
     "start_zone": "B",
-    "sort_order": 46,
+    "sort_order": 57,
     "sectors": [
       {
         "tour_number": 1,
@@ -5688,34 +6095,34 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 13
+        "sector_number": 71
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 23
+        "sector_number": 1
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 17
+        "sector_number": 5
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 41
+        "sector_number": 65
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 17
+        "sector_number": 41
       }
     ]
   },
   {
     "code": "41B",
     "start_zone": "B",
-    "sort_order": 47,
+    "sort_order": 58,
     "sectors": [
       {
         "tour_number": 1,
@@ -5725,155 +6132,7 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 15
-      },
-      {
-        "tour_number": 1,
-        "mini_number": 3,
-        "sector_number": 19
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 1,
-        "sector_number": 19
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 2,
-        "sector_number": 43
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 3,
-        "sector_number": 13
-      }
-    ]
-  },
-  {
-    "code": "43B",
-    "start_zone": "B",
-    "sort_order": 48,
-    "sectors": [
-      {
-        "tour_number": 1,
-        "mini_number": 1,
-        "sector_number": 43
-      },
-      {
-        "tour_number": 1,
-        "mini_number": 2,
-        "sector_number": 17
-      },
-      {
-        "tour_number": 1,
-        "mini_number": 3,
-        "sector_number": 15
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 1,
-        "sector_number": 21
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 2,
-        "sector_number": 45
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 3,
-        "sector_number": 9
-      }
-    ]
-  },
-  {
-    "code": "45B",
-    "start_zone": "B",
-    "sort_order": 49,
-    "sectors": [
-      {
-        "tour_number": 1,
-        "mini_number": 1,
-        "sector_number": 45
-      },
-      {
-        "tour_number": 1,
-        "mini_number": 2,
-        "sector_number": 19
-      },
-      {
-        "tour_number": 1,
-        "mini_number": 3,
-        "sector_number": 11
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 1,
-        "sector_number": 23
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 2,
-        "sector_number": 47
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 3,
-        "sector_number": 5
-      }
-    ]
-  },
-  {
-    "code": "47B",
-    "start_zone": "B",
-    "sort_order": 50,
-    "sectors": [
-      {
-        "tour_number": 1,
-        "mini_number": 1,
-        "sector_number": 47
-      },
-      {
-        "tour_number": 1,
-        "mini_number": 2,
-        "sector_number": 21
-      },
-      {
-        "tour_number": 1,
-        "mini_number": 3,
-        "sector_number": 7
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 1,
-        "sector_number": 25
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 2,
-        "sector_number": 49
-      },
-      {
-        "tour_number": 2,
-        "mini_number": 3,
-        "sector_number": 1
-      }
-    ]
-  },
-  {
-    "code": "49B",
-    "start_zone": "B",
-    "sort_order": 51,
-    "sectors": [
-      {
-        "tour_number": 1,
-        "mini_number": 1,
-        "sector_number": 49
-      },
-      {
-        "tour_number": 1,
-        "mini_number": 2,
-        "sector_number": 23
+        "sector_number": 67
       },
       {
         "tour_number": 1,
@@ -5883,12 +6142,86 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 27
+        "sector_number": 7
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 1
+        "sector_number": 61
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 43
+      }
+    ]
+  },
+  {
+    "code": "43B",
+    "start_zone": "B",
+    "sort_order": 59,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 43
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 63
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 5
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 9
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 57
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 45
+      }
+    ]
+  },
+  {
+    "code": "45B",
+    "start_zone": "B",
+    "sort_order": 60,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 45
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 59
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 7
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 11
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 53
       },
       {
         "tour_number": 2,
@@ -5898,39 +6231,520 @@ export const BOOR_SLIP_PACK: SlipPackCard[] = [
     ]
   },
   {
-    "code": "6B",
+    "code": "47B",
     "start_zone": "B",
-    "sort_order": 52,
+    "sort_order": 61,
     "sectors": [
       {
         "tour_number": 1,
         "mini_number": 1,
-        "sector_number": 6
+        "sector_number": 47
       },
       {
         "tour_number": 1,
         "mini_number": 2,
-        "sector_number": 26
+        "sector_number": 55
       },
       {
         "tour_number": 1,
         "mini_number": 3,
-        "sector_number": 46
+        "sector_number": 9
       },
       {
         "tour_number": 2,
         "mini_number": 1,
-        "sector_number": 46
+        "sector_number": 13
       },
       {
         "tour_number": 2,
         "mini_number": 2,
-        "sector_number": 6
+        "sector_number": 49
       },
       {
         "tour_number": 2,
         "mini_number": 3,
-        "sector_number": 26
+        "sector_number": 49
+      }
+    ]
+  },
+  {
+    "code": "49B",
+    "start_zone": "B",
+    "sort_order": 62,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 49
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 51
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 11
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 15
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 45
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 51
+      }
+    ]
+  },
+  {
+    "code": "51B",
+    "start_zone": "B",
+    "sort_order": 63,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 51
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 47
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 13
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 17
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 41
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 53
+      }
+    ]
+  },
+  {
+    "code": "53B",
+    "start_zone": "B",
+    "sort_order": 64,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 53
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 43
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 15
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 19
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 37
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 55
+      }
+    ]
+  },
+  {
+    "code": "55B",
+    "start_zone": "B",
+    "sort_order": 65,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 55
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 39
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 17
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 21
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 33
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 57
+      }
+    ]
+  },
+  {
+    "code": "57B",
+    "start_zone": "B",
+    "sort_order": 66,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 57
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 35
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 19
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 23
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 29
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 59
+      }
+    ]
+  },
+  {
+    "code": "59B",
+    "start_zone": "B",
+    "sort_order": 67,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 59
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 31
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 21
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 25
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 25
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 61
+      }
+    ]
+  },
+  {
+    "code": "61B",
+    "start_zone": "B",
+    "sort_order": 68,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 61
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 27
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 23
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 27
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 21
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 63
+      }
+    ]
+  },
+  {
+    "code": "63B",
+    "start_zone": "B",
+    "sort_order": 69,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 63
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 23
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 25
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 29
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 17
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 65
+      }
+    ]
+  },
+  {
+    "code": "65B",
+    "start_zone": "B",
+    "sort_order": 70,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 65
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 19
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 27
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 31
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 13
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 67
+      }
+    ]
+  },
+  {
+    "code": "67B",
+    "start_zone": "B",
+    "sort_order": 71,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 67
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 15
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 29
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 33
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 9
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 69
+      }
+    ]
+  },
+  {
+    "code": "69B",
+    "start_zone": "B",
+    "sort_order": 72,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 69
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 11
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 31
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 35
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 5
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 71
+      }
+    ]
+  },
+  {
+    "code": "71B",
+    "start_zone": "B",
+    "sort_order": 73,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 71
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 7
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 33
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 37
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 1
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 73
+      }
+    ]
+  },
+  {
+    "code": "73B",
+    "start_zone": "B",
+    "sort_order": 74,
+    "sectors": [
+      {
+        "tour_number": 1,
+        "mini_number": 1,
+        "sector_number": 73
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 2,
+        "sector_number": 3
+      },
+      {
+        "tour_number": 1,
+        "mini_number": 3,
+        "sector_number": 35
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 1,
+        "sector_number": 39
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 2,
+        "sector_number": 71
+      },
+      {
+        "tour_number": 2,
+        "mini_number": 3,
+        "sector_number": 1
       }
     ]
   }

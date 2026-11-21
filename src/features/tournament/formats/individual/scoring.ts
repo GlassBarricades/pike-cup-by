@@ -6,6 +6,7 @@ import {
   type CatchRow,
   type MiniTour,
   type TournamentEntry,
+  type TournamentRosterMember,
 } from '../../types'
 
 export type TourResult = {
@@ -47,12 +48,20 @@ export type TeamStandingRow = {
 }
 
 export type IndividualResults = {
-  /** Личный зачёт (при separateJuniors — без юниоров) */
+  /**
+   * Взрослая (общая) личка.
+   * При separateJuniors: взрослые + юниоры из смешанных пар (1 юниор + 1 взрослый).
+   */
   athletes: AthleteStandingRow[]
-  /** Юниорский личный зачёт (пустой, если опция выкл) */
+  /**
+   * Юниорский личный зачёт (пустой, если опция выкл).
+   * При separateJuniors: все юниоры, включая смешанных.
+   */
   juniors: AthleteStandingRow[]
   teams: TeamStandingRow[]
 }
+
+type MemberRef = { entry: TournamentEntry; member: TournamentRosterMember }
 
 function assignFinalPlaces(rows: AthleteStandingRow[], format: TournamentFormat): AthleteStandingRow[] {
   const sorted = [...rows].sort((a, b) => compareTiebreakers(a, b, format))
@@ -132,71 +141,81 @@ function weightForAthleteTour(
     .reduce((sum, c) => sum + c.weight_grams, 0)
 }
 
-/**
- * Личный + командный зачёт: места спортсменов в зоне тура, команда = сумма мест атлетов.
- */
-export function computeIndividualResults(
+/** В заявке есть и юниор, и взрослый спортсмен. */
+function entryIsMixed(entry: TournamentEntry): boolean {
+  const athletes = (entry.roster ?? []).filter((m) => m.role === 'athlete')
+  const hasJunior = athletes.some((m) => m.is_junior)
+  const hasAdult = athletes.some((m) => !m.is_junior)
+  return hasJunior && hasAdult
+}
+
+/** Юниор из смешанной пары — идёт и во взрослую личку. */
+function isMixedJunior(ref: MemberRef): boolean {
+  return Boolean(ref.member.is_junior) && entryIsMixed(ref.entry)
+}
+
+function rankTourPlaces(
+  pool: MemberRef[],
+  tour: number,
   format: TournamentFormat,
-  entries: TournamentEntry[],
   catches: CatchRow[],
   miniTours: MiniTour[],
   draws: AthleteDraw[],
-): IndividualResults {
-  const active = entries.filter((e) => e.status === 'registered' || e.status === 'confirmed')
-  const athletes = active.flatMap((entry) =>
-    (entry.roster ?? [])
-      .filter((m) => m.role === 'athlete')
-      .map((member) => ({ entry, member })),
-  )
+  zoneByTourMember: Map<string, string | null>,
+): Map<string, number> {
+  type Row = { id: string; weight: number; zone: string | null }
+  const rows: Row[] = pool.map(({ member }) => {
+    const zone = athleteZoneForTour(member.id, tour, draws)
+    zoneByTourMember.set(`${member.id}:${tour}`, zone)
+    return {
+      id: member.id,
+      weight: weightForAthleteTour(member.id, tour, catches, miniTours),
+      zone,
+    }
+  })
 
-  const tourNumbers = format.tours.map((t) => t.number)
-  const placesByTour = new Map<number, Map<string, number>>()
-  const zoneByTourMember = new Map<string, string | null>()
-
-  for (const tour of tourNumbers) {
-    type Row = { id: string; weight: number; zone: string | null }
-    const rows: Row[] = athletes.map(({ member }) => {
-      const zone = athleteZoneForTour(member.id, tour, draws)
-      zoneByTourMember.set(`${member.id}:${tour}`, zone)
-      return {
-        id: member.id,
-        weight: weightForAthleteTour(member.id, tour, catches, miniTours),
-        zone,
-      }
-    })
-
-    const placeMap = new Map<string, number>()
-    if (format.ranking.group === 'tour') {
+  const placeMap = new Map<string, number>()
+  if (format.ranking.group === 'tour') {
+    const ranked = rankByWeight(
+      rows.map((r) => ({ id: r.id, weight: r.weight })),
+      format,
+    )
+    for (const [id, place] of ranked) placeMap.set(id, place)
+  } else {
+    const byZone = new Map<string, Row[]>()
+    for (const row of rows) {
+      const key = row.zone ?? '__none__'
+      const list = byZone.get(key) ?? []
+      list.push(row)
+      byZone.set(key, list)
+    }
+    for (const group of byZone.values()) {
       const ranked = rankByWeight(
-        rows.map((r) => ({ id: r.id, weight: r.weight })),
+        group.map((r) => ({ id: r.id, weight: r.weight })),
         format,
       )
       for (const [id, place] of ranked) placeMap.set(id, place)
-    } else {
-      const byZone = new Map<string, Row[]>()
-      for (const row of rows) {
-        const key = row.zone ?? '__none__'
-        const list = byZone.get(key) ?? []
-        list.push(row)
-        byZone.set(key, list)
-      }
-      for (const group of byZone.values()) {
-        const ranked = rankByWeight(
-          group.map((r) => ({ id: r.id, weight: r.weight })),
-          format,
-        )
-        for (const [id, place] of ranked) placeMap.set(id, place)
-      }
     }
-    placesByTour.set(tour, placeMap)
   }
+  return placeMap
+}
 
-  const athleteRows: AthleteStandingRow[] = athletes.map(({ entry, member }) => {
+function buildAthleteRows(
+  pool: MemberRef[],
+  placesByTour: Map<number, Map<string, number>>,
+  tourNumbers: number[],
+  zoneByTourMember: Map<string, string | null>,
+  catches: CatchRow[],
+  miniTours: MiniTour[],
+  format: TournamentFormat,
+): AthleteStandingRow[] {
+  const fallbackN = pool.length
+  return pool.map(({ entry, member }) => {
     const tours: TourResult[] = tourNumbers.map((tour) => {
       const weight = weightForAthleteTour(member.id, tour, catches, miniTours)
       const zone = zoneByTourMember.get(`${member.id}:${tour}`) ?? null
       const placeMap = placesByTour.get(tour)!
-      const place = placeMap.get(member.id) ?? zeroPlaceValue(athletes.length, format)
+      const place = placeMap.get(member.id) ?? zeroPlaceValue(fallbackN, format)
       return { tour, zone, weight, place }
     })
     const placeSum = tours.reduce((s, t) => s + t.place, 0)
@@ -220,65 +239,130 @@ export function computeIndividualResults(
       finalPlace: 0,
     }
   })
+}
 
-  // Личники (без team_id) в командный зачёт не входят; юниоры в командном участвуют
-  const teamRows: TeamStandingRow[] = active.filter((entry) => !isSoloEntry(entry)).map((entry) => {
-    const members = (entry.roster ?? []).filter((m) => m.role === 'athlete')
-    const memberIds = new Set(members.map((m) => m.id))
-    const memberStandings = athleteRows.filter((r) => memberIds.has(r.rosterMemberId))
-    const tours: TourResult[] = tourNumbers.map((tour) => {
-      const tourPlaces = memberStandings.map((m) => m.tours.find((t) => t.tour === tour)!)
-      const place = tourPlaces.reduce((s, t) => s + (t?.place ?? 0), 0)
-      const weight = tourPlaces.reduce((s, t) => s + (t?.weight ?? 0), 0)
-      const zones = [...new Set(tourPlaces.map((t) => t?.zone).filter(Boolean))]
-      return {
-        tour,
-        zone: zones.length === 1 ? zones[0]! : null,
-        weight,
-        place,
-      }
+function buildTeamRows(
+  entries: TournamentEntry[],
+  openRows: AthleteStandingRow[],
+  tourNumbers: number[],
+  format: TournamentFormat,
+): TeamStandingRow[] {
+  const openById = new Map(openRows.map((r) => [r.rosterMemberId, r]))
+  const teamRows: TeamStandingRow[] = entries
+    .filter((entry) => !isSoloEntry(entry))
+    .flatMap((entry) => {
+      const members = (entry.roster ?? []).filter((m) => m.role === 'athlete')
+      const memberStandings = members
+        .map((m) => openById.get(m.id))
+        .filter((row): row is AthleteStandingRow => row != null)
+      // Нет никого во взрослой личке (юниор+юниор) — в командный зачёт не входят
+      if (memberStandings.length === 0) return []
+
+      const tours: TourResult[] = tourNumbers.map((tour) => {
+        const tourPlaces = memberStandings.map((m) => m.tours.find((t) => t.tour === tour)!)
+        const place = tourPlaces.reduce((s, t) => s + (t?.place ?? 0), 0)
+        const weight = tourPlaces.reduce((s, t) => s + (t?.weight ?? 0), 0)
+        const zones = [...new Set(tourPlaces.map((t) => t?.zone).filter(Boolean))]
+        return {
+          tour,
+          zone: zones.length === 1 ? zones[0]! : null,
+          weight,
+          place,
+        }
+      })
+      const placeSum = tours.reduce((s, t) => s + t.place, 0)
+      const totalWeight = tours.reduce((s, t) => s + t.weight, 0)
+      const bestTourWeight = tours.reduce((m, t) => Math.max(m, t.weight), 0)
+      const lastTourWeight = tours.length ? tours[tours.length - 1].weight : 0
+      return [
+        {
+          entryId: entry.id,
+          teamId: entry.team_id,
+          teamName: entryTeamName(entry),
+          athleteIds: members.map((m) => m.id),
+          athleteNames: members
+            .slice()
+            .sort((a, b) => a.slot - b.slot)
+            .map((m) => m.full_name_snapshot),
+          tours,
+          placeSum,
+          totalWeight,
+          bestTourWeight,
+          lastTourWeight,
+          finalPlace: 0,
+        },
+      ]
     })
-    const placeSum = tours.reduce((s, t) => s + t.place, 0)
-    const totalWeight = tours.reduce((s, t) => s + t.weight, 0)
-    const bestTourWeight = tours.reduce((m, t) => Math.max(m, t.weight), 0)
-    const lastTourWeight = tours.length ? tours[tours.length - 1].weight : 0
-    return {
-      entryId: entry.id,
-      teamId: entry.team_id,
-      teamName: entryTeamName(entry),
-      athleteIds: members.map((m) => m.id),
-      athleteNames: members
-        .slice()
-        .sort((a, b) => a.slot - b.slot)
-        .map((m) => m.full_name_snapshot),
-      tours,
-      placeSum,
-      totalWeight,
-      bestTourWeight,
-      lastTourWeight,
-      finalPlace: 0,
-    }
-  })
 
   teamRows.sort((a, b) => compareTiebreakers(a, b, format))
   teamRows.forEach((row, index) => {
     row.finalPlace = index + 1
   })
+  return teamRows
+}
 
+function rankPool(
+  pool: MemberRef[],
+  tourNumbers: number[],
+  format: TournamentFormat,
+  catches: CatchRow[],
+  miniTours: MiniTour[],
+  draws: AthleteDraw[],
+): AthleteStandingRow[] {
+  const zoneByTourMember = new Map<string, string | null>()
+  const placesByTour = new Map<number, Map<string, number>>()
+  for (const tour of tourNumbers) {
+    placesByTour.set(
+      tour,
+      rankTourPlaces(pool, tour, format, catches, miniTours, draws, zoneByTourMember),
+    )
+  }
+  return buildAthleteRows(pool, placesByTour, tourNumbers, zoneByTourMember, catches, miniTours, format)
+}
+
+/**
+ * Личный + командный зачёт: места спортсменов в зоне тура, команда = сумма мест атлетов.
+ * При separateJuniors командный зачёт берёт места из взрослой лички (взрослые + смешанные юниоры).
+ */
+export function computeIndividualResults(
+  format: TournamentFormat,
+  entries: TournamentEntry[],
+  catches: CatchRow[],
+  miniTours: MiniTour[],
+  draws: AthleteDraw[],
+): IndividualResults {
+  const active = entries.filter((e) => e.status === 'registered' || e.status === 'confirmed')
+  const allMembers: MemberRef[] = active.flatMap((entry) =>
+    (entry.roster ?? [])
+      .filter((m) => m.role === 'athlete')
+      .map((member) => ({ entry, member })),
+  )
+
+  const tourNumbers = format.tours.map((t) => t.number)
   const separate = format.ranking.separateJuniors
+
   if (!separate) {
+    const athleteRows = rankPool(allMembers, tourNumbers, format, catches, miniTours, draws)
+    const teams = buildTeamRows(active, athleteRows, tourNumbers, format)
     return {
       athletes: assignFinalPlaces(athleteRows, format),
       juniors: [],
-      teams: teamRows,
+      teams,
     }
   }
 
-  const openRows = athleteRows.filter((row) => !row.junior)
-  const juniorRows = athleteRows.filter((row) => row.junior)
+  const openMembers = allMembers.filter(
+    (ref) => !ref.member.is_junior || isMixedJunior(ref),
+  )
+  const juniorMembers = allMembers.filter((ref) => ref.member.is_junior)
+
+  const openRows = rankPool(openMembers, tourNumbers, format, catches, miniTours, draws)
+  const juniorRows = rankPool(juniorMembers, tourNumbers, format, catches, miniTours, draws)
+  const teams = buildTeamRows(active, openRows, tourNumbers, format)
+
   return {
     athletes: assignFinalPlaces(openRows, format),
     juniors: assignFinalPlaces(juniorRows, format),
-    teams: teamRows,
+    teams,
   }
 }

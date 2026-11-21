@@ -40,7 +40,17 @@ export function V2Team() {
     story.matrixTeams.find((row) => row.entryId === entryId)
   const athleteRows =
     individual && results.engine === 'individual'
-      ? [...results.athletes, ...results.juniors].filter((row) => row.entryId === entryId)
+      ? (() => {
+          // Смешанный юниор есть в обеих личках — для карточки команды берём open-места
+          const byId = new Map<string, (typeof results.athletes)[number]>()
+          for (const row of results.juniors) {
+            if (row.entryId === entryId) byId.set(row.rosterMemberId, row)
+          }
+          for (const row of results.athletes) {
+            if (row.entryId === entryId) byId.set(row.rosterMemberId, row)
+          }
+          return [...byId.values()]
+        })()
       : []
   const ends = bestWorstSlot(matrix)
   const tour = story.clock?.tour ?? 1
@@ -163,6 +173,10 @@ export function V2Team() {
                       d.mini_number === slot.mini,
                   )
                 : null
+              const alsoInJuniors =
+                athlete.junior &&
+                results.engine === 'individual' &&
+                results.juniors.some((row) => row.rosterMemberId === athlete.rosterMemberId)
               return (
                 <Group key={athlete.rosterMemberId} justify="space-between" wrap="nowrap">
                   <div>
@@ -179,6 +193,7 @@ export function V2Team() {
                           ? 'Зона —'
                           : 'Сектор —'}
                       {` · место ${formatPlace(athlete.finalPlace)}`}
+                      {alsoInJuniors ? ' · также в юниорском зачёте' : ''}
                     </Text>
                   </div>
                   <Text fw={700} className="pc-tabular">
