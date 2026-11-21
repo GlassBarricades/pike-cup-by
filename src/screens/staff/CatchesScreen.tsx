@@ -1,5 +1,6 @@
 import { Fragment, useMemo, useState } from 'react'
 import {
+  Badge,
   Button,
   Group,
   NumberInput,
@@ -39,9 +40,12 @@ import { oppositeZone } from '../../features/tournament/schedule'
 import {
   entryTeamColumn,
   entryTeamName,
+  type AthleteDraw,
   type CatchRow,
+  type CatchRevision,
   type MiniTour,
   type TournamentEntry,
+  type TournamentRosterMember,
 } from '../../features/tournament/types'
 import { EmptyState, PageHero, Panel, SectionTitle } from '../../ui'
 
@@ -62,6 +66,63 @@ function formatLogTime(iso: string): string {
   })
 }
 
+function authorName(
+  authors: Map<string, { full_name: string | null }> | undefined,
+  userId: string | null | undefined,
+): string {
+  if (!userId) return '—'
+  return authors?.get(userId)?.full_name?.trim() || 'Судья'
+}
+
+function findMember(
+  entry: TournamentEntry | undefined,
+  rosterMemberId: string | null,
+): TournamentRosterMember | undefined {
+  if (!entry || !rosterMemberId) return undefined
+  return (entry.roster ?? []).find((m) => m.id === rosterMemberId)
+}
+
+function findDraw(
+  draws: AthleteDraw[],
+  rosterMemberId: string | null,
+  mini: MiniTour | undefined,
+): AthleteDraw | undefined {
+  if (!rosterMemberId || !mini) return undefined
+  return draws.find(
+    (d) =>
+      d.roster_member_id === rosterMemberId &&
+      d.tour_number === mini.tour_number &&
+      d.mini_number === mini.mini_number,
+  )
+}
+
+function slotLabel(
+  entry: TournamentEntry | undefined,
+  mini: MiniTour | undefined,
+  draw: AthleteDraw | undefined,
+  zonesOnly: boolean,
+  individual: boolean,
+): string {
+  if (!mini) return '—'
+  const tourLabel = mini.tour_number === 1 ? 'I' : 'II'
+  const parts = [`${tourLabel} тур`, `МТ ${mini.mini_number}`]
+  if (individual && draw) {
+    parts.push(`зона ${draw.zone}`)
+    if (!zonesOnly) parts.push(`сектор ${draw.sector}`)
+  } else if (!individual) {
+    const zone =
+      mini.tour_number === 1 ? (entry?.start_zone ?? null) : oppositeZone(entry?.start_zone)
+    if (zone) parts.push(`зона ${zone}`)
+  }
+  return parts.join(' · ')
+}
+
+function revisionActionLabel(action: CatchRevision['action']): string {
+  if (action === 'insert') return 'Создано'
+  if (action === 'delete') return 'Удалено'
+  return 'Было'
+}
+
 export function CatchesScreen() {
   const { user } = useAuth()
   const { selected: tournament } = useStaffTournament()
@@ -72,11 +133,15 @@ export function CatchesScreen() {
   const { data: draws = [] } = useAthleteDraws(tournament?.id)
   const entryIds = useMemo(() => entries.map((entry) => entry.id), [entries])
   const { data: revisions = [] } = useCatchRevisions(tournament?.id, entryIds)
-  const { data: authors } = useCatchAuthors(revisions.map((revision) => ({ created_by: revision.actor_id })))
+  const { data: authors } = useCatchAuthors([
+    ...catches.map((c) => ({ created_by: c.created_by })),
+    ...revisions.map((revision) => ({ created_by: revision.actor_id })),
+  ])
   const queryClient = useQueryClient()
 
   const format = tournament ? getFormat(tournament) : null
   const individual = format ? isIndividual(format) : false
+  const zonesOnly = Boolean(tournament?.draw_zones_only)
   const [entryId, setEntryId] = useState<string | null>(null)
   const [rosterMemberId, setRosterMemberId] = useState<string | null>(null)
   const [miniTourId, setMiniTourId] = useState<string | null>(null)
@@ -135,12 +200,15 @@ export function CatchesScreen() {
   )
 
   const revisionsByCatch = useMemo(() => {
-    const map = new Map<string, typeof revisions>()
+    const map = new Map<string, CatchRevision[]>()
     for (const revision of revisions) {
-      if (revision.action !== 'update' || !revision.catch_id) continue
+      if (!revision.catch_id) continue
       const list = map.get(revision.catch_id) ?? []
       list.push(revision)
       map.set(revision.catch_id, list)
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => a.created_at.localeCompare(b.created_at))
     }
     return map
   }, [revisions])
@@ -205,21 +273,38 @@ export function CatchesScreen() {
   const logRows = useMemo(() => {
     const needle = logFilter.trim().toLocaleLowerCase('ru')
     return catches
-      .map((c) => ({
-        catch: c,
-        entry: entryById.get(c.entry_id),
-        mini: miniById.get(c.mini_tour_id),
-      }))
-      .filter(({ entry }) => {
+      .map((c) => {
+        const entry = entryById.get(c.entry_id)
+        const mini = miniById.get(c.mini_tour_id)
+        const member = findMember(entry, c.roster_member_id)
+        const draw = findDraw(draws, c.roster_member_id, mini)
+        const judge = authorName(authors, c.created_by)
+        return { catch: c, entry, mini, member, draw, judge }
+      })
+      .filter(({ entry, member, judge, mini, draw }) => {
         if (!needle) return true
-        const name = entry ? entryTeamName(entry) : ''
-        return name.toLocaleLowerCase('ru').includes(needle)
+        const haystack = [
+          entry ? entryTeamName(entry) : '',
+          member?.full_name_snapshot ?? '',
+          judge,
+          mini ? `${mini.tour_number} ${mini.mini_number}` : '',
+          draw?.zone ?? '',
+          draw ? String(draw.sector) : '',
+          member?.is_junior ? 'юниор' : '',
+        ]
+          .join(' ')
+          .toLocaleLowerCase('ru')
+        return haystack.includes(needle)
       })
       .sort((a, b) => {
         const na = a.entry ? entryTeamName(a.entry) : ''
         const nb = b.entry ? entryTeamName(b.entry) : ''
         const byName = na.localeCompare(nb, 'ru')
         if (byName !== 0) return byName
+        const athleteA = a.member?.full_name_snapshot ?? ''
+        const athleteB = b.member?.full_name_snapshot ?? ''
+        const byAthlete = athleteA.localeCompare(athleteB, 'ru')
+        if (byAthlete !== 0) return byAthlete
         const ta = a.mini?.tour_number ?? 0
         const tb = b.mini?.tour_number ?? 0
         if (ta !== tb) return ta - tb
@@ -228,7 +313,7 @@ export function CatchesScreen() {
         if (ma !== mb) return ma - mb
         return a.catch.created_at.localeCompare(b.catch.created_at)
       })
-  }, [catches, entryById, miniById, logFilter])
+  }, [catches, entryById, miniById, logFilter, draws, authors])
 
   const startEdit = (row: CatchRow) => {
     setEditingId(row.id)
@@ -370,11 +455,11 @@ export function CatchesScreen() {
         <Group justify="space-between" align="flex-end" wrap="wrap">
           <SectionTitle>Журнал уловов ({catches.length})</SectionTitle>
           <TextInput
-            placeholder="Фильтр по команде"
+            placeholder="Команда, спортсмен, судья, зона…"
             leftSection={<IconSearch size={16} />}
             value={logFilter}
             onChange={(e) => setLogFilter(e.currentTarget.value)}
-            maw={280}
+            maw={320}
             style={{ flex: 1 }}
           />
         </Group>
@@ -392,115 +477,160 @@ export function CatchesScreen() {
           <EmptyState title="Записей пока нет" description="Добавьте улов формой выше." />
         ) : (
           <Panel p={0}>
-            <Table.ScrollContainer minWidth={720}>
+            <Table.ScrollContainer minWidth={980}>
               <Table withColumnBorders className="pc-scoreboard-table">
                 <Table.Thead>
                   <Table.Tr>
+                    <Table.Th>Участник</Table.Th>
                     <Table.Th>Команда</Table.Th>
-                    <Table.Th>Тур / мини-тур</Table.Th>
+                    <Table.Th>Слот</Table.Th>
                     <Table.Th ta="right">Вес, г</Table.Th>
+                    <Table.Th>Судья</Table.Th>
                     <Table.Th>Когда</Table.Th>
                     <Table.Th w={160} />
                   </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
-                  {logRows.map(({ catch: c, entry, mini }) => {
+                  {logRows.map(({ catch: c, entry, mini, member, draw, judge }) => {
                     const isEditing = editingId === c.id
                     const history = revisionsByCatch.get(c.id) ?? []
+                    const teamLabel = entry ? entryTeamName(entry) : c.entry_id.slice(0, 8)
+                    const rosterFallback =
+                      !individual && entry
+                        ? (entry.roster ?? [])
+                            .filter((m) => m.role === 'athlete')
+                            .map((m) => m.full_name_snapshot)
+                            .join(', ')
+                        : null
                     return (
                       <Fragment key={c.id}>
-                      <Table.Tr>
-                        <Table.Td>
-                          <Text size="sm">{entry ? entryTeamName(entry) : c.entry_id.slice(0, 8)}</Text>
-                          {history.map((revision) => (
-                            <Text key={revision.id} size="xs" c="dimmed">
-                              Было {revision.weight_grams.toLocaleString('ru-RU')} г ·{' '}
-                              {authors?.get(revision.actor_id ?? '')?.full_name?.trim() || 'Судья'} ·{' '}
-                              {formatLogTime(revision.created_at)}
-                            </Text>
-                          ))}
-                        </Table.Td>
-                        <Table.Td>
-                          <Text size="sm">
-                            {mini ? miniTourLabel(entry, mini) : `МТ ${c.mini_tour_id.slice(0, 8)}…`}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td ta="right" className="pc-num">
-                          {isEditing ? (
-                            <NumberInput
-                              min={1}
-                              size="xs"
-                              value={editWeight}
-                              onChange={setEditWeight}
-                              w={100}
-                              ml="auto"
-                            />
-                          ) : (
-                            c.weight_grams
-                          )}
-                        </Table.Td>
-                        <Table.Td>
-                          <Text size="xs" c="dimmed">
-                            {formatLogTime(c.created_at)}
-                          </Text>
-                        </Table.Td>
-                        <Table.Td>
-                          <Group gap={4} justify="flex-end" wrap="nowrap">
-                            {isEditing ? (
-                              <>
-                                <Button
-                                  size="compact-xs"
-                                  color="signal"
-                                  loading={updateMutation.isPending}
-                                  disabled={Number(editWeight) <= 0}
-                                  onClick={() =>
-                                    updateMutation.mutate({ id: c.id, grams: Number(editWeight) })
-                                  }
-                                >
-                                  OK
-                                </Button>
-                                <Button
-                                  size="compact-xs"
-                                  variant="subtle"
-                                  onClick={() => setEditingId(null)}
-                                >
-                                  Отмена
-                                </Button>
-                              </>
+                        <Table.Tr>
+                          <Table.Td>
+                            {member ? (
+                              <Group gap={6} wrap="nowrap">
+                                <Text size="sm" fw={600}>
+                                  {member.full_name_snapshot}
+                                </Text>
+                                {member.is_junior ? (
+                                  <Badge size="xs" color="teal" variant="light">
+                                    Юн.
+                                  </Badge>
+                                ) : null}
+                              </Group>
                             ) : (
-                              <>
-                                <Button
-                                  size="compact-xs"
-                                  variant="subtle"
-                                  color="signal"
-                                  onClick={() => startEdit(c)}
-                                >
-                                  Изменить
-                                </Button>
-                                <Button
-                                  size="compact-xs"
-                                  color="red"
-                                  variant="subtle"
-                                  loading={delMutation.isPending && delMutation.variables === c.id}
-                                  onClick={() => {
-                                    const team = entry ? entryTeamName(entry) : 'запись'
-                                    if (
-                                      !window.confirm(
-                                        `Удалить улов «${team}» (${c.weight_grams} г)?`,
-                                      )
-                                    ) {
-                                      return
-                                    }
-                                    delMutation.mutate(c.id)
-                                  }}
-                                >
-                                  Удалить
-                                </Button>
-                              </>
+                              <Text size="sm" c="dimmed">
+                                {rosterFallback || (individual ? 'Спортсмен не найден' : 'Команда')}
+                              </Text>
                             )}
-                          </Group>
-                        </Table.Td>
-                      </Table.Tr>
+                            {history.length > 0 ? (
+                              <Stack gap={2} mt={4}>
+                                {history.map((revision) => (
+                                  <Text key={revision.id} size="xs" c="dimmed">
+                                    {revisionActionLabel(revision.action)}{' '}
+                                    {revision.weight_grams.toLocaleString('ru-RU')} г ·{' '}
+                                    {authorName(authors, revision.actor_id)} ·{' '}
+                                    {formatLogTime(revision.created_at)}
+                                  </Text>
+                                ))}
+                              </Stack>
+                            ) : null}
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm">{teamLabel}</Text>
+                            {entry?.quota ? (
+                              <Text size="xs" c="dimmed">
+                                {entry.quota === 'prize'
+                                  ? 'призовая'
+                                  : entry.quota === 'org'
+                                    ? 'орг.'
+                                    : 'открытая'}
+                              </Text>
+                            ) : null}
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm">
+                              {slotLabel(entry, mini, draw, zonesOnly, individual)}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td ta="right" className="pc-num">
+                            {isEditing ? (
+                              <NumberInput
+                                min={1}
+                                size="xs"
+                                value={editWeight}
+                                onChange={setEditWeight}
+                                w={100}
+                                ml="auto"
+                              />
+                            ) : (
+                              c.weight_grams
+                            )}
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="sm">{judge}</Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Text size="xs" c="dimmed">
+                              {formatLogTime(c.created_at)}
+                            </Text>
+                          </Table.Td>
+                          <Table.Td>
+                            <Group gap={4} justify="flex-end" wrap="nowrap">
+                              {isEditing ? (
+                                <>
+                                  <Button
+                                    size="compact-xs"
+                                    color="signal"
+                                    loading={updateMutation.isPending}
+                                    disabled={Number(editWeight) <= 0}
+                                    onClick={() =>
+                                      updateMutation.mutate({ id: c.id, grams: Number(editWeight) })
+                                    }
+                                  >
+                                    OK
+                                  </Button>
+                                  <Button
+                                    size="compact-xs"
+                                    variant="subtle"
+                                    onClick={() => setEditingId(null)}
+                                  >
+                                    Отмена
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button
+                                    size="compact-xs"
+                                    variant="subtle"
+                                    color="signal"
+                                    onClick={() => startEdit(c)}
+                                  >
+                                    Изменить
+                                  </Button>
+                                  <Button
+                                    size="compact-xs"
+                                    color="red"
+                                    variant="subtle"
+                                    loading={delMutation.isPending && delMutation.variables === c.id}
+                                    onClick={() => {
+                                      const who = member?.full_name_snapshot ?? teamLabel
+                                      if (
+                                        !window.confirm(
+                                          `Удалить улов «${who}» (${c.weight_grams} г)?`,
+                                        )
+                                      ) {
+                                        return
+                                      }
+                                      delMutation.mutate(c.id)
+                                    }}
+                                  >
+                                    Удалить
+                                  </Button>
+                                </>
+                              )}
+                            </Group>
+                          </Table.Td>
+                        </Table.Tr>
                       </Fragment>
                     )
                   })}
