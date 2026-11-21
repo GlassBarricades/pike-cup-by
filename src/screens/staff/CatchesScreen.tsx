@@ -9,12 +9,30 @@ import {
   Text,
   TextInput,
 } from '@mantine/core'
-import { IconSearch } from '@tabler/icons-react'
+import { notifications } from '@mantine/notifications'
+import { IconFileSpreadsheet, IconFileTypePdf, IconSearch } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { addCatch, deleteCatch, updateCatchWeight } from '../../features/tournament/api'
 import { useAuth } from '../../features/auth/AuthProvider'
+import {
+  buildAthleteExportTable,
+  buildExportMeta,
+  buildTeamExportTable,
+  downloadPdf,
+  downloadXlsx,
+  type ExportStandingKind,
+} from '../../features/tournament/exportStandings'
 import { getFormat, isIndividual } from '../../features/tournament/formats'
-import { tournamentKeys, useCatchAuthors, useCatches, useCatchRevisions, useEntries, useMiniTours } from '../../features/tournament/hooks'
+import { computeResults } from '../../features/tournament/formats/results'
+import {
+  tournamentKeys,
+  useAthleteDraws,
+  useCatchAuthors,
+  useCatches,
+  useCatchRevisions,
+  useEntries,
+  useMiniTours,
+} from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
 import { oppositeZone } from '../../features/tournament/schedule'
@@ -51,6 +69,7 @@ export function CatchesScreen() {
   const { data: entries = [] } = useEntries(tournament?.id)
   const { data: miniTours = [] } = useMiniTours(tournament?.id)
   const { data: catches = [] } = useCatches(tournament?.id)
+  const { data: draws = [] } = useAthleteDraws(tournament?.id)
   const entryIds = useMemo(() => entries.map((entry) => entry.id), [entries])
   const { data: revisions = [] } = useCatchRevisions(tournament?.id, entryIds)
   const { data: authors } = useCatchAuthors(revisions.map((revision) => ({ created_by: revision.actor_id })))
@@ -65,6 +84,39 @@ export function CatchesScreen() {
   const [logFilter, setLogFilter] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editWeight, setEditWeight] = useState<number | string>('')
+  const [exporting, setExporting] = useState<string | null>(null)
+
+  const individualResults = useMemo(() => {
+    if (!tournament || !individual) return null
+    const results = computeResults({ tournament, entries, catches, miniTours, draws })
+    return results.engine === 'individual' ? results : null
+  }, [tournament, individual, entries, catches, miniTours, draws])
+
+  async function runExport(kind: ExportStandingKind, formatKind: 'pdf' | 'xlsx') {
+    if (!tournament || !individualResults) return
+    const key = `${kind}-${formatKind}`
+    setExporting(key)
+    try {
+      const meta = buildExportMeta(tournament, kind)
+      const table =
+        kind === 'team'
+          ? buildTeamExportTable(individualResults.teams, meta)
+          : buildAthleteExportTable(
+              kind === 'juniors' ? individualResults.juniors : individualResults.athletes,
+              meta,
+            )
+      if (formatKind === 'pdf') await downloadPdf(table)
+      else await downloadXlsx(table)
+    } catch (error) {
+      notifications.show({
+        color: 'red',
+        title: 'Выгрузка не удалась',
+        message: error instanceof Error ? error.message : 'Неизвестная ошибка',
+      })
+    } finally {
+      setExporting(null)
+    }
+  }
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries])
   const miniById = useMemo(() => new Map(miniTours.map((m) => [m.id, m])), [miniTours])
@@ -204,6 +256,65 @@ export function CatchesScreen() {
           Турнир завершён. Пульт закрыт, журнал можно править. Каждая правка остаётся в истории.
         </Text>
       )}
+
+      {individual && individualResults ? (
+        <Stack gap="sm">
+          <SectionTitle>Выгрузка итогов</SectionTitle>
+          <Panel p="sm">
+            <Stack gap="sm">
+              {(
+                [
+                  { kind: 'team' as const, label: 'Командный', count: individualResults.teams.length },
+                  {
+                    kind: 'individual' as const,
+                    label: 'Личный',
+                    count: individualResults.athletes.length,
+                  },
+                  {
+                    kind: 'juniors' as const,
+                    label: 'Юниоры',
+                    count: individualResults.juniors.length,
+                  },
+                ] as const
+              ).map((item) => {
+                const disabled = item.count === 0
+                return (
+                  <Group key={item.kind} justify="space-between" wrap="wrap" gap="xs">
+                    <Text size="sm" fw={600}>
+                      {item.label}
+                      <Text span size="sm" c="dimmed" fw={400}>
+                        {` · ${item.count}`}
+                      </Text>
+                    </Text>
+                    <Group gap={6}>
+                      <Button
+                        size="xs"
+                        variant="default"
+                        leftSection={<IconFileTypePdf size={14} />}
+                        disabled={disabled}
+                        loading={exporting === `${item.kind}-pdf`}
+                        onClick={() => void runExport(item.kind, 'pdf')}
+                      >
+                        PDF
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="default"
+                        leftSection={<IconFileSpreadsheet size={14} />}
+                        disabled={disabled}
+                        loading={exporting === `${item.kind}-xlsx`}
+                        onClick={() => void runExport(item.kind, 'xlsx')}
+                      >
+                        Excel
+                      </Button>
+                    </Group>
+                  </Group>
+                )
+              })}
+            </Stack>
+          </Panel>
+        </Stack>
+      ) : null}
 
       <Panel>
         <Stack gap="md">

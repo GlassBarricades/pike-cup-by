@@ -49,13 +49,13 @@ export type TeamStandingRow = {
 
 export type IndividualResults = {
   /**
-   * Взрослая (общая) личка.
-   * При separateJuniors: взрослые + юниоры из смешанных пар (1 юниор + 1 взрослый).
+   * Общая (взрослая) личка.
+   * При separateJuniors: все спортсмены, включая юниоров.
    */
   athletes: AthleteStandingRow[]
   /**
    * Юниорский личный зачёт (пустой, если опция выкл).
-   * При separateJuniors: все юниоры, включая смешанных.
+   * При separateJuniors: все юниоры — отдельный пересчёт мест только среди них.
    */
   juniors: AthleteStandingRow[]
   teams: TeamStandingRow[]
@@ -139,19 +139,6 @@ function weightForAthleteTour(
   return catches
     .filter((c) => c.roster_member_id === rosterMemberId && miniIds.has(c.mini_tour_id))
     .reduce((sum, c) => sum + c.weight_grams, 0)
-}
-
-/** В заявке есть и юниор, и взрослый спортсмен. */
-function entryIsMixed(entry: TournamentEntry): boolean {
-  const athletes = (entry.roster ?? []).filter((m) => m.role === 'athlete')
-  const hasJunior = athletes.some((m) => m.is_junior)
-  const hasAdult = athletes.some((m) => !m.is_junior)
-  return hasJunior && hasAdult
-}
-
-/** Юниор из смешанной пары — идёт и во взрослую личку. */
-function isMixedJunior(ref: MemberRef): boolean {
-  return Boolean(ref.member.is_junior) && entryIsMixed(ref.entry)
 }
 
 function rankTourPlaces(
@@ -255,7 +242,6 @@ function buildTeamRows(
       const memberStandings = members
         .map((m) => openById.get(m.id))
         .filter((row): row is AthleteStandingRow => row != null)
-      // Нет никого во взрослой личке (юниор+юниор) — в командный зачёт не входят
       if (memberStandings.length === 0) return []
 
       const tours: TourResult[] = tourNumbers.map((tour) => {
@@ -322,7 +308,7 @@ function rankPool(
 
 /**
  * Личный + командный зачёт: места спортсменов в зоне тура, команда = сумма мест атлетов.
- * При separateJuniors командный зачёт берёт места из взрослой лички (взрослые + смешанные юниоры).
+ * При separateJuniors: общая личка = все; юниорская = только юниоры; команда из общей лички.
  */
 export function computeIndividualResults(
   format: TournamentFormat,
@@ -341,24 +327,19 @@ export function computeIndividualResults(
   const tourNumbers = format.tours.map((t) => t.number)
   const separate = format.ranking.separateJuniors
 
+  const openRows = rankPool(allMembers, tourNumbers, format, catches, miniTours, draws)
+  const teams = buildTeamRows(active, openRows, tourNumbers, format)
+
   if (!separate) {
-    const athleteRows = rankPool(allMembers, tourNumbers, format, catches, miniTours, draws)
-    const teams = buildTeamRows(active, athleteRows, tourNumbers, format)
     return {
-      athletes: assignFinalPlaces(athleteRows, format),
+      athletes: assignFinalPlaces(openRows, format),
       juniors: [],
       teams,
     }
   }
 
-  const openMembers = allMembers.filter(
-    (ref) => !ref.member.is_junior || isMixedJunior(ref),
-  )
   const juniorMembers = allMembers.filter((ref) => ref.member.is_junior)
-
-  const openRows = rankPool(openMembers, tourNumbers, format, catches, miniTours, draws)
   const juniorRows = rankPool(juniorMembers, tourNumbers, format, catches, miniTours, draws)
-  const teams = buildTeamRows(active, openRows, tourNumbers, format)
 
   return {
     athletes: assignFinalPlaces(openRows, format),

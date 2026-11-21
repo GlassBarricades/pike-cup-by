@@ -146,7 +146,7 @@ describe('computeIndividualResults', () => {
     expect(teams.every((t) => t.entryId !== 'solo1')).toBe(true)
   })
 
-  it('puts mixed junior in both open and junior tables; team uses open places', () => {
+  it('puts all juniors in open table and junior table; team uses open places', () => {
     const format = {
       ...BOOR_INDIVIDUAL_TEAM_FORMAT,
       ranking: { ...BOOR_INDIVIDUAL_TEAM_FORMAT.ranking, separateJuniors: true },
@@ -178,33 +178,33 @@ describe('computeIndividualResults', () => {
       { id: 'c1', tournament_id: 't1', entry_id: 'e1', roster_member_id: 'a1', mini_tour_id: 'm11', weight_grams: 800, created_by: null, created_at: '' },
       { id: 'c2', tournament_id: 't1', entry_id: 'e1', roster_member_id: 'j1', mini_tour_id: 'm11', weight_grams: 900, created_by: null, created_at: '' },
       { id: 'c3', tournament_id: 't1', entry_id: 'e2', roster_member_id: 'a2', mini_tour_id: 'm11', weight_grams: 700, created_by: null, created_at: '' },
-      // j2 heavier than j1 in zone A → junior place of j1 is 2, open place stays 1
+      // j2 heavier than j1 in zone A → open place of j1 is 2; junior-only place of j1 is also 2
       { id: 'c4', tournament_id: 't1', entry_id: 'e3', roster_member_id: 'j2', mini_tour_id: 'm11', weight_grams: 950, created_by: null, created_at: '' },
       { id: 'c5', tournament_id: 't1', entry_id: 'e3', roster_member_id: 'j3', mini_tour_id: 'm11', weight_grams: 400, created_by: null, created_at: '' },
     ]
     const { athletes, juniors, teams } = computeIndividualResults(format, entries, catches, minis, draws)
 
-    // Open: adults + mixed junior j1 (not j2/j3)
-    expect(athletes.map((a) => a.rosterMemberId).sort()).toEqual(['a1', 'a2', 'j1'])
+    // Open: everyone including junior+junior pair
+    expect(athletes.map((a) => a.rosterMemberId).sort()).toEqual(['a1', 'a2', 'j1', 'j2', 'j3'])
     expect(athletes.find((a) => a.rosterMemberId === 'j1')?.junior).toBe(true)
 
-    // Junior table: all juniors including mixed
+    // Junior table: all juniors with separate places
     expect(juniors.map((j) => j.rosterMemberId).sort()).toEqual(['j1', 'j2', 'j3'])
 
     const openJ1 = athletes.find((a) => a.rosterMemberId === 'j1')!
     const juniorJ1 = juniors.find((j) => j.rosterMemberId === 'j1')!
-    // Open zone A: j1 900 → 1; junior zone A: j2 950 → 1, j1 900 → 2
-    expect(openJ1.tours[0].place).toBe(1)
+    // Open zone A: j2 950 → 1, j1 900 → 2, a1 800 → 3, a2 700 → 4
+    expect(openJ1.tours[0].place).toBe(2)
+    // Junior zone A: j2 950 → 1, j1 900 → 2
     expect(juniorJ1.tours[0].place).toBe(2)
 
     const alpha = teams.find((t) => t.entryId === 'e1')!
     const openA1 = athletes.find((a) => a.rosterMemberId === 'a1')!
     expect(alpha.tours[0].place).toBe(openA1.tours[0].place + openJ1.tours[0].place)
-    expect(teams.map((t) => t.entryId).sort()).toEqual(['e1', 'e2'])
-    expect(teams.every((t) => t.entryId !== 'e3')).toBe(true)
+    expect(teams.map((t) => t.entryId).sort()).toEqual(['e1', 'e2', 'e3'])
   })
 
-  it('keeps junior+junior and solo junior only in junior table when separateJuniors is on', () => {
+  it('includes junior+junior and solo junior in open table when separateJuniors is on', () => {
     const format = {
       ...BOOR_INDIVIDUAL_TEAM_FORMAT,
       ranking: { ...BOOR_INDIVIDUAL_TEAM_FORMAT.ranking, separateJuniors: true },
@@ -259,10 +259,10 @@ describe('computeIndividualResults', () => {
       { id: 'c1', tournament_id: 't1', entry_id: 'e1', roster_member_id: 'a1', mini_tour_id: 'm11', weight_grams: 800, created_by: null, created_at: '' },
     ]
     const { athletes, juniors, teams } = computeIndividualResults(format, entries, catches, minis, draws)
-    expect(athletes.every((a) => !a.junior)).toBe(true)
-    expect(athletes.map((a) => a.rosterMemberId).sort()).toEqual(['a1', 'a2'])
+    expect(athletes.map((a) => a.rosterMemberId).sort()).toEqual(['a1', 'a2', 'j1', 'j2', 'sj1'])
     expect(juniors.map((j) => j.rosterMemberId).sort()).toEqual(['j1', 'j2', 'sj1'])
-    expect(teams.map((t) => t.entryId)).toEqual(['e1'])
+    // Solo still excluded from team standings; junior+junior team is included
+    expect(teams.map((t) => t.entryId).sort()).toEqual(['e1', 'e2'])
   })
 
   it('uses total_weight then best_tour_weight tiebreakers and sums team places', () => {

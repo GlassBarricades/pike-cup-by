@@ -225,7 +225,7 @@ export function FormatEditPanel({ tournament }: { tournament: Tournament }) {
         />
         <Checkbox
           label="Отдельный зачёт юниоров"
-          description="Две личные таблицы: взрослая (взрослые + юниоры из смешанных пар) и юниоры. Команда из взрослой лички; пара юниор+юниор — только в юниорской."
+          description="Две личные таблицы: общая (все, включая юниоров) и юниоры (отдельный пересчёт). Команда из общей лички."
           checked={Boolean(draft.ranking.separateJuniors)}
           onChange={(e) => {
             const checked = e.currentTarget.checked

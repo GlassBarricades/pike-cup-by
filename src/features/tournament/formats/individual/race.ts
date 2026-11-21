@@ -340,7 +340,7 @@ function collectIndividualRecords(
   return { heaviestMini, heaviestSector, biggestJump, driestZone: driest }
 }
 
-/** Open-строка предпочтительнее: смешанный юниор есть в обеих личках с разными местами. */
+/** Open-строка предпочтительнее: юниор есть в обеих личках с разными местами. */
 function allAthleteRows(results: {
   athletes: AthleteStandingRow[]
   juniors: AthleteStandingRow[]

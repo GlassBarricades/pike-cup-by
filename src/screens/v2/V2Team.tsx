@@ -41,7 +41,7 @@ export function V2Team() {
   const athleteRows =
     individual && results.engine === 'individual'
       ? (() => {
-          // Смешанный юниор есть в обеих личках — для карточки команды берём open-места
+          // Юниор есть в обеих личках — для карточки команды берём места из общей лички
           const byId = new Map<string, (typeof results.athletes)[number]>()
           for (const row of results.juniors) {
             if (row.entryId === entryId) byId.set(row.rosterMemberId, row)
