@@ -5,12 +5,15 @@ import {
   isPikecup,
   parseFormat,
   PIKECUP_FORMAT,
+  zoneCodes,
+  zoneFor,
   zeroPlacePlusOne,
   type TournamentFormat,
 } from './formats'
+import { generateScheduleFromFormat, generatedToSeedRows } from './formats/scheduleFromFormat'
+import { slipPackForFormat, slipPackIdForFormat, type SlipPackCard } from './slipPacks'
 import { FISHING_KEYS, type ScheduleWriteRow } from './scheduleEdit'
 import { oppositeZone } from './schedule'
-import { slipPackForFormat, type SlipPackCard } from './slipPacks'
 import {
   defaultMapModeForFormat,
   parseMapMode,
@@ -44,10 +47,10 @@ import {
 
 /** Карточка турнира без тяжёлого rules_content (экономия egress для списков и LIVE). */
 const TOURNAMENT_CARD_SELECT =
-  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, league_id, format, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one, venue_map, map_mode, draw_zones_only'
+  'id, name, event_date, location, organizers, max_teams, open_slots, prize_slots, org_slots, status, league_id, format, format_preset_id, rules_updated_at, rules_locked_at, schedule_delay_minutes, schedule_paused_at, live_phase_override, zero_place_is_group_size_plus_one, venue_map, map_mode, draw_zones_only'
 
 const LEAGUE_SELECT =
-  'id, slug, name, short_name, kind, region_code, description, brand_color, is_active, default_format, created_at, updated_at'
+  'id, slug, name, short_name, kind, region_code, description, brand_color, is_active, default_format, default_preset_id, created_at, updated_at'
 
 function asTournamentCard(row: Record<string, unknown> | null): Tournament | null {
   if (!row) return null
@@ -55,11 +58,12 @@ function asTournamentCard(row: Record<string, unknown> | null): Tournament | nul
   return {
     ...(row as unknown as Tournament),
     format,
+    format_preset_id: (row.format_preset_id as string | null) ?? null,
     rules_content: '',
     zero_place_is_group_size_plus_one: zeroPlacePlusOne(format),
     venue_map: parseVenueMap(row.venue_map),
-    map_mode: parseMapMode(row.map_mode),
-    draw_zones_only: Boolean(row.draw_zones_only),
+    map_mode: parseMapMode(row.map_mode ?? format.setup.mapMode),
+    draw_zones_only: Boolean(row.draw_zones_only ?? format.draw.zonesOnly),
   }
 }
 
@@ -68,6 +72,7 @@ function asLeague(row: Record<string, unknown> | null): League | null {
   return {
     ...(row as unknown as League),
     default_format: row.default_format == null ? null : parseFormat(row.default_format),
+    default_preset_id: (row.default_preset_id as string | null) ?? null,
   }
 }
 
@@ -138,7 +143,18 @@ export async function createLeague(input: {
 export async function updateLeague(
   leagueId: string,
   patch: Partial<
-    Pick<League, 'name' | 'short_name' | 'kind' | 'region_code' | 'description' | 'brand_color' | 'is_active'>
+    Pick<
+      League,
+      | 'name'
+      | 'short_name'
+      | 'kind'
+      | 'region_code'
+      | 'description'
+      | 'brand_color'
+      | 'is_active'
+      | 'default_preset_id'
+      | 'default_format'
+    >
   >,
 ): Promise<void> {
   const { error } = await supabase.from('leagues').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', leagueId)
@@ -219,6 +235,8 @@ type ScheduleSeedRow = {
   windowKind?: 'fishing' | 'move'
   moveTour?: number
   moveMini?: number
+  /** 0 = eventDate, 1 = next calendar day, … (multi-day formats) */
+  dayOffset?: number
 }
 
 const DEFAULT_DAY_SCHEDULE: ScheduleSeedRow[] = [
@@ -288,8 +306,43 @@ function minskClock(iso: string): { hour: number; minute: number } {
 }
 
 function scheduleTemplateForFormat(format: TournamentFormat): ScheduleSeedRow[] {
-  if (isPikecup(format)) return DEFAULT_DAY_SCHEDULE
-  return BOOR_DAY_SCHEDULE
+  // Prefer exact historical templates for the two system presets (timing fidelity).
+  if (isPikecup(format) && format.structure.tours.every((t) => t.minis === 5) && format.structure.tours.length === 2) {
+    return DEFAULT_DAY_SCHEDULE
+  }
+  if (
+    !isPikecup(format) &&
+    format.structure.tours.length === 2 &&
+    format.structure.tours.every((t) => t.minis === 3)
+  ) {
+    return BOOR_DAY_SCHEDULE
+  }
+  // Universal generator for custom / multi-day formats
+  const generated = generateScheduleFromFormat(format)
+  return generatedToSeedRows(generated, '1970-01-01').map((row, index) => {
+    const day = generated[index]?.day ?? 1
+    return {
+      key: row.key,
+      title: row.title,
+      sort_order: row.sort_order,
+      startHour: row.startHour,
+      startMin: row.startMin,
+      endHour: row.endHour,
+      endMin: row.endMin,
+      tour: row.tour,
+      mini: row.mini,
+      windowKind: row.windowKind,
+      moveTour: row.moveTour,
+      moveMini: row.moveMini,
+      dayOffset: day - 1,
+    }
+  })
+}
+
+function addCalendarDays(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
 }
 
 export async function seedScheduleFromFormat(
@@ -308,17 +361,20 @@ export async function seedScheduleFromFormat(
     }
   }
 
-  const segmentRows = rows.map((row) => ({
-    tournament_id: tournamentId,
-    key: row.key,
-    title: row.title,
-    sort_order: row.sort_order,
-    planned_starts_at: minskIso(eventDate, row.startHour, row.startMin),
-    planned_ends_at: minskIso(eventDate, row.endHour, row.endMin),
-    window_kind: row.windowKind ?? null,
-    move_tour: row.moveTour ?? null,
-    move_mini: row.moveMini ?? null,
-  }))
+  const segmentRows = rows.map((row) => {
+    const date = addCalendarDays(eventDate, row.dayOffset ?? 0)
+    return {
+      tournament_id: tournamentId,
+      key: row.key,
+      title: row.title,
+      sort_order: row.sort_order,
+      planned_starts_at: minskIso(date, row.startHour, row.startMin),
+      planned_ends_at: minskIso(date, row.endHour, row.endMin),
+      window_kind: row.windowKind ?? null,
+      move_tour: row.moveTour ?? null,
+      move_mini: row.moveMini ?? null,
+    }
+  })
 
   const { data: segments, error: segError } = await supabase
     .from('schedule_segments')
@@ -353,6 +409,7 @@ export async function createTournament(input: {
   /** null = фестиваль вне лиги */
   leagueId?: string | null
   format?: TournamentFormat
+  formatPresetId?: string | null
   organizers?: string[]
   rulesContent?: string
   withDefaultSchedule?: boolean
@@ -363,8 +420,8 @@ export async function createTournament(input: {
     input.zeroPlaceIsGroupSizePlusOne ?? zeroPlacePlusOne(format)
   const formatPayload: TournamentFormat = {
     ...format,
-    ranking: {
-      ...format.ranking,
+    scoring: {
+      ...format.scoring,
       zeroPlace: zeroPlusOne ? 'group_size_plus_one' : 'group_size',
     },
   }
@@ -378,10 +435,12 @@ export async function createTournament(input: {
       status: input.status,
       league_id: input.leagueId === undefined ? null : input.leagueId,
       format: formatPayload,
+      format_preset_id: input.formatPresetId ?? null,
       organizers: input.organizers ?? [],
       rules_content: input.rulesContent?.trim() || DEFAULT_RULES_STUB,
       zero_place_is_group_size_plus_one: zeroPlusOne,
       map_mode: defaultMapModeForFormat(formatPayload),
+      draw_zones_only: formatPayload.draw.zonesOnly,
     })
     .select(TOURNAMENT_CARD_SELECT)
     .single()
@@ -395,15 +454,22 @@ export async function createTournament(input: {
   return tournament
 }
 
-export async function updateTournamentFormat(tournamentId: string, format: TournamentFormat): Promise<void> {
-  const { error } = await supabase
-    .from('tournaments')
-    .update({
-      format,
-      zero_place_is_group_size_plus_one: zeroPlacePlusOne(format),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', tournamentId)
+export async function updateTournamentFormat(
+  tournamentId: string,
+  format: TournamentFormat,
+  options?: { formatPresetId?: string | null },
+): Promise<void> {
+  const payload: Record<string, unknown> = {
+    format,
+    zero_place_is_group_size_plus_one: zeroPlacePlusOne(format),
+    draw_zones_only: format.draw.zonesOnly,
+    map_mode: format.setup.mapMode,
+    updated_at: new Date().toISOString(),
+  }
+  if (options && 'formatPresetId' in options) {
+    payload.format_preset_id = options.formatPresetId ?? null
+  }
+  const { error } = await supabase.from('tournaments').update(payload).eq('id', tournamentId)
   if (error) throw error
 }
 
@@ -806,9 +872,10 @@ export async function createEntryFromTeam(input: {
   const tournament = await fetchTournamentById(input.tournamentId)
   const format = input.format ?? (tournament ? getFormat(tournament) : PIKECUP_FORMAT)
   const memberships = await fetchActiveMemberships(input.teamId)
-  if (memberships.length < format.roster.minAthletes || memberships.length > format.roster.maxAthletes) {
+  const roster = format.participants.roster
+  if (memberships.length < roster.minAthletes || memberships.length > roster.maxAthletes) {
     throw new Error(
-      `У команды должно быть от ${format.roster.minAthletes} до ${format.roster.maxAthletes} спортсменов в текущем составе`,
+      `У команды должно быть от ${roster.minAthletes} до ${roster.maxAthletes} спортсменов в текущем составе`,
     )
   }
 
@@ -1029,8 +1096,8 @@ export function generateAthleteDraws(input: {
   zonesOnly?: boolean
 }): Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[] {
   const sectorsPerZone = input.sectorsPerZone ?? 40
-  const zonesOnly = Boolean(input.zonesOnly)
-  const zones = input.format.zones
+  const zonesOnly = Boolean(input.zonesOnly ?? input.format.draw.zonesOnly)
+  const zones = zoneCodes(input.format)
   if (zones.length === 0) throw new Error('В формате нет зон')
   const ids = [...input.rosterMemberIds]
   const groups =
@@ -1069,15 +1136,11 @@ export function generateAthleteDraws(input: {
 
   const tour1Zones = assignTour1Zones()
 
-  for (const tour of input.format.tours) {
+  for (const tour of input.format.structure.tours) {
     const zoneOf = new Map<string, string>()
     for (const id of ids) {
       const start = tour1Zones.get(id)!
-      if (tour.number === 1 || zones.length !== 2) {
-        zoneOf.set(id, start)
-      } else {
-        zoneOf.set(id, oppositeZone(start as 'A' | 'B') ?? start)
-      }
+      zoneOf.set(id, zoneFor(input.format, start, tour.number) ?? start)
     }
 
     for (const zone of zones) {
@@ -1109,11 +1172,8 @@ export function buildZoneOnlyDrawRows(
   startZone: ZoneCode,
 ): Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[] {
   const rows: Omit<AthleteDraw, 'id' | 'created_at' | 'tournament_id'>[] = []
-  for (const tour of format.tours) {
-    const zone =
-      tour.number === 1 || format.zones.length !== 2
-        ? startZone
-        : ((oppositeZone(startZone) as ZoneCode) ?? startZone)
+  for (const tour of format.structure.tours) {
+    const zone = (zoneFor(format, startZone, tour.number) as ZoneCode) ?? startZone
     for (let mini = 1; mini <= tour.minis; mini += 1) {
       rows.push({
         roster_member_id: rosterMemberId,
@@ -1275,7 +1335,7 @@ export async function seedDrawSlipsForTournament(
 
   const existing = await countDrawSlips(tournamentId)
   if (existing > 0 && !options?.replace) {
-    return { seeded: 0, packId: format.draw === 'pikecup_slips' ? 'pikecup' : 'boor' }
+    return { seeded: 0, packId: slipPackIdForFormat(format) }
   }
 
   if (existing > 0 && options?.replace) {
@@ -1290,7 +1350,7 @@ export async function seedDrawSlipsForTournament(
   await insertSlipPack(tournamentId, pack)
   return {
     seeded: pack.length,
-    packId: format.draw === 'pikecup_slips' ? 'pikecup' : 'boor',
+    packId: slipPackIdForFormat(format),
   }
 }
 
@@ -1689,6 +1749,9 @@ export async function addCatch(input: {
   userId: string
   tournamentId?: string
   rosterMemberId?: string | null
+  species?: string | null
+  lengthMm?: number | null
+  counted?: boolean
 }): Promise<CatchRow> {
   const { data, error } = await supabase
     .from('catches')
@@ -1699,6 +1762,9 @@ export async function addCatch(input: {
       created_by: input.userId,
       roster_member_id: input.rosterMemberId ?? null,
       ...(input.tournamentId ? { tournament_id: input.tournamentId } : {}),
+      ...(input.species != null ? { species: input.species } : {}),
+      ...(input.lengthMm != null ? { length_mm: input.lengthMm } : {}),
+      ...(input.counted != null ? { counted: input.counted } : {}),
     })
     .select('*')
     .single()

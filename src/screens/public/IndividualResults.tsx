@@ -2,9 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Badge, Button, Group, SegmentedControl, Stack, Table, Text, TextInput } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useCheer } from '../../features/tournament/cheer'
+import {
+  daysCount,
+  hasIndividualStandings,
+  hasTeamStandings,
+  toursByDay,
+  type TournamentFormat,
+} from '../../features/tournament/formats'
+import type { AthleteStandingRow, TeamStandingRow } from '../../features/tournament/formats/individual/scoring'
 import { formatPlace } from '../../features/tournament/scoring'
 import { isIndividualSumBoardOpen } from '../../features/tournament/spectator'
-import type { AthleteStandingRow, TeamStandingRow } from '../../features/tournament/formats/individual/scoring'
 import type { CatchRow, MiniTour, ZoneCode } from '../../features/tournament/types'
 
 type ZoneFilter = 'all' | ZoneCode
@@ -112,15 +119,24 @@ function AthleteTable({
                     {row.teamName}
                   </Text>
                 </Table.Td>
-                {row.tours.map((tour) => (
-                  <Table.Td key={tour.tour}>
-                    {formatPlace(tour.place)}
-                    <Text span size="xs" c="dimmed">
-                      {' '}
-                      ({tour.zone ?? '—'}) / {tour.weight}г
-                    </Text>
-                  </Table.Td>
-                ))}
+                {tourHeaders.map((tourNum) => {
+                  const tour = row.tours.find((t) => t.tour === tourNum)
+                  return (
+                    <Table.Td key={tourNum}>
+                      {tour ? (
+                        <>
+                          {formatPlace(tour.place)}
+                          <Text span size="xs" c="dimmed">
+                            {' '}
+                            ({tour.zone ?? '—'}) / {tour.weight}г
+                          </Text>
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </Table.Td>
+                  )
+                })}
                 {sumOpen ? <Table.Td>{formatPlace(row.placeSum)}</Table.Td> : null}
                 <Table.Td>{liveWeight}</Table.Td>
               </Table.Tr>
@@ -150,6 +166,7 @@ export function IndividualResults({
   tournamentStatus,
   tournamentId,
   liveTour = null,
+  format,
 }: {
   teams: TeamStandingRow[]
   athletes: AthleteStandingRow[]
@@ -159,9 +176,15 @@ export function IndividualResults({
   tournamentStatus?: string | null
   tournamentId?: string
   liveTour?: number | null
+  format?: TournamentFormat | null
 }) {
+  const showTeamTab = format ? hasTeamStandings(format) : true
+  const showPersonalTab = format ? hasIndividualStandings(format) : true
   const showJuniors = juniors.length > 0
-  const [tab, setTab] = useState<'team' | 'individual' | 'juniors'>('team')
+  const multiDay = format ? daysCount(format) > 1 : false
+  const dayGroups = format && multiDay ? toursByDay(format) : []
+  const [tab, setTab] = useState<'team' | 'individual' | 'juniors'>(showTeamTab ? 'team' : 'individual')
+  const [dayFilter, setDayFilter] = useState<number | 'all'>('all')
   const [filter, setFilter] = useState('')
   const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('all')
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set())
@@ -229,14 +252,27 @@ export function IndividualResults({
     [juniors, needle, zoneFilter, showSum, liveTour],
   )
 
-  const tourHeaders = (
+  const allTourHeaders = (
     teams[0]?.tours ??
     athletes[0]?.tours ??
     juniors[0]?.tours ??
     []
   ).map((t) => t.tour)
 
-  const activeTab = tab === 'juniors' && !showJuniors ? 'individual' : tab
+  const tourHeaders = useMemo(() => {
+    if (!multiDay || dayFilter === 'all' || !format) return allTourHeaders
+    const dayTourNums = new Set(toursByDay(format).find((g) => g.day === dayFilter)?.tours.map((t) => t.number) ?? [])
+    return allTourHeaders.filter((n) => dayTourNums.has(n))
+  }, [allTourHeaders, multiDay, dayFilter, format])
+
+  const activeTab =
+    tab === 'juniors' && !showJuniors
+      ? showPersonalTab
+        ? 'individual'
+        : 'team'
+      : tab === 'team' && !showTeamTab
+        ? 'individual'
+        : tab
   const emptyLabel = zoneFilter === 'all' ? 'Нет участников' : 'В этой зоне никого'
 
   const cheerInView = useMemo(() => {
@@ -289,11 +325,32 @@ export function IndividualResults({
         value={activeTab}
         onChange={(v) => setTab(v as 'team' | 'individual' | 'juniors')}
         data={[
-          { value: 'team', label: 'Командный' },
-          { value: 'individual', label: 'Личный' },
+          ...(showTeamTab ? [{ value: 'team', label: 'Командный' }] : []),
+          ...(showPersonalTab ? [{ value: 'individual', label: 'Личный' }] : []),
           ...(showJuniors ? [{ value: 'juniors', label: `Юниоры (${juniors.length})` }] : []),
         ]}
       />
+      {multiDay ? (
+        <Group gap={6} wrap="wrap">
+          <Button
+            size="xs"
+            variant={dayFilter === 'all' ? 'filled' : 'default'}
+            onClick={() => setDayFilter('all')}
+          >
+            Все дни
+          </Button>
+          {dayGroups.map((group) => (
+            <Button
+              key={group.day}
+              size="xs"
+              variant={dayFilter === group.day ? 'filled' : 'default'}
+              onClick={() => setDayFilter(group.day)}
+            >
+              День {group.day}
+            </Button>
+          ))}
+        </Group>
+      ) : null}
       <Group gap={6} wrap="wrap">
         {(
           [
@@ -366,15 +423,24 @@ export function IndividualResults({
                         {row.athleteNames.join(', ')}
                       </Text>
                     </Table.Td>
-                    {row.tours.map((tour) => (
-                      <Table.Td key={tour.tour}>
-                        {formatPlace(tour.place)}
-                        <Text span size="xs" c="dimmed">
-                          {' '}
-                          / {tour.weight}г
-                        </Text>
-                      </Table.Td>
-                    ))}
+                    {tourHeaders.map((tourNum) => {
+                      const tour = row.tours.find((t) => t.tour === tourNum)
+                      return (
+                        <Table.Td key={tourNum}>
+                          {tour ? (
+                            <>
+                              {formatPlace(tour.place)}
+                              <Text span size="xs" c="dimmed">
+                                {' '}
+                                / {tour.weight}г
+                              </Text>
+                            </>
+                          ) : (
+                            '—'
+                          )}
+                        </Table.Td>
+                      )
+                    })}
                     {showSum ? <Table.Td>{formatPlace(row.placeSum)}</Table.Td> : null}
                     <Table.Td>{liveWeight}</Table.Td>
                   </Table.Tr>

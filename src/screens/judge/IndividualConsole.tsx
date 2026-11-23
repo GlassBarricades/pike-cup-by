@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { addCatch, deleteCatch, isZoneWeighingCompleted, setZoneWeighingCompleted } from '../../features/tournament/api'
-import { getFormat } from '../../features/tournament/formats'
+import { getFormat, speciesEnabled, zoneCodes } from '../../features/tournament/formats'
 import {
   tournamentKeys,
   useAthleteDraws,
@@ -86,7 +86,7 @@ export function IndividualConsole({
   const myZones = useMemo(() => {
     if (!user) return [] as ZoneCode[]
     if (assignedZone) return [assignedZone]
-    if (isOrg) return (format.zones ?? ['A', 'B']) as ZoneCode[]
+    if (isOrg) return zoneCodes(format) as ZoneCode[]
     return zoneJudges.filter((j) => j.user_id === user.id).map((j) => j.zone)
   }, [user, isOrg, zoneJudges, format, assignedZone])
 
@@ -110,11 +110,13 @@ export function IndividualConsole({
   const [editingMiniTourId, setEditingMiniTourId] = useState<string | null>(null)
   const [addMiniTourId, setAddMiniTourId] = useState<string | null>(null)
   const [addMemberId, setAddMemberId] = useState<string | null>(null)
+  const [catchSpecies, setCatchSpecies] = useState<string | null>(null)
   const [failedSave, setFailedSave] = useState<{
     grams: number
     entryId: string
     rosterMemberId: string
     miniTourId: string
+    species?: string | null
   } | null>(null)
   const [savedNote, setSavedNote] = useState(false)
   const [showVenueMap, setShowVenueMap] = useState(false)
@@ -372,15 +374,31 @@ export function IndividualConsole({
     },
   })
 
+  const speciesOn = speciesEnabled(format)
+  const speciesList = format.catch.species.list
+  const minFishWeightG = format.catch.minFishWeightG
+
+  useEffect(() => {
+    if (!speciesOn) {
+      setCatchSpecies(null)
+      return
+    }
+    if (catchSpecies && speciesList.includes(catchSpecies)) return
+    setCatchSpecies(speciesList[0] ?? null)
+  }, [speciesOn, speciesList, catchSpecies])
+
   const saveMutation = useMutation({
     mutationFn: (input: {
       grams: number
       entryId: string
       rosterMemberId: string
       miniTourId: string
+      species?: string | null
     }) => {
       if (closed) throw new Error('Турнир завершён')
       if (weighingDone) throw new Error('Взвешивание зоны завершено — нажмите «Продолжить взвешивание»')
+      if (speciesOn && !input.species) throw new Error('Выберите вид рыбы')
+      const belowMin = minFishWeightG != null && input.grams < minFishWeightG
       return addCatch({
         entryId: input.entryId,
         rosterMemberId: input.rosterMemberId,
@@ -388,6 +406,8 @@ export function IndividualConsole({
         weightGrams: input.grams,
         userId: user!.id,
         tournamentId,
+        species: speciesOn ? input.species ?? null : undefined,
+        counted: belowMin ? false : undefined,
       })
     },
     onMutate: async () => {
@@ -462,7 +482,7 @@ export function IndividualConsole({
     )
   }
 
-  const tourOptions = format.tours.map((t) => ({
+  const tourOptions = format.structure.tours.map((t) => ({
     value: String(t.number),
     label: t.number === 1 ? 'I тур' : t.number === 2 ? 'II тур' : `Тур ${t.number}`,
   }))
@@ -847,28 +867,41 @@ export function IndividualConsole({
       </div>
 
       {editing && user && !inputLocked && (
-        <WeightNumpad
-          key={`${editing.member.id}:${activeEditMiniTourId ?? 'none'}`}
-          subjectName={editing.member.full_name_snapshot}
-          recordedGrams={editingWeight}
-          targetLabel={editTargetLabel}
-          saving={saveMutation.isPending}
-          error={saveMutation.isError ? (saveMutation.error as Error).message : null}
-          onSave={(grams) => {
-            if (!activeEditMiniTourId) return
-            saveMutation.mutate({
-              grams,
-              entryId: editing.entry.id,
-              rosterMemberId: editing.member.id,
-              miniTourId: activeEditMiniTourId,
-            })
-          }}
-          onClose={() => {
-            saveMutation.reset()
-            setEditingMemberId(null)
-            setEditingMiniTourId(null)
-          }}
-        />
+        <Stack gap="xs" className="pc-judge-console-species">
+          {speciesOn ? (
+            <Select
+              label="Вид"
+              size="sm"
+              data={speciesList.map((s) => ({ value: s, label: s }))}
+              value={catchSpecies}
+              onChange={setCatchSpecies}
+              allowDeselect={false}
+            />
+          ) : null}
+          <WeightNumpad
+            key={`${editing.member.id}:${activeEditMiniTourId ?? 'none'}`}
+            subjectName={editing.member.full_name_snapshot}
+            recordedGrams={editingWeight}
+            targetLabel={editTargetLabel}
+            saving={saveMutation.isPending}
+            error={saveMutation.isError ? (saveMutation.error as Error).message : null}
+            onSave={(grams) => {
+              if (!activeEditMiniTourId) return
+              saveMutation.mutate({
+                grams,
+                entryId: editing.entry.id,
+                rosterMemberId: editing.member.id,
+                miniTourId: activeEditMiniTourId,
+                species: catchSpecies,
+              })
+            }}
+            onClose={() => {
+              saveMutation.reset()
+              setEditingMemberId(null)
+              setEditingMiniTourId(null)
+            }}
+          />
+        </Stack>
       )}
     </div>
   )

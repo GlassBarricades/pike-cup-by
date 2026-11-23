@@ -8,7 +8,7 @@ import {
   deleteEntry,
   lockAllRosters,
 } from '../../features/tournament/api'
-import { getFormat } from '../../features/tournament/formats'
+import { getFormat, isIndividual } from '../../features/tournament/formats'
 import { tournamentKeys, useEntries, useTeamsCatalog } from '../../features/tournament/hooks'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { useTournamentDayClosed } from '../../features/tournament/useTournamentDayClosed'
@@ -41,7 +41,8 @@ export function EntriesScreen() {
     entries.map((e) => e.team_id).filter((id): id is string => Boolean(id)),
   )
   const available = teams.filter((t) => !enteredIds.has(t.id))
-  const individualEnabled = format?.engine === 'individual'
+  const individualEnabled = format ? isIndividual(format) : false
+  const roster = format?.participants.roster
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -52,10 +53,10 @@ export function EntriesScreen() {
         const teamName = teams.find((t) => t.id === teamId)?.name ?? teamId
         try {
           const extraRoster = []
-          if (format?.roster.captain && captainName.trim()) {
+          if (roster?.captain && captainName.trim()) {
             extraRoster.push({ fullName: captainName.trim(), role: 'captain' as const })
           }
-          if (format?.roster.representative && repName.trim()) {
+          if (roster?.representative && repName.trim()) {
             extraRoster.push({ fullName: repName.trim(), role: 'representative' as const })
           }
           await createEntryFromTeam({
@@ -152,7 +153,7 @@ export function EntriesScreen() {
         title="Заявки на турнир"
         subtitle={
           format
-            ? `Можно выбрать несколько команд. Состав: ${format.roster.minAthletes}–${format.roster.maxAthletes} спортсменов в справочнике (копируется в снимок турнира).`
+            ? `Можно выбрать несколько команд. Состав: ${format.participants.roster.minAthletes}–${format.participants.roster.maxAthletes} спортсменов в справочнике (копируется в снимок турнира).`
             : 'Выберите турнир.'
         }
       />
@@ -189,7 +190,7 @@ export function EntriesScreen() {
             onChange={(e) => setPhone(e.currentTarget.value)}
             disabled={closed}
           />
-          {format?.roster.captain && (
+          {roster?.captain && (
             <TextInput
               label="Капитан (ФИО, опционально, для всех выбранных)"
               value={captainName}
@@ -197,7 +198,7 @@ export function EntriesScreen() {
               disabled={closed}
             />
           )}
-          {format?.roster.representative && (
+          {roster?.representative && (
             <TextInput
               label="Представитель (ФИО, опционально)"
               value={repName}

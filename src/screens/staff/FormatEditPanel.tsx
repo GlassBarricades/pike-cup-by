@@ -1,48 +1,91 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Checkbox, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Link } from 'react-router-dom'
+import {
+  Alert,
+  Button,
+  Group,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  diffFormatPaths,
+  useCreateFormatPreset,
+  useFormatPresets,
+  useUpdateFormatPreset,
+} from '../../features/formatPresets'
 import { updateTournamentFormat } from '../../features/tournament/api'
 import {
-  BOOR_INDIVIDUAL_TEAM_FORMAT,
+  cloneFormat,
   FORMAT_PRESETS,
-  PIKECUP_FORMAT,
+  formatSummary,
   type TournamentFormat,
 } from '../../features/tournament/formats'
+import { slugifyLeagueName } from '../../features/tournament/leagueLabels'
 import { invalidateTournamentCard, invalidateTournamentLists, useCatches } from '../../features/tournament/hooks'
 import type { Tournament } from '../../features/tournament/types'
 import { Panel, SectionTitle } from '../../ui'
+import { FormatSettingsFields } from './FormatSettingsFields'
 
-function cloneFormat(format: TournamentFormat): TournamentFormat {
-  return structuredClone(format)
-}
-
-function matchPresetId(format: TournamentFormat): string {
-  const found = FORMAT_PRESETS.find((p) => JSON.stringify(p.format) === JSON.stringify(format))
-  return found?.id ?? 'custom'
-}
+const CUSTOM = 'custom'
 
 export function FormatEditPanel({ tournament }: { tournament: Tournament }) {
   const queryClient = useQueryClient()
   const { data: catches = [] } = useCatches(tournament.id)
+  const { data: dbPresets = [] } = useFormatPresets()
+  const createPreset = useCreateFormatPreset()
+  const updatePreset = useUpdateFormatPreset()
   const locked = catches.length > 0
   const [draft, setDraft] = useState<TournamentFormat>(() => cloneFormat(tournament.format))
-  const [preset, setPreset] = useState(matchPresetId(tournament.format))
+  const [presetId, setPresetId] = useState<string>(tournament.format_preset_id ?? CUSTOM)
+  const [showNewPreset, setShowNewPreset] = useState(false)
+  const [newPresetName, setNewPresetName] = useState('')
+  const [newPresetSlug, setNewPresetSlug] = useState('')
+
+  const presetOptions = useMemo(() => {
+    if (dbPresets.length > 0) {
+      return [
+        ...dbPresets.map((p) => ({ value: p.id, label: p.name })),
+        { value: CUSTOM, label: 'Свой' },
+      ]
+    }
+    return [
+      ...FORMAT_PRESETS.map((p) => ({ value: p.id, label: p.label })),
+      { value: CUSTOM, label: 'Свой' },
+    ]
+  }, [dbPresets])
+
+  const selectedDbPreset = useMemo(
+    () => dbPresets.find((p) => p.id === presetId) ?? null,
+    [dbPresets, presetId],
+  )
+
+  const selectedFormat = useMemo(() => {
+    if (selectedDbPreset) return selectedDbPreset.format
+    const code = FORMAT_PRESETS.find((p) => p.id === presetId)
+    return code?.format ?? null
+  }, [presetId, selectedDbPreset])
+
+  const diffPaths = useMemo(() => {
+    if (!selectedFormat || presetId === CUSTOM) return []
+    return diffFormatPaths(draft, selectedFormat)
+  }, [draft, selectedFormat, presetId])
 
   useEffect(() => {
     setDraft(cloneFormat(tournament.format))
-    setPreset(matchPresetId(tournament.format))
-  }, [tournament.id, tournament.format])
+    setPresetId(tournament.format_preset_id ?? CUSTOM)
+  }, [tournament.id, tournament.format, tournament.format_preset_id])
 
-  const tour1Minis = draft.tours.find((t) => t.number === 1)?.minis ?? 3
-  const tour2Minis = draft.tours.find((t) => t.number === 2)?.minis ?? 3
-
-  const summary = useMemo(() => {
-    const tours = draft.tours.map((t) => `${t.number}×${t.minis}`).join(', ')
-    return `${draft.engine} · туры ${tours} · зоны ${draft.zones.join('/')} · состав ${draft.roster.minAthletes}–${draft.roster.maxAthletes}`
-  }, [draft])
+  const summary = useMemo(() => formatSummary(draft), [draft])
 
   const saveMutation = useMutation({
-    mutationFn: () => updateTournamentFormat(tournament.id, draft),
+    mutationFn: () =>
+      updateTournamentFormat(tournament.id, draft, {
+        formatPresetId:
+          selectedDbPreset && diffPaths.length === 0 ? selectedDbPreset.id : null,
+      }),
     onSuccess: async () => {
       await invalidateTournamentLists(queryClient)
       await invalidateTournamentCard(queryClient, tournament.id)
@@ -50,23 +93,33 @@ export function FormatEditPanel({ tournament }: { tournament: Tournament }) {
   })
 
   const applyPreset = (id: string) => {
-    setPreset(id)
-    if (id === 'pikecup') setDraft(cloneFormat(PIKECUP_FORMAT))
-    if (id === 'boor_individual') setDraft(cloneFormat(BOOR_INDIVIDUAL_TEAM_FORMAT))
+    setPresetId(id)
+    if (id === CUSTOM) return
+    const db = dbPresets.find((p) => p.id === id)
+    if (db) {
+      setDraft(cloneFormat(db.format))
+      return
+    }
+    const code = FORMAT_PRESETS.find((p) => p.id === id)
+    if (code) setDraft(cloneFormat(code.format))
   }
 
-  const setTourMinis = (tourNumber: number, minis: number) => {
-    setPreset('custom')
-    setDraft((prev) => ({
-      ...prev,
-      tours: prev.tours.map((t) => (t.number === tourNumber ? { ...t, minis } : t)),
-    }))
+  const openNewPresetForm = () => {
+    const base = `Формат ${tournament.name}`
+    setNewPresetName(base)
+    setNewPresetSlug(slugifyLeagueName(base) || `format-${Date.now().toString(36)}`)
+    setShowNewPreset(true)
   }
 
   return (
     <Panel>
       <Stack gap="md">
-        <SectionTitle>Формат соревнования</SectionTitle>
+        <Group justify="space-between" align="flex-start" wrap="wrap" gap="sm">
+          <SectionTitle>Формат соревнования</SectionTitle>
+          <Button component={Link} to="/staff/presets" size="xs" variant="light" color="gray">
+            Библиотека пресетов
+          </Button>
+        </Group>
         <Text size="sm" c="dimmed">
           {summary}
         </Text>
@@ -77,181 +130,104 @@ export function FormatEditPanel({ tournament }: { tournament: Tournament }) {
         )}
         <Select
           label="Пресет"
-          data={[
-            ...FORMAT_PRESETS.map((p) => ({ value: p.id, label: p.label })),
-            { value: 'custom', label: 'Свой' },
-          ]}
-          value={preset}
+          data={presetOptions}
+          value={presetId}
           onChange={(v) => v && applyPreset(v)}
           disabled={locked}
+          searchable
         />
-        <Select
-          label="Движок"
-          data={[
-            { value: 'pikecup', label: 'PikeCup (командный, бумажки)' },
-            { value: 'individual', label: 'Индивидуально-командный' },
-          ]}
-          value={draft.engine}
-          onChange={(v) => {
-            if (!v) return
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              engine: v as TournamentFormat['engine'],
-              draw: v === 'pikecup' ? 'pikecup_slips' : 'per_athlete_sectors',
-              standings: v === 'pikecup' ? ['team'] : ['team', 'individual'],
-            }))
-          }}
+        {presetId !== CUSTOM && diffPaths.length > 0 && (
+          <Alert color="yellow" title="Отличается от пресета">
+            Черновик отличается от выбранного пресета ({diffPaths.length}{' '}
+            {diffPaths.length === 1 ? 'поле' : 'полей'}).
+          </Alert>
+        )}
+        <Group gap="xs" wrap="wrap">
+          <Button size="xs" variant="light" color="gray" disabled={locked} onClick={openNewPresetForm}>
+            Сохранить как новый пресет
+          </Button>
+          <Button
+            size="xs"
+            variant="light"
+            color="gray"
+            disabled={locked || !selectedDbPreset || selectedDbPreset.is_system}
+            loading={updatePreset.isPending}
+            onClick={() => {
+              if (!selectedDbPreset) return
+              updatePreset.mutate({
+                id: selectedDbPreset.id,
+                patch: { format: draft },
+              })
+            }}
+          >
+            Обновить пресет
+          </Button>
+        </Group>
+        {showNewPreset && (
+          <Stack gap="xs">
+            <TextInput
+              label="Название пресета"
+              value={newPresetName}
+              onChange={(e) => {
+                const next = e.currentTarget.value
+                setNewPresetName(next)
+                if (!newPresetSlug || newPresetSlug === slugifyLeagueName(newPresetName)) {
+                  setNewPresetSlug(slugifyLeagueName(next) || `format-${Date.now().toString(36)}`)
+                }
+              }}
+            />
+            <TextInput
+              label="Slug"
+              value={newPresetSlug}
+              onChange={(e) => setNewPresetSlug(e.currentTarget.value.toLowerCase())}
+            />
+            {createPreset.isError && (
+              <Text size="sm" c="red">
+                {(createPreset.error as Error).message}
+              </Text>
+            )}
+            <Group gap="xs">
+              <Button
+                size="xs"
+                color="signal"
+                disabled={!newPresetName.trim() || !newPresetSlug.trim()}
+                loading={createPreset.isPending}
+                onClick={() => {
+                  createPreset.mutate(
+                    {
+                      name: newPresetName.trim(),
+                      slug: newPresetSlug.trim(),
+                      format: draft,
+                    },
+                    {
+                      onSuccess: (created) => {
+                        setPresetId(created.id)
+                        setShowNewPreset(false)
+                      },
+                    },
+                  )
+                }}
+              >
+                Создать пресет
+              </Button>
+              <Button size="xs" variant="subtle" color="gray" onClick={() => setShowNewPreset(false)}>
+                Отмена
+              </Button>
+            </Group>
+          </Stack>
+        )}
+        {updatePreset.isError && (
+          <Text size="sm" c="red">
+            {(updatePreset.error as Error).message}
+          </Text>
+        )}
+
+        <FormatSettingsFields
+          value={draft}
+          onChange={setDraft}
           disabled={locked}
         />
-        <NumberInput
-          label="Мини-туров в I туре"
-          min={1}
-          max={20}
-          value={tour1Minis}
-          onChange={(v) => setTourMinis(1, Number(v) || 1)}
-          disabled={locked}
-        />
-        <NumberInput
-          label="Мини-туров во II туре"
-          min={1}
-          max={20}
-          value={tour2Minis}
-          onChange={(v) => setTourMinis(2, Number(v) || 1)}
-          disabled={locked}
-        />
-        <TextInput
-          label="Зоны (через запятую)"
-          value={draft.zones.join(',')}
-          onChange={(e) => {
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              zones: e.currentTarget.value
-                .split(',')
-                .map((z) => z.trim())
-                .filter(Boolean),
-            }))
-          }}
-          disabled={locked}
-        />
-        <NumberInput
-          label="Мин. спортсменов"
-          min={1}
-          max={10}
-          value={draft.roster.minAthletes}
-          onChange={(v) => {
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              roster: { ...prev.roster, minAthletes: Number(v) || 1 },
-            }))
-          }}
-          disabled={locked}
-        />
-        <NumberInput
-          label="Макс. спортсменов"
-          min={1}
-          max={10}
-          value={draft.roster.maxAthletes}
-          onChange={(v) => {
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              roster: { ...prev.roster, maxAthletes: Number(v) || 1 },
-            }))
-          }}
-          disabled={locked}
-        />
-        <Checkbox
-          label="Капитан в заявке"
-          checked={draft.roster.captain}
-          onChange={(e) => {
-            const checked = e.currentTarget.checked
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              roster: { ...prev.roster, captain: checked },
-            }))
-          }}
-          disabled={locked}
-        />
-        <Checkbox
-          label="Представитель в заявке"
-          checked={draft.roster.representative}
-          onChange={(e) => {
-            const checked = e.currentTarget.checked
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              roster: { ...prev.roster, representative: checked },
-            }))
-          }}
-          disabled={locked}
-        />
-        <Select
-          label="Группа ранжирования"
-          data={[
-            { value: 'zone_tour', label: 'Зона × тур' },
-            { value: 'tour', label: 'Весь тур' },
-          ]}
-          value={draft.ranking.group}
-          onChange={(v) => {
-            if (!v) return
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              ranking: { ...prev.ranking, group: v as TournamentFormat['ranking']['group'] },
-            }))
-          }}
-          disabled={locked}
-        />
-        <Select
-          label="Место при нулевом улове"
-          data={[
-            { value: 'group_size_plus_one', label: 'n + 1' },
-            { value: 'group_size', label: 'n' },
-          ]}
-          value={draft.ranking.zeroPlace}
-          onChange={(v) => {
-            if (!v) return
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              ranking: { ...prev.ranking, zeroPlace: v as TournamentFormat['ranking']['zeroPlace'] },
-            }))
-          }}
-          disabled={locked}
-        />
-        <Checkbox
-          label="Отдельный зачёт юниоров"
-          description="Две личные таблицы: общая (все, включая юниоров) и юниоры (отдельный пересчёт). Команда из общей лички."
-          checked={Boolean(draft.ranking.separateJuniors)}
-          onChange={(e) => {
-            const checked = e.currentTarget.checked
-            setPreset('custom')
-            setDraft((prev) => ({
-              ...prev,
-              ranking: { ...prev.ranking, separateJuniors: checked },
-            }))
-          }}
-          disabled={locked || draft.engine !== 'individual'}
-        />
-        <Select
-          label="Жеребьёвка"
-          data={[
-            { value: 'pikecup_slips', label: 'Бумажки PikeCup' },
-            { value: 'per_athlete_sectors', label: 'Секторы спортсменов' },
-            { value: 'none', label: 'Без жеребьёвки' },
-          ]}
-          value={draft.draw}
-          onChange={(v) => {
-            if (!v) return
-            setPreset('custom')
-            setDraft((prev) => ({ ...prev, draw: v as TournamentFormat['draw'] }))
-          }}
-          disabled={locked}
-        />
+
         <Button color="signal" loading={saveMutation.isPending} disabled={locked} onClick={() => saveMutation.mutate()}>
           Сохранить формат
         </Button>

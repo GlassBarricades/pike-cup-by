@@ -35,7 +35,7 @@ import {
 import { pickCurrentTournament } from './date'
 import { getCompetitionStage } from './schedule'
 import { useNow } from './useNow'
-import { computeStandings, type StandingRow } from './scoring'
+import { computeResults } from './scoring'
 import type {
   ActiveTournamentScope,
   Tournament,
@@ -316,10 +316,21 @@ export function useTeamTournaments(teamId: string | undefined) {
   })
 }
 
+export type TeamCompetitionStanding = {
+  entryId: string
+  finalPlace: number
+  placeSum: number
+  totalWeight: number
+  zoneAWeight?: number
+  zoneBWeight?: number
+  zoneAPlace?: number
+  zoneBPlace?: number
+}
+
 export type TeamCompetitionResult = {
   tournament: Tournament
   entry: TournamentEntry
-  standing: StandingRow | null
+  standing: TeamCompetitionStanding | null
 }
 
 export function useTeamCompetitionResults(teamId: string | undefined) {
@@ -340,13 +351,33 @@ export function useTeamCompetitionResults(teamId: string | undefined) {
             fetchCatches(tournament.id),
             fetchMiniTours(tournament.id),
           ])
-          const standings = computeStandings(entries, catches, miniTours, {
-            zeroPlaceIsGroupSizePlusOne: tournament.zero_place_is_group_size_plus_one,
+          const draws =
+            tournament.format?.participants?.catchUnit === 'athlete'
+              ? await fetchAthleteDraws(tournament.id)
+              : []
+          const results = computeResults({
+            tournament,
+            entries,
+            catches,
+            miniTours,
+            draws,
           })
+          const standing = results.teams.find((s) => s.entryId === entry.id) ?? null
           return {
             tournament,
             entry,
-            standing: standings.find((s) => s.entryId === entry.id) ?? null,
+            standing: standing
+              ? {
+                  entryId: standing.entryId,
+                  finalPlace: standing.finalPlace,
+                  placeSum: standing.placeSum,
+                  totalWeight: standing.totalWeight,
+                  zoneAWeight: 'zoneAWeight' in standing ? standing.zoneAWeight : undefined,
+                  zoneBWeight: 'zoneBWeight' in standing ? standing.zoneBWeight : undefined,
+                  zoneAPlace: 'zoneAPlace' in standing ? standing.zoneAPlace : undefined,
+                  zoneBPlace: 'zoneBPlace' in standing ? standing.zoneBPlace : undefined,
+                }
+              : null,
           }
         }),
       )

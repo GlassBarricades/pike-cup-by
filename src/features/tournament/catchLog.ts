@@ -1,5 +1,6 @@
 import { physicalZone } from './schedule'
 import { slipSector } from './slips'
+import type { TournamentFormat } from './formats/types'
 import { entryTeamName, type CatchRow, type MiniTour, type TournamentEntry, type ZoneCode } from './types'
 
 export type CatchLogItem = {
@@ -20,6 +21,7 @@ export function buildCatchLog(
   entries: TournamentEntry[],
   catches: CatchRow[],
   miniTours: MiniTour[],
+  format?: TournamentFormat | null,
 ): CatchLogItem[] {
   const entryById = new Map(entries.map((entry) => [entry.id, entry]))
   const miniById = new Map(miniTours.map((mini) => [mini.id, mini]))
@@ -27,7 +29,7 @@ export function buildCatchLog(
     .map((row) => {
       const entry = entryById.get(row.entry_id)
       const mini = miniById.get(row.mini_tour_id)
-      const tour = mini?.tour_number === 1 || mini?.tour_number === 2 ? mini.tour_number : null
+      const tour = mini?.tour_number ?? null
       const miniNumber = mini?.mini_number ?? null
       const start = entry?.start_zone ?? entry?.draw_slip?.start_zone ?? null
       return {
@@ -40,8 +42,11 @@ export function buildCatchLog(
         grams: row.weight_grams,
         tour,
         mini: miniNumber,
-        zone: tour && start ? physicalZone(start, tour) : null,
-        sector: entry && tour && miniNumber != null ? slipSector(entry.draw_slip, tour, miniNumber) : null,
+        zone:
+          tour != null && start
+            ? ((format ? physicalZone(start, tour, format) : physicalZone(start, tour)) as ZoneCode | null)
+            : null,
+        sector: entry && tour != null && miniNumber != null ? slipSector(entry.draw_slip, tour, miniNumber) : null,
       }
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))

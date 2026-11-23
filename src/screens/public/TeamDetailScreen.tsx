@@ -335,9 +335,13 @@ export function TeamDetailScreen() {
             </Text>
             {standing && (
               <Text size="sm" mt={4} className="pc-tabular">
-                Зона А: {standing.zoneAWeight} ({formatPlace(standing.zoneAPlace)}) · Зона Б:{' '}
-                {standing.zoneBWeight} ({formatPlace(standing.zoneBPlace)}) · Σ мест{' '}
-                {formatPlace(standing.placeSum)} · вес {standing.totalWeight}
+                {standing.zoneAWeight != null && standing.zoneBWeight != null ? (
+                  <>
+                    Зона А: {standing.zoneAWeight} ({formatPlace(standing.zoneAPlace ?? 0)}) · Зона Б:{' '}
+                    {standing.zoneBWeight} ({formatPlace(standing.zoneBPlace ?? 0)}) ·{' '}
+                  </>
+                ) : null}
+                Σ мест {formatPlace(standing.placeSum)} · вес {standing.totalWeight}
               </Text>
             )}
             {entry.draw_slip && (

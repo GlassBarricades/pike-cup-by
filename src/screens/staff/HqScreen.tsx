@@ -4,7 +4,7 @@ import { IconDeviceGamepad2, IconFishHook } from '@tabler/icons-react'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { formatTournamentDate, statusLabel } from '../../features/tournament/date'
-import { getFormat } from '../../features/tournament/formats'
+import { getFormat, legacyDrawMode } from '../../features/tournament/formats'
 import {
   useAthleteDraws,
   useEntries,
@@ -19,7 +19,7 @@ export function HqScreen() {
   const isOrg = canManageTournament(role)
   const { selected, tournaments } = useStaffTournament()
   const format = selected ? getFormat(selected) : null
-  const drawMode = format?.draw ?? 'pikecup_slips'
+  const drawMode = format ? legacyDrawMode(format) : 'pikecup_slips'
   const { data: entries = [] } = useEntries(selected?.id)
   const { data: athleteDraws = [] } = useAthleteDraws(
     drawMode === 'per_athlete_sectors' ? selected?.id : undefined,

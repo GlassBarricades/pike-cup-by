@@ -53,7 +53,7 @@ export function DrawSlipsPanel({ tournament }: { tournament: Tournament }) {
   })
   const assigned = assignedQuery.data ?? 0
   const slipCount = slips.length
-  const tourMinis = format.tours.map((t) => t.minis)
+  const tourMinis = format.structure.tours.map((t) => t.minis)
 
   const ownerBySlip = useMemo(() => {
     const map = new Map<string, string>()

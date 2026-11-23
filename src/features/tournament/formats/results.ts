@@ -1,5 +1,6 @@
-import { getFormat, isIndividual, zeroPlacePlusOne, type TournamentFormat } from './index'
-import { computeIndividualResults, type IndividualResults } from './individual/scoring'
+import { getFormat, type TournamentFormat } from './index'
+import { computeTournamentResults } from './engine'
+import type { IndividualResults } from './individual/scoring'
 import { computeStandings, type StandingRow } from './pikecup/scoring'
 import type { AthleteDraw, CatchRow, MiniTour, Tournament, TournamentEntry } from '../types'
 
@@ -15,6 +16,22 @@ export type TournamentResults =
       juniors: IndividualResults['juniors']
     }
 
+function resolveFormat(
+  tournament: Pick<Tournament, 'format' | 'zero_place_is_group_size_plus_one'> | TournamentFormat,
+): TournamentFormat {
+  const raw = tournament as Record<string, unknown>
+  const looksLikeFormat =
+    raw &&
+    typeof raw === 'object' &&
+    ('version' in raw || 'structure' in raw || ('engine' in raw && 'tours' in raw))
+  if (looksLikeFormat) {
+    return raw.version === 2
+      ? (raw as unknown as TournamentFormat)
+      : getFormat({ format: raw })
+  }
+  return getFormat(raw as { format?: unknown })
+}
+
 export function computeResults(input: {
   tournament: Pick<Tournament, 'format' | 'zero_place_is_group_size_plus_one'> | TournamentFormat
   entries: TournamentEntry[]
@@ -22,31 +39,28 @@ export function computeResults(input: {
   miniTours: MiniTour[]
   draws?: AthleteDraw[]
 }): TournamentResults {
-  const format =
-    'engine' in input.tournament && 'tours' in input.tournament
-      ? (input.tournament as TournamentFormat)
-      : getFormat(input.tournament as { format?: unknown })
-
-  if (isIndividual(format)) {
-    const results = computeIndividualResults(
-      format,
-      input.entries,
-      input.catches,
-      input.miniTours,
-      input.draws ?? [],
-    )
+  const format = resolveFormat(input.tournament)
+  const unified = computeTournamentResults({
+    format,
+    entries: input.entries,
+    catches: input.catches,
+    miniTours: input.miniTours,
+    draws: input.draws,
+  })
+  if (unified.engine === 'individual') {
     return {
       engine: 'individual',
-      teams: results.teams,
-      athletes: results.athletes,
-      juniors: results.juniors,
+      teams: unified.teams as IndividualResults['teams'],
+      athletes: unified.athletes,
+      juniors: unified.juniors,
     }
   }
-
-  const teams = computeStandings(input.entries, input.catches, input.miniTours, {
-    zeroPlaceIsGroupSizePlusOne: zeroPlacePlusOne(format),
-  })
-  return { engine: 'pikecup', teams, athletes: [], juniors: [] }
+  return {
+    engine: 'pikecup',
+    teams: unified.teams as StandingRow[],
+    athletes: [],
+    juniors: [],
+  }
 }
 
 /** Обратная совместимость: только командный PikeCup-скоринг. */

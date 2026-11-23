@@ -21,6 +21,8 @@ export type League = {
   brand_color: string | null
   is_active: boolean
   default_format: TournamentFormat | null
+  /** Preferred preset for new tournaments in this league */
+  default_preset_id: string | null
   created_at: string
   updated_at: string
 }
@@ -39,6 +41,8 @@ export type Tournament = {
   /** null = фестиваль / событие вне лиги */
   league_id: string | null
   format: TournamentFormat
+  /** Originating preset (null if custom / preset deleted). Snapshot in `format` is source of truth. */
+  format_preset_id: string | null
   /** Пусто на карточке турнира; полный текст грузится отдельно на экране регламента. */
   rules_content: string
   rules_updated_at: string
@@ -46,13 +50,13 @@ export type Tournament = {
   schedule_delay_minutes: number
   schedule_paused_at: string | null
   live_phase_override: string | null
-  /** @deprecated используйте format.ranking.zeroPlace; оставлено для совместимости с БД */
+  /** @deprecated используйте format.scoring.zeroPlace; оставлено для совместимости с БД */
   zero_place_is_group_size_plus_one: boolean
   /** Leaflet: точка сбора и полигоны зон; null если не задано */
   venue_map: VenueMap | null
-  /** Какую карту показывать зрителям и судьям */
+  /** Какую карту показывать зрителям и судьям; mirrored from format.setup.mapMode */
   map_mode: TournamentMapMode
-  /** Individual: жеребьёвка только зоны A/B, без секторов/бумажек */
+  /** Mirrored from format.draw.zonesOnly */
   draw_zones_only: boolean
 }
 
@@ -207,6 +211,11 @@ export type CatchRow = {
   roster_member_id: string | null
   mini_tour_id: string
   weight_grams: number
+  /** When format.catch.species.enabled */
+  species?: string | null
+  length_mm?: number | null
+  /** False if below min weight / over bag / non-counted species */
+  counted?: boolean
   created_by: string | null
   created_at: string
 }

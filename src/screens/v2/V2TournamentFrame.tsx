@@ -1,26 +1,10 @@
 import { Group, Stack, Text, Title } from '@mantine/core'
 import { NavLink, Outlet } from 'react-router-dom'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import { defaultMapMode, getFormat, isEntryCatch } from '../../features/tournament/formats'
 import { SpectatorRefreshBar } from '../../ui'
 import { useV2Tournament } from './context'
 
-const pikecupLinks = [
-  { to: '/now', label: 'Сейчас', end: true },
-  { to: '/feed', label: 'Лента', end: true },
-  {
-    to: '/map',
-    label: 'Карта',
-    end: false,
-    hint: 'черновик',
-    title: 'Карта ещё дорабатывается — пока сырое решение',
-  },
-  { to: '/table', label: 'Таблица', end: false },
-  { to: '/matrix', label: 'Матрица', end: false },
-  { to: '/schedule', label: 'День', end: false },
-  { to: '/teams', label: 'Команды', end: false },
-]
-
-const individualLinks = [
+const baseLinks = [
   { to: '/now', label: 'Сейчас', end: true },
   { to: '/feed', label: 'Лента', end: true },
   { to: '/map', label: 'Карта', end: false },
@@ -32,8 +16,18 @@ const individualLinks = [
 
 export function V2SectionNav() {
   const { tournament } = useV2Tournament()
+  const format = getFormat(tournament)
   const base = `/live/t/${tournament.id}`
-  const links = isIndividual(getFormat(tournament)) ? individualLinks : pikecupLinks
+  const schematicDraft = isEntryCatch(format) && defaultMapMode(format) === 'schematic'
+  const links = baseLinks.map((item) =>
+    item.to === '/map' && schematicDraft
+      ? {
+          ...item,
+          hint: 'черновик',
+          title: 'Карта ещё дорабатывается — пока сырое решение',
+        }
+      : item,
+  )
   return (
     <Stack gap="sm">
       <Title order={3} className="pc-display" lineClamp={2}>

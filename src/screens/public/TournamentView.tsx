@@ -3,7 +3,12 @@ import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 import { formatTournamentDate } from '../../features/tournament/date'
 import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
-import { getFormat, isIndividual, isPikecup } from '../../features/tournament/formats'
+import {
+  defaultMapMode,
+  getFormat,
+  isEntryCatch,
+  usesAthleteDraw,
+} from '../../features/tournament/formats'
 import { useAthleteDraws, useRefreshTournament } from '../../features/tournament/hooks'
 import { getCompetitionStage, getCurrentPhase, slotTitle } from '../../features/tournament/schedule'
 import {
@@ -37,15 +42,20 @@ function LatestWeighing({
   catches,
   miniTours,
   live,
+  format,
 }: {
   tournamentId: string
   entries: TournamentEntry[]
   catches: CatchRow[]
   miniTours: MiniTour[]
   live: boolean
+  format: ReturnType<typeof getFormat>
 }) {
   const { newCatchIds, hasRefreshed } = useRefreshTournament(tournamentId)
-  const log = useMemo(() => buildCatchLog(entries, catches, miniTours), [entries, catches, miniTours])
+  const log = useMemo(
+    () => buildCatchLog(entries, catches, miniTours, format),
+    [entries, catches, miniTours, format],
+  )
   const delta = useMemo(() => {
     if (newCatchIds.length === 0) return []
     const ids = new Set(newCatchIds)
@@ -132,7 +142,7 @@ export function TournamentView({
 }) {
   const now = useNow(5_000)
   const format = getFormat(tournament)
-  const { data: draws = [] } = useAthleteDraws(isIndividual(format) ? tournament.id : undefined)
+  const { data: draws = [] } = useAthleteDraws(usesAthleteDraw(format) ? tournament.id : undefined)
   const stage = getCompetitionStage(tournament, segments, now)
   const isOver = stage === 'completed'
   const phase = isOver ? null : getCurrentPhase(tournament, segments, now)
@@ -143,8 +153,8 @@ export function TournamentView({
     [entries],
   )
 
-  const useGeoMap = tournament.map_mode === 'geo'
-  const showMapTab = useGeoMap || isPikecup(format)
+  const useGeoMap = tournament.map_mode === 'geo' || defaultMapMode(format) === 'geo'
+  const showMapTab = useGeoMap || isEntryCatch(format)
 
   const tabs = [
     { value: 'results', label: 'Таблица' },
@@ -186,6 +196,7 @@ export function TournamentView({
             catches={catches}
             miniTours={miniTours}
             live={stage === 'live'}
+            format={format}
           />
         </Stack>
       </Stack>
@@ -220,6 +231,7 @@ export function TournamentView({
               catches={catches}
               miniTours={miniTours}
               live={stage === 'live'}
+              format={format}
             />
           </Stack>
         </PageHero>
@@ -287,7 +299,7 @@ export function TournamentView({
                           {e.draw_slip ? ` · бумажка № ${e.draw_slip.code}` : ''}
                         </Text>
                       </div>
-                      {isPikecup(format) && (
+                      {isEntryCatch(format) && (
                         <Button
                           component={Link}
                           to={`/tournament/${tournament.id}/team/${e.id}`}

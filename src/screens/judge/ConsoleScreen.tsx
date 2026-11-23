@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
 import { addCatch, deleteCatch, isZoneWeighingCompleted, setZoneWeighingCompleted } from '../../features/tournament/api'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import { getFormat, isAthleteCatch, speciesEnabled } from '../../features/tournament/formats'
 import { formatTournamentDate, statusLabel } from '../../features/tournament/date'
 import {
     tournamentKeys,
@@ -196,7 +196,7 @@ export function ConsoleScreen() {
                     size="sm"
                 />
             )}
-            {isIndividual(getFormat(active.tournament)) ? (
+            {isAthleteCatch(getFormat(active.tournament)) ? (
                 <IndividualConsole tournament={active.tournament} assignedZone={assignedZone} />
             ) : (
                 <PikecupConsole tournament={active.tournament} assignedZone={assignedZone} />
@@ -218,6 +218,7 @@ function PikecupConsole({
     const { data: liveTournament } = useTournament(tournamentId)
     const activeTournament = liveTournament ?? tournament
     const closed = useTournamentDayClosed(activeTournament)
+    const format = getFormat(activeTournament)
     const now = useNow()
 
     const { data: entries = [] } = useEntries(tournamentId)
@@ -258,21 +259,40 @@ function PikecupConsole({
     const [editingMiniTourId, setEditingMiniTourId] = useState<string | null>(null)
     const [addMiniTourId, setAddMiniTourId] = useState<string | null>(null)
     const [addEntryId, setAddEntryId] = useState<string | null>(null)
-    const [failedSave, setFailedSave] = useState<{ grams: number; entryId: string; miniTourId: string } | null>(null)
+    const [catchSpecies, setCatchSpecies] = useState<string | null>(null)
+    const [failedSave, setFailedSave] = useState<{
+        grams: number
+        entryId: string
+        miniTourId: string
+        species?: string | null
+    } | null>(null)
     const [savedNote, setSavedNote] = useState(false)
     const [showVenueMap, setShowVenueMap] = useState(false)
     const swipeLocked = Boolean(editingEntryId)
 
+    const speciesOn = speciesEnabled(format)
+    const speciesList = format.catch.species.list
+    const minFishWeightG = format.catch.minFishWeightG
+
+    useEffect(() => {
+        if (!speciesOn) {
+            setCatchSpecies(null)
+            return
+        }
+        if (catchSpecies && speciesList.includes(catchSpecies)) return
+        setCatchSpecies(speciesList[0] ?? null)
+    }, [speciesOn, speciesList, catchSpecies])
+
     const zoneEntries = useMemo(() => {
         const needle = search.trim().toLocaleLowerCase('ru')
         return entries
-            .filter((e) => physicalZone(e.start_zone, tourNumber) === zone)
+            .filter((e) => physicalZone(e.start_zone, tourNumber, format) === zone)
             .filter((e) => {
                 if (!needle) return true
                 return entryTeamName(e).toLocaleLowerCase('ru').includes(needle)
             })
             .sort((a, b) => entryTeamName(a).localeCompare(entryTeamName(b), 'ru'))
-    }, [entries, tourNumber, zone, search])
+    }, [entries, tourNumber, zone, search, format])
 
     const weighedCount = useMemo(
         () => zoneEntries.filter((e) => tourWeight(e.id, tourNumber, catches, miniTours) > 0).length,
@@ -302,11 +322,11 @@ function PikecupConsole({
     const addTeamOptions = useMemo(
         () =>
             entries
-                .filter((e) => physicalZone(e.start_zone, tourNumber) === zone)
+                .filter((e) => physicalZone(e.start_zone, tourNumber, format) === zone)
                 .slice()
                 .sort((a, b) => entryTeamName(a).localeCompare(entryTeamName(b), 'ru'))
                 .map((e) => ({ value: e.id, label: entryTeamName(e) })),
-        [entries, tourNumber, zone],
+        [entries, tourNumber, zone, format],
     )
 
     const editingEntry = entries.find((e) => e.id === editingEntryId)
@@ -398,15 +418,24 @@ function PikecupConsole({
     })
 
     const saveMutation = useMutation({
-        mutationFn: (input: { grams: number; entryId: string; miniTourId: string }) => {
+        mutationFn: (input: {
+            grams: number
+            entryId: string
+            miniTourId: string
+            species?: string | null
+        }) => {
             if (closed) throw new Error('Турнир завершён')
             if (weighingDone) throw new Error('Взвешивание зоны завершено — нажмите «Продолжить взвешивание»')
+            if (speciesOn && !input.species) throw new Error('Выберите вид рыбы')
+            const belowMin = minFishWeightG != null && input.grams < minFishWeightG
             return addCatch({
                 entryId: input.entryId,
                 miniTourId: input.miniTourId,
                 weightGrams: input.grams,
                 userId: user!.id,
                 tournamentId: tournamentId,
+                species: speciesOn ? input.species ?? null : undefined,
+                counted: belowMin ? false : undefined,
             })
         },
         onMutate: async () => {
@@ -824,23 +853,40 @@ function PikecupConsole({
             </div>
 
             {editingEntry && user && !inputLocked && (
-                <WeightNumpad
-                    key={`${editingEntry.id}:${activeEditMiniTourId ?? 'none'}`}
-                    subjectName={entryTeamName(editingEntry)}
-                    recordedGrams={editingWeight}
-                    targetLabel={editTargetLabel}
-                    saving={saveMutation.isPending}
-                    error={saveMutation.isError ? (saveMutation.error as Error).message : null}
-                    onSave={(grams) => {
-                        if (!editingEntryId || !activeEditMiniTourId) return
-                        saveMutation.mutate({ grams, entryId: editingEntryId, miniTourId: activeEditMiniTourId })
-                    }}
-                    onClose={() => {
-                        saveMutation.reset()
-                        setEditingEntryId(null)
-                        setEditingMiniTourId(null)
-                    }}
-                />
+                <Stack gap="xs">
+                    {speciesOn ? (
+                        <Select
+                            label="Вид"
+                            size="sm"
+                            data={speciesList.map((s) => ({ value: s, label: s }))}
+                            value={catchSpecies}
+                            onChange={setCatchSpecies}
+                            allowDeselect={false}
+                        />
+                    ) : null}
+                    <WeightNumpad
+                        key={`${editingEntry.id}:${activeEditMiniTourId ?? 'none'}`}
+                        subjectName={entryTeamName(editingEntry)}
+                        recordedGrams={editingWeight}
+                        targetLabel={editTargetLabel}
+                        saving={saveMutation.isPending}
+                        error={saveMutation.isError ? (saveMutation.error as Error).message : null}
+                        onSave={(grams) => {
+                            if (!editingEntryId || !activeEditMiniTourId) return
+                            saveMutation.mutate({
+                                grams,
+                                entryId: editingEntryId,
+                                miniTourId: activeEditMiniTourId,
+                                species: catchSpecies,
+                            })
+                        }}
+                        onClose={() => {
+                            saveMutation.reset()
+                            setEditingEntryId(null)
+                            setEditingMiniTourId(null)
+                        }}
+                    />
+                </Stack>
             )}
         </div>
     )

@@ -1,3 +1,5 @@
+import { zoneFor } from './formats/capabilities'
+import type { TournamentFormat } from './formats/types'
 import { slipSector } from './slips'
 import type { ScheduleSegment, Tournament, TournamentEntry, ZoneCode } from './types'
 import { entryTeamName } from './types'
@@ -124,9 +126,27 @@ export function oppositeZone(zone: 'A' | 'B' | null | undefined): 'A' | 'B' | nu
     return null
 }
 
-/** Физическая зона команды в данном туре (PikeCup): I = стартовая, II+ = противоположная. */
-export function physicalZone(startZone: 'A' | 'B' | null | undefined, tourNumber: number): 'A' | 'B' | null {
-    if (!startZone) return null
+/**
+ * Физическая зона в данном туре.
+ * With `format` — uses format.structure.zoneRotation via zoneFor.
+ * Without — legacy PikeCup A/B swap (tour 1 = start, later = opposite).
+ */
+export function physicalZone(
+    startZone: string | null | undefined,
+    tourNumber: number,
+): ZoneCode | null
+export function physicalZone(
+    startZone: string | null | undefined,
+    tourNumber: number,
+    format: TournamentFormat,
+): string | null
+export function physicalZone(
+    startZone: string | null | undefined,
+    tourNumber: number,
+    format?: TournamentFormat | null,
+): string | null {
+    if (format) return zoneFor(format, startZone, tourNumber)
+    if (startZone !== 'A' && startZone !== 'B') return null
     return tourNumber === 1 ? startZone : oppositeZone(startZone)
 }
 

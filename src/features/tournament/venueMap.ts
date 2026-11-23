@@ -60,7 +60,7 @@ export function parseMapMode(raw: unknown): TournamentMapMode {
   return raw === 'geo' ? 'geo' : 'schematic'
 }
 
-/** Стартовый режим при создании: PikeCup → схема, иначе OSM. */
+/** Стартовый режим при создании — из setup.mapMode формата. */
 export function defaultMapModeForFormat(format: TournamentFormat): TournamentMapMode {
-  return format.engine === 'pikecup' ? 'schematic' : 'geo'
+  return format.setup.mapMode
 }

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Button, Group, SimpleGrid, Stack, Text } from '@mantine/core'
 import { Link, useSearchParams } from 'react-router-dom'
 import { formatCatchClock } from '../../features/tournament/catchLog'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import { defaultMapMode, getFormat, isAthleteCatch } from '../../features/tournament/formats'
 import {
   athleteGramsForSlot,
   listAthletesOnZone,
@@ -18,9 +18,13 @@ type Pick = { zone: ZoneCode; sector: number }
 
 export function V2Map() {
   const { tournament, entries, catches, miniTours, segments, story } = useV2Tournament()
-  const individual = isIndividual(getFormat(tournament))
+  const format = getFormat(tournament)
+  const useGeo =
+    isAthleteCatch(format) ||
+    tournament.map_mode === 'geo' ||
+    defaultMapMode(format) === 'geo'
 
-  if (individual || tournament.map_mode === 'geo') {
+  if (useGeo) {
     return <V2GeoMap />
   }
 

@@ -1,7 +1,12 @@
 import { Button, Group, Stack, Text, Title } from '@mantine/core'
 import { Link, useParams } from 'react-router-dom'
 import { setPrimaryCheer, toggleCheer, useCheer, useCheerCounts } from '../../features/tournament/cheer'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import {
+  getFormat,
+  hasIndividualStandings,
+  hasTeamStandings,
+  isAthleteCatch,
+} from '../../features/tournament/formats'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone, slotTitle } from '../../features/tournament/schedule'
 import {
@@ -21,7 +26,10 @@ import { useV2Tournament } from './context'
 export function V2Team() {
   const { entryId } = useParams()
   const { tournament, entries, catches, miniTours, story, results, draws } = useV2Tournament()
-  const individual = isIndividual(getFormat(tournament))
+  const format = getFormat(tournament)
+  const athleteCatch = isAthleteCatch(format)
+  const personalBoard = hasIndividualStandings(format)
+  const teamBoard = hasTeamStandings(format)
   const cheer = useCheer(tournament.id)
   const { data: fanCounts } = useCheerCounts(tournament.id)
   const entry = entries.find((item) => item.id === entryId)
@@ -30,16 +38,16 @@ export function V2Team() {
   const fans = entry ? (fanCounts?.get(entry.id) ?? 0) : 0
 
   const teamResult =
-    individual && results.engine === 'individual'
+    athleteCatch && results.engine === 'individual'
       ? results.teams.find((row) => row.entryId === entryId)
       : null
   const standing = story.standings.find((row) => row.entryId === entryId)
   const matrix =
-    (individual ? story.matrixTeams.find((row) => row.entryId === entryId) : null) ??
+    (athleteCatch ? story.matrixTeams.find((row) => row.entryId === entryId) : null) ??
     story.matrix.find((row) => row.entryId === entryId && !row.rosterMemberId) ??
     story.matrixTeams.find((row) => row.entryId === entryId)
   const athleteRows =
-    individual && results.engine === 'individual'
+    athleteCatch && personalBoard && results.engine === 'individual'
       ? (() => {
           // Юниор есть в обеих личках — для карточки команды берём места из общей лички
           const byId = new Map<string, (typeof results.athletes)[number]>()
@@ -54,10 +62,12 @@ export function V2Team() {
       : []
   const ends = bestWorstSlot(matrix)
   const tour = story.clock?.tour ?? 1
-  const shore = entry ? physicalZone(entry.start_zone ?? entry.draw_slip?.start_zone, tour) : null
+  const shore = entry
+    ? physicalZone(entry.start_zone ?? entry.draw_slip?.start_zone, tour, format)
+    : null
   const gap =
-    standing && !individual
-      ? shore
+    standing && !athleteCatch
+      ? shore === 'A' || shore === 'B'
         ? zoneGap(standing, story.standings, shore)
         : sumGap(standing, story.standings)
       : standing
@@ -67,8 +77,8 @@ export function V2Team() {
   const slot = story.clock
 
   if (!entry) return <Text>Команда в этом турнире не найдена</Text>
-  if (!individual && !standing) return <Text>Команда в этом турнире не найдена</Text>
-  if (individual && !teamResult && !standing) return <Text>Команда в этом турнире не найдена</Text>
+  if (!athleteCatch && !standing) return <Text>Команда в этом турнире не найдена</Text>
+  if (athleteCatch && !teamResult && !standing) return <Text>Команда в этом турнире не найдена</Text>
 
   const placeSum = teamResult?.placeSum ?? standing?.placeSum ?? 0
   const totalWeight = teamResult?.totalWeight ?? standing?.totalWeight ?? 0
@@ -110,7 +120,7 @@ export function V2Team() {
         <Button component={Link} to={`/live/t/${tournament.id}/compare?a=${entry.id}`} size="xs" variant="default">
           Сравнить
         </Button>
-        {individual ? (
+        {athleteCatch ? (
           <Button component={Link} to={`/live/t/${tournament.id}/map`} size="xs" variant="default">
             Карта площадки
           </Button>
@@ -126,7 +136,7 @@ export function V2Team() {
         ) : null}
       </Group>
 
-      {individual && teamResult ? (
+      {athleteCatch && teamBoard && teamResult ? (
         <Group grow align="stretch">
           {teamResult.tours.map((t) => (
             <Stat
@@ -158,7 +168,7 @@ export function V2Team() {
       ) : null}
       {gap && gapLine(gap) ? <Text size="sm">{gapLine(gap)}</Text> : null}
 
-      {individual && athleteRows.length > 0 ? (
+      {athleteCatch && athleteRows.length > 0 ? (
         <Panel p="sm">
           <Text size="xs" c="dimmed" tt="uppercase">
             Состав

@@ -1,7 +1,12 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { Button, Group, SegmentedControl, Text } from '@mantine/core'
 import { Link } from 'react-router-dom'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import {
+  getFormat,
+  hasIndividualStandings,
+  hasJuniorStandings,
+  hasTeamStandings,
+} from '../../features/tournament/formats'
 import { formatPlace } from '../../features/tournament/scoring'
 import { slotTitle } from '../../features/tournament/schedule'
 import { gramsLabel, type MatrixCell, type MatrixRow } from '../../features/tournament/spectator'
@@ -27,18 +32,21 @@ function rowMatchesZone(
 
 export function V2Matrix() {
   const { tournament, story } = useV2Tournament()
-  const individual = isIndividual(getFormat(tournament))
+  const format = getFormat(tournament)
+  const personalBoard = hasIndividualStandings(format)
+  const teamBoard = hasTeamStandings(format)
+  const juniorsBoard = hasJuniorStandings(format)
   const [mode, setMode] = useState<'weight' | 'place'>('weight')
-  const [scope, setScope] = useState<Scope>(individual ? 'personal' : 'team')
-  const hasJuniors = story.matrix.some((row) => row.junior)
+  const [scope, setScope] = useState<Scope>(personalBoard ? 'personal' : 'team')
+  const hasJuniors = juniorsBoard || story.matrix.some((row) => row.junior)
   const [juniorFilter, setJuniorFilter] = useState<JuniorFilter>('all')
   const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('all')
   const clock = story.clock
 
   const rows = useMemo(() => {
     let source: MatrixRow[] =
-      individual && scope === 'team' ? story.matrixTeams : story.matrix
-    if (individual && scope === 'personal' && hasJuniors && juniorFilter !== 'all') {
+      personalBoard && scope === 'team' ? story.matrixTeams : story.matrix
+    if (personalBoard && scope === 'personal' && hasJuniors && juniorFilter !== 'all') {
       source =
         juniorFilter === 'juniors'
           ? source.filter((row) => row.junior)
@@ -47,7 +55,7 @@ export function V2Matrix() {
     if (zoneFilter === 'all') return source
     return source.filter((row) => rowMatchesZone(row, zoneFilter, story.slots, clock))
   }, [
-    individual,
+    personalBoard,
     scope,
     story.matrix,
     story.matrixTeams,
@@ -60,12 +68,12 @@ export function V2Matrix() {
 
   const maxWeight = Math.max(1, ...rows.flatMap((row) => row.cells.map((cell) => cell.grams ?? 0)))
   const worstPlace = Math.max(1, ...rows.flatMap((row) => row.cells.map((cell) => cell.place ?? 0)))
-  const nameHeader = !individual || scope === 'team' ? 'Команда' : 'Спортсмен'
+  const nameHeader = !personalBoard || scope === 'team' ? 'Команда' : 'Спортсмен'
 
   return (
     <div style={{ overflowX: 'auto' }}>
       <Group gap={6} mb="sm" wrap="wrap">
-        {individual && (
+        {personalBoard && teamBoard && (
           <SegmentedControl
             size="xs"
             value={scope}
@@ -76,7 +84,7 @@ export function V2Matrix() {
             ]}
           />
         )}
-        {individual && scope === 'personal' && hasJuniors && (
+        {personalBoard && scope === 'personal' && hasJuniors && (
           <SegmentedControl
             size="xs"
             value={juniorFilter}
@@ -111,7 +119,7 @@ export function V2Matrix() {
         <Button size="xs" variant={mode === 'place' ? 'filled' : 'default'} onClick={() => setMode('place')}>
           Цвет по месту
         </Button>
-        {individual && (
+        {personalBoard && (
           <Button component={Link} to={`/live/t/${tournament.id}/compare`} size="xs" variant="light">
             Сравнить
           </Button>
@@ -140,7 +148,7 @@ export function V2Matrix() {
           ) : (
             rows.map((row) => {
               const label =
-                individual && scope === 'personal'
+                personalBoard && scope === 'personal'
                   ? row.athleteName ?? row.rosterNames[0] ?? row.teamName
                   : row.teamName
               const key = row.rosterMemberId ?? row.entryId
@@ -158,7 +166,7 @@ export function V2Matrix() {
                         </Text>
                       ) : null}
                     </Link>
-                    {individual && scope === 'personal' && row.teamName ? (
+                    {personalBoard && scope === 'personal' && row.teamName ? (
                       <Text size="xs" c="dimmed">
                         {row.teamName}
                       </Text>

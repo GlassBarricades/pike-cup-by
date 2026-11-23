@@ -26,6 +26,7 @@ import {
   YAxis,
 } from 'recharts'
 import { useCheer } from '../../features/tournament/cheer'
+import { getFormat, usesAthleteDraw } from '../../features/tournament/formats'
 import { useSeasonDigest } from '../../features/tournament/season'
 import { getCompetitionStage } from '../../features/tournament/schedule'
 import { formatPlace } from '../../features/tournament/scoring'
@@ -595,10 +596,11 @@ function SectorsPane({
   onSlot: (slot: string) => void
   onTeam: (id: string) => void
 }) {
-  const { story, entries, catches, miniTours } = useV2Tournament()
+  const { tournament, story, entries, catches, miniTours } = useV2Tournament()
   const [shorePick, setShorePick] = useState<{ zone: Zone; sector: number } | null>(null)
   if (!weighed) return <EmptyState title="Весов ещё нет" />
-  const individual = story.engine === 'individual'
+  const format = getFormat(tournament)
+  const athleteDraw = usesAthleteDraw(format) || story.engine === 'individual'
   const averages = sectorAverages(story)
   const route = entryId ? slipPoints(story, entryId) : []
   const luck = entryId ? sectorLuck(story, entryId) : []
@@ -610,7 +612,7 @@ function SectorsPane({
     return (
       <Panel p="sm">
         <Text size="sm" c="dimmed">
-          {individual
+          {athleteDraw
             ? 'В жеребьёвке нет секторов с весом — разбор берега пока пуст.'
             : 'В бумажках этого турнира нет номеров секторов, поэтому карта берега, удача номера и соседи не из чего сложиться.'}
         </Text>
@@ -619,7 +621,7 @@ function SectorsPane({
   }
   return (
     <Stack gap="sm">
-      {!individual ? (
+      {!athleteDraw ? (
         <ShoreHeat
           heat={story.heatDay}
           picked={shorePick}
@@ -643,9 +645,9 @@ function SectorsPane({
         </BarChart>
       </Frame>
       <Frame
-        title={individual ? 'Маршрут по секторам' : 'Маршрут бумажки'}
+        title={athleteDraw ? 'Маршрут по секторам' : 'Маршрут бумажки'}
         note={
-          individual
+          athleteDraw
             ? 'Точка — сектор и вес окна выбранной команды (сумма атлетов).'
             : 'Точка — сектор и вес окна выбранной команды.'
         }

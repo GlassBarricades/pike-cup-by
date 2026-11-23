@@ -72,7 +72,7 @@ function assignFinalPlaces(rows: AthleteStandingRow[], format: TournamentFormat)
 }
 
 function zeroPlaceValue(groupSize: number, format: TournamentFormat): number {
-  return format.ranking.zeroPlace === 'group_size_plus_one' ? groupSize + 1 : groupSize
+  return format.scoring.zeroPlace === 'group_size_plus_one' ? groupSize + 1 : groupSize
 }
 
 function rankByWeight(
@@ -89,7 +89,7 @@ function rankByWeight(
     if (sorted[i].weight === 0) {
       const place = zeroPlaceValue(n, format)
       for (let k = i; k < j; k++) places.set(sorted[k].id, place)
-    } else if (format.ranking.tieAverage && j - i > 1) {
+    } else if (format.scoring.tieAverage && j - i > 1) {
       const avg = (i + 1 + j) / 2
       for (let k = i; k < j; k++) places.set(sorted[k].id, avg)
     } else {
@@ -106,14 +106,15 @@ function compareTiebreakers(
   format: TournamentFormat,
 ): number {
   if (a.placeSum !== b.placeSum) return a.placeSum - b.placeSum
-  for (const key of format.tiebreakers) {
-    if (key === 'total_weight' && a.totalWeight !== b.totalWeight) return b.totalWeight - a.totalWeight
-    if (key === 'best_tour_weight' && a.bestTourWeight !== b.bestTourWeight) {
+  for (const tb of format.scoring.tiebreakers) {
+    if (tb.kind === 'total_weight' && a.totalWeight !== b.totalWeight) return b.totalWeight - a.totalWeight
+    if (tb.kind === 'best_tour_weight' && a.bestTourWeight !== b.bestTourWeight) {
       return b.bestTourWeight - a.bestTourWeight
     }
-    if (key === 'last_tour_weight' && a.lastTourWeight !== b.lastTourWeight) {
+    if (tb.kind === 'last_tour_weight' && a.lastTourWeight !== b.lastTourWeight) {
       return b.lastTourWeight - a.lastTourWeight
     }
+    // zone_weight is handled in entry-level (PikeCup) scoring; ignore for athletes
   }
   return 0
 }
@@ -162,7 +163,7 @@ function rankTourPlaces(
   })
 
   const placeMap = new Map<string, number>()
-  if (format.ranking.group === 'tour') {
+  if (format.scoring.group === 'tour') {
     const ranked = rankByWeight(
       rows.map((r) => ({ id: r.id, weight: r.weight })),
       format,
@@ -324,8 +325,8 @@ export function computeIndividualResults(
       .map((member) => ({ entry, member })),
   )
 
-  const tourNumbers = format.tours.map((t) => t.number)
-  const separate = format.ranking.separateJuniors
+  const tourNumbers = format.structure.tours.map((t) => t.number)
+  const separate = format.participants.juniors.separateStandings
 
   const openRows = rankPool(allMembers, tourNumbers, format, catches, miniTours, draws)
   const teams = buildTeamRows(active, openRows, tourNumbers, format)

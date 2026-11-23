@@ -2,8 +2,11 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } fr
 import { Anchor, Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { useCheer } from '../../features/tournament/cheer'
-import { isIndividual } from '../../features/tournament/formats'
-import { getFormat } from '../../features/tournament/formats'
+import {
+  getFormat,
+  hasIndividualStandings,
+  showSpectatorRulesHint,
+} from '../../features/tournament/formats'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone } from '../../features/tournament/schedule'
 import {
@@ -32,6 +35,7 @@ const modes: { id: BoardMode; label: string }[] = [
 
 export function V2Table() {
   const { tournament, entries, catches, miniTours, story, results } = useV2Tournament()
+  const format = getFormat(tournament)
   const mode = useBoardMode()
   const [comic, setComic] = useState(false)
   const [query, setQuery] = useState('')
@@ -90,7 +94,7 @@ export function V2Table() {
     return sorted
   }, [story, effectiveMode, cheer, tour, query, sumBoardOpen])
 
-  if (isIndividual(getFormat(tournament)) && results.engine === 'individual') {
+  if (hasIndividualStandings(format) && results.engine === 'individual') {
     return (
       <IndividualResults
         teams={results.teams}
@@ -101,6 +105,7 @@ export function V2Table() {
         tournamentStatus={tournament.status}
         tournamentId={tournament.id}
         liveTour={story?.clock?.tour ?? null}
+        format={format}
       />
     )
   }
@@ -124,7 +129,9 @@ export function V2Table() {
           Сравнить две команды
         </Button>
       </Group>
-      {comic ? <RulesComic onClose={() => setComic(false)} /> : null}
+      {comic && showSpectatorRulesHint(format) ? (
+        <RulesComic format={format} onClose={() => setComic(false)} />
+      ) : null}
       <TextInput
         placeholder="Команда или фамилия"
         value={query}

@@ -1,6 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
-import { fetchCatches, fetchEntriesForStandings, fetchMiniTours, fetchTournaments } from './api'
-import { computeStandings } from './scoring'
+import {
+  fetchAthleteDraws,
+  fetchCatches,
+  fetchEntriesForStandings,
+  fetchMiniTours,
+  fetchTournaments,
+} from './api'
+import { isAthleteCatch, getFormat } from './formats'
+import { computeResults } from './scoring'
 import type { SeasonBundle } from './spectator'
 
 export type SeasonDigestOptions = {
@@ -30,21 +37,41 @@ export function useSeasonDigest(options: SeasonDigestOptions | boolean = true) {
       })
       const bundles = await Promise.all(
         tournaments.map(async (tournament) => {
-          const [entries, catches, miniTours] = await Promise.all([
+          const format = getFormat(tournament)
+          const [entries, catches, miniTours, draws] = await Promise.all([
             fetchEntriesForStandings(tournament.id),
             fetchCatches(tournament.id),
             fetchMiniTours(tournament.id),
+            isAthleteCatch(format) ? fetchAthleteDraws(tournament.id) : Promise.resolve([]),
           ])
+          const results = computeResults({
+            tournament,
+            entries,
+            catches,
+            miniTours,
+            draws,
+          })
+          // SeasonBundle historically expects PikeCup StandingRow[]; map common fields.
+          const standings = results.teams.map((row) => ({
+            entryId: row.entryId,
+            teamId: 'teamId' in row ? row.teamId : null,
+            teamName: row.teamName,
+            rosterNames: 'rosterNames' in row ? row.rosterNames : ('athleteNames' in row ? row.athleteNames : []),
+            startZone: 'startZone' in row ? row.startZone : null,
+            zoneAWeight: 'zoneAWeight' in row ? row.zoneAWeight : 0,
+            zoneBWeight: 'zoneBWeight' in row ? row.zoneBWeight : 0,
+            totalWeight: row.totalWeight,
+            zoneAPlace: 'zoneAPlace' in row ? row.zoneAPlace : 0,
+            zoneBPlace: 'zoneBPlace' in row ? row.zoneBPlace : 0,
+            placeSum: row.placeSum,
+            finalPlace: row.finalPlace,
+          }))
           return {
             tournament,
             entries,
             catches,
             miniTours,
-            standings: computeStandings(entries, catches, miniTours, {
-              zeroPlaceIsGroupSizePlusOne:
-                tournament.format?.ranking?.zeroPlace !== 'group_size' &&
-                tournament.zero_place_is_group_size_plus_one !== false,
-            }),
+            standings,
           }
         }),
       )

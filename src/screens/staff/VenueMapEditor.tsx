@@ -10,7 +10,7 @@ import {
   useMapEvents,
 } from 'react-leaflet'
 import { updateVenueMap } from '../../features/tournament/api'
-import { getFormat } from '../../features/tournament/formats'
+import { getFormat, zoneCodes } from '../../features/tournament/formats'
 import {
   invalidateTournamentCard,
   invalidateTournamentLists,
@@ -185,7 +185,7 @@ export function VenueMapEditor({ tournament }: Props) {
             >
               Точка сбора
             </Button>
-            {format.zones.map((code) => (
+            {zoneCodes(format).map((code) => (
               <Button
                 key={code}
                 size="xs"

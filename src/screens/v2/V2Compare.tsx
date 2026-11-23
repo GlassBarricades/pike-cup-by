@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { SegmentedControl, Select, Stack, Text } from '@mantine/core'
 import { useSearchParams } from 'react-router-dom'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import { getFormat, hasIndividualStandings, hasTeamStandings } from '../../features/tournament/formats'
 import { slotTitle } from '../../features/tournament/schedule'
 import { gramsLabel, type MatrixRow } from '../../features/tournament/spectator'
 import { useV2Tournament } from './context'
@@ -10,12 +10,14 @@ type Scope = 'personal' | 'team'
 
 export function V2Compare() {
   const { tournament, story } = useV2Tournament()
-  const individual = isIndividual(getFormat(tournament))
+  const format = getFormat(tournament)
+  const personalBoard = hasIndividualStandings(format)
+  const teamBoard = hasTeamStandings(format)
   const [params, setParams] = useSearchParams()
-  const [scope, setScope] = useState<Scope>(individual ? 'personal' : 'team')
+  const [scope, setScope] = useState<Scope>(personalBoard ? 'personal' : 'team')
 
   const matrix: MatrixRow[] =
-    individual && scope === 'team' ? story.matrixTeams : story.matrix
+    personalBoard && scope === 'team' ? story.matrixTeams : story.matrix
 
   const options = matrix.map((row) => ({
     value: row.rosterMemberId ?? row.entryId,
@@ -45,7 +47,7 @@ export function V2Compare() {
 
   return (
     <Stack gap="md">
-      {individual && (
+      {personalBoard && teamBoard && (
         <SegmentedControl
           value={scope}
           onChange={(v) => {

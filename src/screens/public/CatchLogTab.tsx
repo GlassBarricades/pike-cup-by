@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Anchor, Button, Group, Select, Stack, Table, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { buildCatchLog, formatCatchClock } from '../../features/tournament/catchLog'
+import { getFormat } from '../../features/tournament/formats'
 import {
   clockWeighSlot,
   fishingSlotsInOrder,
@@ -27,6 +28,7 @@ export function CatchLogTab({
   segments: ScheduleSegment[]
 }) {
   const now = useNow(5_000)
+  const format = getFormat(tournament)
   const [search, setSearch] = useState('')
   const [zone, setZone] = useState<ZoneCode | null>(null)
   const [tour, setTour] = useState<'all' | '1' | '2'>('all')
@@ -39,7 +41,10 @@ export function CatchLogTab({
   const miniFilter = miniPick ?? clockKey
 
   const slots = useMemo(() => fishingSlotsInOrder(segments), [segments])
-  const log = useMemo(() => buildCatchLog(entries, catches, miniTours), [entries, catches, miniTours])
+  const log = useMemo(
+    () => buildCatchLog(entries, catches, miniTours, format),
+    [entries, catches, miniTours, format],
+  )
 
   const rows = useMemo(() => {
     const query = search.trim().toLocaleLowerCase('ru')

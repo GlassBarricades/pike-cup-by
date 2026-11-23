@@ -1,20 +1,25 @@
 import { useMemo } from 'react'
-import { Button, Stack, Text } from '@mantine/core'
+import { Button, Select, Stack, Text } from '@mantine/core'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../../features/auth/AuthProvider'
 import { canManageTournament } from '../../features/auth/permissions'
+import { useFormatPresets } from '../../features/formatPresets'
+import { updateLeague } from '../../features/tournament/api'
 import { formatTournamentDate } from '../../features/tournament/date'
 import { LEAGUE_KIND_LABEL, regionLabel } from '../../features/tournament/leagueLabels'
 import {
+  invalidateTournamentLists,
+  tournamentKeys,
   useActiveTournament,
   useLeagueBySlug,
   useSegmentsForTournaments,
   useTournaments,
 } from '../../features/tournament/hooks'
 import { getCompetitionStage, type CompetitionStage } from '../../features/tournament/schedule'
-import type { ScheduleSegment, Tournament } from '../../features/tournament/types'
+import type { League, ScheduleSegment, Tournament } from '../../features/tournament/types'
 import { useNow } from '../../features/tournament/useNow'
-import { EmptyState, PageHeader, SurfaceCard } from '../../ui'
+import { EmptyState, PageHeader, Panel, SectionTitle, SurfaceCard } from '../../ui'
 
 type TournamentRow = {
   tournament: Tournament
@@ -121,6 +126,8 @@ export function LeagueDetailScreen() {
           {league.description ? ` · ${league.description}` : ''}
         </Text>
 
+        {canManage && <LeagueDefaultPresetPanel league={league} />}
+
         {tournaments.filter((t) => t.status !== 'draft').length === 0 ? (
           <EmptyState title="Этапов пока нет" description="Соревнования лиги появятся здесь после публикации." />
         ) : (
@@ -167,5 +174,56 @@ function TournamentCard({ row, featured = false }: { row: TournamentRow; feature
       featured={featured}
       lines={[`${formatTournamentDate(tournament.event_date)} · ${tournament.location}`]}
     />
+  )
+}
+
+function LeagueDefaultPresetPanel({ league }: { league: League }) {
+  const queryClient = useQueryClient()
+  const { data: presets = [] } = useFormatPresets()
+  const NONE = '__none__'
+
+  const mutation = useMutation({
+    mutationFn: (presetId: string | null) =>
+      updateLeague(league.id, { default_preset_id: presetId }),
+    onSuccess: async () => {
+      await Promise.all([
+        invalidateTournamentLists(queryClient),
+        queryClient.invalidateQueries({ queryKey: tournamentKeys.leagueSlug(league.slug) }),
+        queryClient.invalidateQueries({ queryKey: tournamentKeys.leagueId(league.id) }),
+      ])
+    },
+  })
+
+  return (
+    <Panel>
+      <Stack gap="sm">
+        <SectionTitle>Пресет по умолчанию</SectionTitle>
+        <Text size="sm" c="dimmed">
+          Подставляется при создании этапа этой лиги.
+        </Text>
+        <Select
+          label="Формат"
+          data={[
+            { value: NONE, label: 'Не задан' },
+            ...presets.map((p) => ({ value: p.id, label: p.name })),
+          ]}
+          value={league.default_preset_id ?? NONE}
+          onChange={(v) => mutation.mutate(v && v !== NONE ? v : null)}
+          searchable
+          disabled={presets.length === 0}
+          description={presets.length === 0 ? 'Сначала создайте пресет в штабе' : undefined}
+        />
+        {mutation.isError && (
+          <Text size="sm" c="red">
+            {(mutation.error as Error).message}
+          </Text>
+        )}
+        {mutation.isSuccess && (
+          <Text size="sm" c="dimmed">
+            Сохранено
+          </Text>
+        )}
+      </Stack>
+    </Panel>
   )
 }

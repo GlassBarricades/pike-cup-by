@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'rea
 import { Anchor, Box, Button, Group, Stack, Table, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { formatTournamentDate } from '../../features/tournament/date'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import { getFormat, hasIndividualStandings } from '../../features/tournament/formats'
 import { computeResults } from '../../features/tournament/formats/results'
 import { getCompetitionStage, getCurrentPhase, tourNumberFromPhase } from '../../features/tournament/schedule'
 import { computeStandings, formatPlace, type StandingRow } from '../../features/tournament/scoring'
@@ -83,7 +83,7 @@ export function ResultsTab({
   const liveTour = tourNumberFromPhase(phase)
 
   const individualResults = useMemo(() => {
-    if (!isIndividual(format)) return null
+    if (!hasIndividualStandings(format)) return null
     return computeResults({ tournament, entries, catches, miniTours, draws })
   }, [format, tournament, entries, catches, miniTours, draws])
 
@@ -278,6 +278,7 @@ export function ResultsTab({
         tournamentStatus={tournament.status}
         tournamentId={tournament.id}
         liveTour={liveTour}
+        format={format}
       />
     )
   }

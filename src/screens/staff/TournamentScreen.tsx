@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button, Checkbox, Group, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
@@ -38,11 +38,14 @@ import { JudgesScreen } from './JudgesScreen'
 import { RulesEditScreen } from './RulesEditScreen'
 import { ScheduleEditor } from './ScheduleEditor'
 import { VenueMapEditor } from './VenueMapEditor'
+import { useFormatPresets } from '../../features/formatPresets'
 import {
   BOOR_INDIVIDUAL_TEAM_FORMAT,
+  cloneFormat,
   defaultFormatForLeague,
+  FORMAT_PRESETS,
   getFormat,
-  PIKECUP_FORMAT,
+  legacyDrawMode,
   type TournamentFormat,
 } from '../../features/tournament/formats'
 import { fishingScheduleReady } from '../../features/tournament/scheduleEdit'
@@ -293,7 +296,7 @@ export function TournamentScreen() {
                     value={mapMode}
                     onChange={(v) => setMapMode(v === 'geo' ? 'geo' : 'schematic')}
                   />
-                  {getFormat(selected).draw === 'per_athlete_sectors' ? (
+                  {legacyDrawMode(getFormat(selected)) === 'per_athlete_sectors' ? (
                     <Checkbox
                       label="Жеребьёвка только по зонам"
                       description="Без бумажек и секторов: участник тянет A/B, напарник автоматически получает другую зону."
@@ -398,6 +401,7 @@ function CreateTournamentForm({
   const queryClient = useQueryClient()
   const { data: leagues = [] } = useLeagues()
   const { data: defaultLeague } = useDefaultLeague()
+  const { data: dbPresets = [] } = useFormatPresets()
   const [newName, setNewName] = useState('Pike Cup in Belarus')
   const [newLocation, setNewLocation] = useState('озеро Повстынь')
   const [newDate, setNewDate] = useState('')
@@ -409,6 +413,14 @@ function CreateTournamentForm({
   /** null до загрузки default; FESTIVAL_VALUE = фестиваль */
   const [newLeagueId, setNewLeagueId] = useState<string | null>(null)
   const [format, setFormat] = useState<TournamentFormat>(BOOR_INDIVIDUAL_TEAM_FORMAT)
+  const [formatPresetId, setFormatPresetId] = useState<string | null>(null)
+
+  const formatSelectData = useMemo(() => {
+    if (dbPresets.length > 0) {
+      return dbPresets.map((p) => ({ value: p.id, label: p.name }))
+    }
+    return FORMAT_PRESETS.map((p) => ({ value: p.id, label: p.label }))
+  }, [dbPresets])
 
   useEffect(() => {
     if (newLeagueId !== null) return
@@ -417,17 +429,41 @@ function CreateTournamentForm({
 
   useEffect(() => {
     if (!newLeagueId || newLeagueId === FESTIVAL_VALUE) {
-      setFormat(BOOR_INDIVIDUAL_TEAM_FORMAT)
+      setFormat(cloneFormat(BOOR_INDIVIDUAL_TEAM_FORMAT))
+      setFormatPresetId(null)
       return
     }
     const league = leagues.find((row) => row.id === newLeagueId)
+    if (league?.default_preset_id) {
+      const preset = dbPresets.find((p) => p.id === league.default_preset_id)
+      if (preset) {
+        setFormat(cloneFormat(preset.format))
+        setFormatPresetId(preset.id)
+        return
+      }
+    }
     setFormat(defaultFormatForLeague(league ?? null))
-  }, [newLeagueId, leagues])
+    setFormatPresetId(null)
+  }, [newLeagueId, leagues, dbPresets])
 
   const leagueSelectData = [
     { value: FESTIVAL_VALUE, label: 'Фестиваль (без лиги)' },
     ...leagues.map((league) => ({ value: league.id, label: league.name })),
   ]
+
+  const applyFormatPreset = (id: string) => {
+    const db = dbPresets.find((p) => p.id === id)
+    if (db) {
+      setFormat(cloneFormat(db.format))
+      setFormatPresetId(db.id)
+      return
+    }
+    const code = FORMAT_PRESETS.find((p) => p.id === id)
+    if (code) {
+      setFormat(cloneFormat(code.format))
+      setFormatPresetId(null)
+    }
+  }
 
   const createMutation = useMutation({
     mutationFn: async () => {
@@ -443,8 +479,8 @@ function CreateTournamentForm({
       }
       const formatPayload: TournamentFormat = {
         ...format,
-        ranking: {
-          ...format.ranking,
+        scoring: {
+          ...format.scoring,
           zeroPlace: newZeroPlacePlusOne ? 'group_size_plus_one' : 'group_size',
         },
       }
@@ -455,6 +491,7 @@ function CreateTournamentForm({
         status: newStatus,
         leagueId: !newLeagueId || newLeagueId === FESTIVAL_VALUE ? null : newLeagueId,
         format: formatPayload,
+        formatPresetId: dbPresets.length > 0 ? formatPresetId : null,
         organizers: newOrganizers
           .split(',')
           .map((s) => s.trim())
@@ -513,15 +550,18 @@ function CreateTournamentForm({
           />
           <Select
             label="Формат"
-            data={[
-              { value: 'pikecup', label: 'PikeCup' },
-              { value: 'boor_individual', label: 'БООР: личный + командный' },
-            ]}
-            value={format.engine === 'pikecup' ? 'pikecup' : 'boor_individual'}
-            onChange={(v) => {
-              if (v === 'pikecup') setFormat(structuredClone(PIKECUP_FORMAT))
-              else setFormat(structuredClone(BOOR_INDIVIDUAL_TEAM_FORMAT))
-            }}
+            data={formatSelectData}
+            value={
+              formatPresetId ??
+              (dbPresets.length > 0
+                ? null
+                : (FORMAT_PRESETS.find((p) => JSON.stringify(p.format) === JSON.stringify(format))?.id ??
+                  FORMAT_PRESETS[0]?.id ??
+                  null))
+            }
+            onChange={(v) => v && applyFormatPreset(v)}
+            searchable
+            placeholder="Выберите формат"
           />
           <TextInput
             label="Оргкомитет (через запятую)"

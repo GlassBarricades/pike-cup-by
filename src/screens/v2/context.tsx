@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { Text } from '@mantine/core'
 import { Outlet, useParams } from 'react-router-dom'
 import { useCheerSync } from '../../features/tournament/cheer'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import { getFormat, isAthleteCatch, usesAthleteDraw } from '../../features/tournament/formats'
 import { computeResults, type TournamentResults } from '../../features/tournament/formats/results'
 import {
   useAthleteDraws,
@@ -54,7 +54,7 @@ export function V2TournamentProvider({ children }: { children: ReactNode }) {
   const tournamentQuery = useTournament(tournamentId)
   const id = tournamentQuery.data?.id
   const format = tournamentQuery.data ? getFormat(tournamentQuery.data) : null
-  const needsDraws = format ? isIndividual(format) : false
+  const needsDraws = format ? usesAthleteDraw(format) || isAthleteCatch(format) : false
   const entriesQuery = useEntries(id)
   const catchesQuery = useCatches(id)
   const miniQuery = useMiniTours(id)
@@ -76,7 +76,7 @@ export function V2TournamentProvider({ children }: { children: ReactNode }) {
 
   const race = useMemo(() => {
     if (!tournament || !format) return null
-    if (isIndividual(format)) {
+    if (isAthleteCatch(format)) {
       return buildIndividualRace(format, tournament, entries, catches, miniTours, segments, draws)
     }
     return buildRace(tournament, entries, catches, miniTours, segments)

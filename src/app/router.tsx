@@ -57,6 +57,8 @@ import { V2TournamentOutlet } from '../screens/v2/context'
 import { HqScreen } from '../screens/staff/HqScreen'
 import { TournamentScreen } from '../screens/staff/TournamentScreen'
 import { EntriesScreen } from '../screens/staff/EntriesScreen'
+import { PresetsScreen } from '../screens/staff/PresetsScreen'
+import { PresetEditorScreen } from '../screens/staff/PresetEditorScreen'
 import { DrawRouter } from '../screens/staff/DrawRouter'
 import { CatchesScreen } from '../screens/staff/CatchesScreen'
 import { ConsoleScreen } from '../screens/judge/ConsoleScreen'
@@ -183,6 +185,30 @@ export const router = createBrowserRouter([
         element: (
           <RoleGuard allow={canManageTournament}>
             <EntriesScreen />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'presets',
+        element: (
+          <RoleGuard allow={canManageTournament}>
+            <PresetsScreen />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'presets/new',
+        element: (
+          <RoleGuard allow={canManageTournament}>
+            <PresetEditorScreen />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'presets/:presetId',
+        element: (
+          <RoleGuard allow={canManageTournament}>
+            <PresetEditorScreen />
           </RoleGuard>
         ),
       },

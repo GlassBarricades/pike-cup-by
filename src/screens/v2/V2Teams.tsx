@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Anchor, Button, Group, Stack, Text, TextInput } from '@mantine/core'
 import { Link } from 'react-router-dom'
 import { setPrimaryCheer, toggleCheer, useCheer, useCheerCounts } from '../../features/tournament/cheer'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import { getFormat, hasTeamStandings, isAthleteCatch } from '../../features/tournament/formats'
 import { physicalZone } from '../../features/tournament/schedule'
 import { slipSector } from '../../features/tournament/slips'
 import { isIndividualSumBoardOpen } from '../../features/tournament/spectator'
@@ -11,7 +11,9 @@ import { useV2Tournament } from './context'
 
 export function V2Teams() {
   const { tournament, entries, catches, miniTours, story, draws, results } = useV2Tournament()
-  const individual = isIndividual(getFormat(tournament))
+  const format = getFormat(tournament)
+  const athleteCatch = isAthleteCatch(format)
+  const showTeamPlaces = hasTeamStandings(format)
   const [query, setQuery] = useState('')
   const cheer = useCheer(tournament.id)
   const { data: fanCounts } = useCheerCounts(tournament.id)
@@ -20,7 +22,7 @@ export function V2Teams() {
 
   const rows = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('ru')
-    if (individual && results.engine === 'individual') {
+    if (athleteCatch && results.engine === 'individual') {
       const list = results.teams.flatMap((row) => {
         const entry = entries.find((item) => item.id === row.entryId)
         if (!entry) return []
@@ -86,7 +88,7 @@ export function V2Teams() {
     })
     list.sort((a, b) => b.fans - a.fans || a.teamName.localeCompare(b.teamName, 'ru'))
     return list
-  }, [individual, results, story.standings, entries, slot, query, fanCounts, draws])
+  }, [athleteCatch, results, story.standings, entries, slot, query, fanCounts, draws])
 
   if (rows.length === 0 && !query) return <EmptyState title="Заявок нет" />
 
@@ -142,7 +144,7 @@ export function V2Teams() {
                       : row.zone && row.sector != null
                         ? `Зона ${row.zone} · сектор ${row.sector}`
                         : 'Сектор ещё не открыт'}
-                  {individual && individualSumOpen ? ` · Σ ${row.placeSum}` : ''}
+                  {athleteCatch && showTeamPlaces && individualSumOpen ? ` · Σ ${row.placeSum}` : ''}
                 </Text>
               </div>
               {cheer.primaryId === row.entryId ? (

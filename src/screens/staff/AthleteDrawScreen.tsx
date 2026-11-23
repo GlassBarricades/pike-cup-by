@@ -9,7 +9,7 @@ import {
   setAthleteZoneDraw,
   upsertAthleteDraws,
 } from '../../features/tournament/api'
-import { getFormat } from '../../features/tournament/formats'
+import { getFormat, legacyDrawMode, zoneCodes } from '../../features/tournament/formats'
 import {
   tournamentKeys,
   useAthleteDraws,
@@ -91,10 +91,12 @@ export function AthleteDrawScreen() {
 
   const slots = useMemo(() => {
     if (!format) return [] as { tour: number; mini: number }[]
-    return format.tours.flatMap((tour) =>
+    return format.structure.tours.flatMap((tour) =>
       Array.from({ length: tour.minis }, (_, i) => ({ tour: tour.number, mini: i + 1 })),
     )
   }, [format])
+
+  const zones = useMemo(() => (format ? zoneCodes(format) : []), [format])
 
   const invalidate = async () => {
     if (!tournament) return
@@ -190,7 +192,7 @@ export function AthleteDrawScreen() {
     return <EmptyState title="Нет турнира" description="Выберите турнир сверху." />
   }
 
-  if (format.draw !== 'per_athlete_sectors') {
+  if (legacyDrawMode(format) !== 'per_athlete_sectors') {
     return (
       <EmptyState
         title="Жеребьёвка по секторам не нужна"
@@ -539,9 +541,9 @@ export function AthleteDrawScreen() {
                                 <Stack gap={4}>
                                   <Select
                                     size="xs"
-                                    data={format.zones.map((z) => ({ value: z, label: z }))}
+                                    data={zones.map((z) => ({ value: z, label: z }))}
                                     value={editZone}
-                                    onChange={(v) => setEditZone(v ?? format.zones[0]!)}
+                                    onChange={(v) => setEditZone(v ?? zones[0]!)}
                                   />
                                   <TextInput
                                     size="xs"
@@ -569,7 +571,7 @@ export function AthleteDrawScreen() {
                                   disabled={closed}
                                   onClick={() => {
                                     setEditKey(key)
-                                    setEditZone(row?.zone ?? format.zones[0]!)
+                                    setEditZone(row?.zone ?? zones[0]!)
                                     setEditSector(row?.sector ?? 1)
                                   }}
                                 >

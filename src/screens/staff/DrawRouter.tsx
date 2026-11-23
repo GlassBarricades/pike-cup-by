@@ -1,4 +1,4 @@
-import { getFormat } from '../../features/tournament/formats'
+import { getFormat, legacyDrawMode } from '../../features/tournament/formats'
 import { useStaffTournament } from '../../features/tournament/StaffTournamentContext'
 import { EmptyState } from '../../ui'
 import { AthleteDrawScreen } from './AthleteDrawScreen'
@@ -11,8 +11,9 @@ export function DrawRouter() {
     return <EmptyState title="Нет турнира" description="Выберите турнир сверху." />
   }
   const format = getFormat(tournament)
-  if (format.draw === 'per_athlete_sectors') return <AthleteDrawScreen />
-  if (format.draw === 'none') {
+  const drawMode = legacyDrawMode(format)
+  if (drawMode === 'per_athlete_sectors') return <AthleteDrawScreen />
+  if (drawMode === 'none') {
     return <EmptyState title="Жеребьёвка не используется" description="В формате турнира жеребьёвка отключена." />
   }
   return <DrawScreen />

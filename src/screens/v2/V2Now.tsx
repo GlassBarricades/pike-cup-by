@@ -5,7 +5,11 @@ import { formatCatchClock } from '../../features/tournament/catchLog'
 import { useRefreshTournament } from '../../features/tournament/hooks'
 import { formatPlace } from '../../features/tournament/scoring'
 import { physicalZone, slotTitle } from '../../features/tournament/schedule'
-import { getFormat, isIndividual } from '../../features/tournament/formats'
+import {
+  getFormat,
+  hasIndividualStandings,
+  showSpectatorRulesHint,
+} from '../../features/tournament/formats'
 import { formatPlaceShift, gramsLabel, shoreLeaders, sumGap, zoneGap, gapLine } from '../../features/tournament/spectator'
 import { useCheer } from '../../features/tournament/cheer'
 import { slipSector } from '../../features/tournament/slips'
@@ -19,11 +23,12 @@ type ZoneFilter = 'all' | ZoneCode
 
 export function V2Now() {
   const { tournament, entries, story, results } = useV2Tournament()
-  const individual = isIndividual(getFormat(tournament))
+  const format = getFormat(tournament)
+  const showAthleteBoard = hasIndividualStandings(format) && results.engine === 'individual'
   const cheer = useCheer(tournament.id)
   const { newCatchIds, hasRefreshed } = useRefreshTournament(tournament.id)
   const seen = useRulesSeen()
-  const [comic, setComic] = useState(!seen && !individual)
+  const [comic, setComic] = useState(!seen && showSpectatorRulesHint(format))
   const [zoneFilter, setZoneFilter] = useState<ZoneFilter>('all')
   const delta = useMemo(() => {
     if (newCatchIds.length === 0) return []
@@ -40,7 +45,7 @@ export function V2Now() {
   const leadersA = shoreLeaders(story.standings, tour, 'A')
   const leadersB = shoreLeaders(story.standings, tour, 'B')
   const athleteLeaders = useMemo(() => {
-    if (!individual || results.engine !== 'individual') return { A: [], B: [] as typeof results.athletes }
+    if (!showAthleteBoard) return { A: [], B: [] as typeof results.athletes }
     const open = results.athletes
     const byZone = (zone: 'A' | 'B') =>
       open
@@ -52,11 +57,13 @@ export function V2Now() {
         })
         .slice(0, 3)
     return { A: byZone('A'), B: byZone('B') }
-  }, [individual, results, tour])
+  }, [showAthleteBoard, results, tour])
 
   return (
     <Stack gap="md">
-      {!individual && comic ? <RulesComic onClose={() => setComic(false)} /> : null}
+      {showSpectatorRulesHint(format) && comic ? (
+        <RulesComic format={format} onClose={() => setComic(false)} />
+      ) : null}
       <PhaseClock
         phase={story.phase}
         delayMinutes={tournament.schedule_delay_minutes}
@@ -204,7 +211,7 @@ export function V2Now() {
         {(['A', 'B'] as const)
           .filter((zone) => zoneFilter === 'all' || zone === zoneFilter)
           .map((zone) => {
-          if (individual) {
+          if (showAthleteBoard) {
             const leaders = athleteLeaders[zone]
             return (
               <Panel key={zone} p="sm">

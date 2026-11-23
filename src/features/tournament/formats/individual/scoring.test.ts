@@ -149,7 +149,11 @@ describe('computeIndividualResults', () => {
   it('puts all juniors in open table and junior table; team uses open places', () => {
     const format = {
       ...BOOR_INDIVIDUAL_TEAM_FORMAT,
-      ranking: { ...BOOR_INDIVIDUAL_TEAM_FORMAT.ranking, separateJuniors: true },
+      participants: {
+        ...BOOR_INDIVIDUAL_TEAM_FORMAT.participants,
+        juniors: { mark: true, separateStandings: true },
+      },
+      standings: { ...BOOR_INDIVIDUAL_TEAM_FORMAT.standings, juniors: true },
     }
     const entries = [
       entry('e1', 'Alpha', [
@@ -207,7 +211,11 @@ describe('computeIndividualResults', () => {
   it('includes junior+junior and solo junior in open table when separateJuniors is on', () => {
     const format = {
       ...BOOR_INDIVIDUAL_TEAM_FORMAT,
-      ranking: { ...BOOR_INDIVIDUAL_TEAM_FORMAT.ranking, separateJuniors: true },
+      participants: {
+        ...BOOR_INDIVIDUAL_TEAM_FORMAT.participants,
+        juniors: { mark: true, separateStandings: true },
+      },
+      standings: { ...BOOR_INDIVIDUAL_TEAM_FORMAT.standings, juniors: true },
     }
     const soloJunior: TournamentEntry = {
       id: 'soloJ',

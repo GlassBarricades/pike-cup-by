@@ -524,7 +524,7 @@ export function buildIndividualRace(
     afterSlot,
     heatBySlot,
     heatDay: heatForAthletes(entries, draws, slots, catches, miniTours),
-    zeroPlusOne: format.ranking.zeroPlace === 'group_size_plus_one',
+    zeroPlusOne: format.scoring.zeroPlace === 'group_size_plus_one',
     engine: 'individual',
   }
 }
