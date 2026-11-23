@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Badge, Button, Group, SegmentedControl, Stack, Text, TextInput, UnstyledButton } from '@mantine/core'
+import { Badge, Button, Group, SegmentedControl, Select, Stack, Text, TextInput, UnstyledButton } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../features/auth/AuthProvider'
@@ -30,7 +30,7 @@ import {
 } from '../../features/tournament/schedule'
 import { useNow } from '../../features/tournament/useNow'
 import { entryTeamColumn, type CatchRow, type Tournament, type ZoneCode } from '../../features/tournament/types'
-import { EmptyState, VenueMapView } from '../../ui'
+import { EmptyState, Panel, VenueMapView } from '../../ui'
 import { WeightNumpad } from './WeightNumpad'
 
 type Panel = 'console' | 'results'
@@ -106,6 +106,10 @@ export function IndividualConsole({
   const [panel, setPanel] = useState<Panel>('console')
   const [search, setSearch] = useState('')
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null)
+  /** null = текущий слот взвешивания; иначе мини-тур из формы на вкладке «Результаты» */
+  const [editingMiniTourId, setEditingMiniTourId] = useState<string | null>(null)
+  const [addMiniTourId, setAddMiniTourId] = useState<string | null>(null)
+  const [addMemberId, setAddMemberId] = useState<string | null>(null)
   const [failedSave, setFailedSave] = useState<{
     grams: number
     entryId: string
@@ -150,8 +154,17 @@ export function IndividualConsole({
           (mini) => mini.tour_number === weighTarget.slot?.tour && mini.mini_number === weighTarget.slot?.mini,
         ) ?? null)
   const weighMiniId = weighMini?.id ?? null
+  const activeEditMiniTourId = editingMiniTourId ?? weighMiniId
+  const activeEditMini = activeEditMiniTourId
+    ? (miniTours.find((m) => m.id === activeEditMiniTourId) ?? null)
+    : null
   const weighLabel = weighTarget.slot
     ? `${slotTitle(weighTarget.slot)}${weighTarget.note ? ` · ${weighTarget.note}` : ''}`
+    : null
+  const editTargetLabel = activeEditMini
+    ? editingMiniTourId
+      ? `${activeEditMini.tour_number === 1 ? 'I' : 'II'} тур · МТ ${activeEditMini.mini_number}`
+      : weighLabel
     : null
   const msLeft =
     phase?.endsAtEffective != null
@@ -212,18 +225,130 @@ export function IndividualConsole({
 
   const weighedCount = useMemo(() => athletes.filter((a) => a.weight > 0).length, [athletes])
 
-  const resultGroups = useMemo(
+  const tourMinis = useMemo(
     () =>
-      athletes
-        .filter((a) => a.rows.length > 0)
-        .sort((a, b) => a.member.full_name_snapshot.localeCompare(b.member.full_name_snapshot, 'ru')),
-    [athletes],
+      miniTours
+        .filter((m) => m.tour_number === tourNumber)
+        .slice()
+        .sort((a, b) => a.mini_number - b.mini_number),
+    [miniTours, tourNumber],
   )
 
-  const editing = athletes.find((a) => a.member.id === editingMemberId) ?? null
+  const addAthleteOptions = useMemo(() => {
+    if (!zone || !addMiniTourId) return [] as { value: string; label: string; entryId: string }[]
+    const mini = miniTours.find((m) => m.id === addMiniTourId)
+    if (!mini) return []
+    const inZone = new Set(
+      draws
+        .filter(
+          (d) =>
+            d.zone === zone && d.tour_number === mini.tour_number && d.mini_number === mini.mini_number,
+        )
+        .map((d) => d.roster_member_id),
+    )
+    return entries
+      .flatMap((entry) =>
+        (entry.roster ?? [])
+          .filter((m) => m.role === 'athlete' && inZone.has(m.id))
+          .map((member) => {
+            const draw = draws.find(
+              (d) =>
+                d.roster_member_id === member.id &&
+                d.tour_number === mini.tour_number &&
+                d.mini_number === mini.mini_number,
+            )
+            const sector =
+              activeTournament.draw_zones_only || !draw ? '' : ` · сектор ${draw.sector}`
+            return {
+              value: member.id,
+              entryId: entry.id,
+              label: `${member.full_name_snapshot}${member.is_junior ? ' · Юн.' : ''} · ${entryTeamColumn(entry)}${sector}`,
+            }
+          }),
+      )
+      .sort((a, b) => a.label.localeCompare(b.label, 'ru'))
+  }, [zone, addMiniTourId, miniTours, draws, entries, activeTournament.draw_zones_only])
+
+  /** Журнал зоны: все уловы спортсменов, которые в этом туре ловили в зоне судьи. */
+  const resultGroups = useMemo(() => {
+    if (!zone) return []
+    const memberIdsInZone = new Set(
+      draws
+        .filter((d) => d.zone === zone && d.tour_number === tourNumber)
+        .map((d) => d.roster_member_id),
+    )
+    const tourMiniIds = new Set(tourMinis.map((m) => m.id))
+    return entries
+      .flatMap((entry) =>
+        (entry.roster ?? [])
+          .filter((m) => m.role === 'athlete' && memberIdsInZone.has(m.id))
+          .map((member) => {
+            const rows = catches
+              .filter((c) => c.roster_member_id === member.id && tourMiniIds.has(c.mini_tour_id))
+              .sort((a, b) => a.created_at.localeCompare(b.created_at))
+            const weight = rows.reduce((s, c) => s + c.weight_grams, 0)
+            const draw = draws.find(
+              (d) =>
+                d.roster_member_id === member.id &&
+                d.tour_number === tourNumber &&
+                d.mini_number === (weighTarget.slot?.mini ?? 1),
+            )
+            return {
+              member,
+              entry,
+              sector: draw?.sector ?? 0,
+              weight,
+              rows,
+              teamName: entryTeamColumn(entry),
+            }
+          }),
+      )
+      .filter((a) => a.rows.length > 0)
+      .sort((a, b) => a.member.full_name_snapshot.localeCompare(b.member.full_name_snapshot, 'ru'))
+  }, [zone, draws, tourNumber, tourMinis, entries, catches, weighTarget.slot?.mini])
+
+  const editingFromGrid = athletes.find((a) => a.member.id === editingMemberId) ?? null
+  const editingFromAdd = useMemo(() => {
+    if (!editingMemberId || !editingMiniTourId) return null
+    for (const entry of entries) {
+      const member = (entry.roster ?? []).find((m) => m.id === editingMemberId)
+      if (member) {
+        return {
+          member,
+          entry,
+          teamName: entryTeamColumn(entry),
+        }
+      }
+    }
+    return null
+  }, [editingMemberId, editingMiniTourId, entries])
+  const editing = editingFromGrid ?? editingFromAdd
   const editingWeight = editing
-    ? memberMiniWeight(editing.member.id, weighMiniId, catches)
+    ? memberMiniWeight(editing.member.id, activeEditMiniTourId, catches)
     : 0
+
+  useEffect(() => {
+    if (addMiniTourId && !tourMinis.some((m) => m.id === addMiniTourId)) {
+      setAddMiniTourId(null)
+      setAddMemberId(null)
+    }
+  }, [tourMinis, addMiniTourId])
+
+  useEffect(() => {
+    if (addMemberId && !addAthleteOptions.some((o) => o.value === addMemberId)) {
+      setAddMemberId(null)
+    }
+  }, [addAthleteOptions, addMemberId])
+
+  // Умный дефолт: текущий слот взвешивания
+  useEffect(() => {
+    if (addMiniTourId) return
+    if (weighMiniId && tourMinis.some((m) => m.id === weighMiniId)) {
+      setAddMiniTourId(weighMiniId)
+    } else if (tourMinis[0]) {
+      setAddMiniTourId(tourMinis[0].id)
+    }
+  }, [weighMiniId, tourMinis, addMiniTourId])
 
   const fishingDone = isFishingComplete(activeTournament, segments, now)
   const weighingDone = isZoneWeighingCompleted(zoneJudges, zone)
@@ -280,6 +405,7 @@ export function IndividualConsole({
       setFailedSave(null)
       setSavedNote(true)
       setEditingMemberId(null)
+      setEditingMiniTourId(null)
     },
     onError: (_error, input) => {
       setSavedNote(false)
@@ -497,7 +623,7 @@ export function IndividualConsole({
             className={`pc-judge-tab ${panel === 'results' ? 'pc-judge-tab--active' : ''}`}
             onClick={() => goToPanel('results')}
           >
-            Результаты
+            Журнал
           </UnstyledButton>
         </Group>
       </Stack>
@@ -530,7 +656,9 @@ export function IndividualConsole({
                     key={row.member.id}
                     className={`pc-judge-team-btn ${row.weight > 0 ? 'pc-judge-team-btn--done' : ''}`}
                     onClick={() => {
-                      if (!inputLocked) setEditingMemberId(row.member.id)
+                      if (inputLocked) return
+                      setEditingMiniTourId(null)
+                      setEditingMemberId(row.member.id)
                     }}
                   >
                     <Text fw={800} size="md" lineClamp={2} ta="center">
@@ -562,10 +690,85 @@ export function IndividualConsole({
 
         <section className="pc-judge-panel">
           <Stack gap="sm" h="100%">
-            <Text fw={700} size="sm" c="dimmed">
-              Вводы зоны {zone}
-              {weighTarget.slot ? ` · ${slotTitle(weighTarget.slot)}` : ''}
+            <Text fw={700} size="sm">
+              Журнал зоны {zone}
+              {` · ${tourNumber === 1 ? 'I' : 'II'} тур`}
             </Text>
+
+            <Panel
+              p="sm"
+              className="pc-judge-add-catch"
+              style={{
+                borderColor: 'color-mix(in srgb, var(--pc-signal) 40%, var(--pc-line))',
+                background: 'color-mix(in srgb, var(--pc-signal) 8%, var(--pc-panel))',
+              }}
+            >
+              <Stack gap="sm">
+                <div>
+                  <Text fw={800} size="sm">
+                    Добавить улов
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Выберите мини-тур и спортсмена зоны, затем введите вес
+                  </Text>
+                </div>
+                {inputLocked ? (
+                  <Text size="sm" c="dimmed">
+                    {closed
+                      ? 'Турнир завершён — запись закрыта.'
+                      : 'Взвешивание зоны завершено. Нажмите «Продолжить взвешивание» выше, чтобы добавить улов.'}
+                  </Text>
+                ) : (
+                  <>
+                    <Select
+                      label="Мини-тур"
+                      placeholder="Выберите МТ"
+                      data={tourMinis.map((m) => ({
+                        value: m.id,
+                        label: `МТ ${m.mini_number}`,
+                      }))}
+                      value={addMiniTourId}
+                      onChange={(v) => {
+                        setAddMiniTourId(v)
+                        setAddMemberId(null)
+                      }}
+                      searchable
+                      size="md"
+                    />
+                    <Select
+                      label="Спортсмен"
+                      placeholder={
+                        addMiniTourId
+                          ? addAthleteOptions.length
+                            ? 'Кто на зоне в этом МТ'
+                            : 'В этом МТ никого в зоне'
+                          : 'Сначала мини-тур'
+                      }
+                      data={addAthleteOptions}
+                      value={addMemberId}
+                      onChange={setAddMemberId}
+                      searchable
+                      disabled={!addMiniTourId}
+                      size="md"
+                    />
+                    <Button
+                      color="signal"
+                      size="lg"
+                      fullWidth
+                      disabled={!addMiniTourId || !addMemberId}
+                      onClick={() => {
+                        if (!addMiniTourId || !addMemberId) return
+                        setEditingMiniTourId(addMiniTourId)
+                        setEditingMemberId(addMemberId)
+                      }}
+                    >
+                      Ввести вес
+                    </Button>
+                  </>
+                )}
+              </Stack>
+            </Panel>
+
             {deleteMutation.isError && (
               <Text c="red" size="sm">
                 {(deleteMutation.error as Error).message}
@@ -580,23 +783,17 @@ export function IndividualConsole({
                 {resultGroups.map((row) => (
                   <Stack key={row.member.id} gap={6}>
                     <Group justify="space-between" wrap="nowrap" gap="xs">
-                      <UnstyledButton
-                        style={{ minWidth: 0, flex: 1, textAlign: 'left' }}
-                        onClick={() => {
-                          if (inputLocked) return
-                          goToPanel('console')
-                          setEditingMemberId(row.member.id)
-                        }}
-                      >
+                      <div style={{ minWidth: 0, flex: 1 }}>
                         <Text fw={700} lineClamp={1}>
                           {row.member.full_name_snapshot}
+                          {row.member.is_junior ? ' · Юн.' : ''}
                         </Text>
                         <Text size="xs" c="dimmed" lineClamp={1}>
                           {activeTournament.draw_zones_only
                             ? row.teamName
                             : `${row.teamName} · сектор ${row.sector || '—'}`}
                         </Text>
-                      </UnstyledButton>
+                      </div>
                       <Text fw={800} className="pc-tabular" size="lg">
                         {row.weight} г
                       </Text>
@@ -605,11 +802,13 @@ export function IndividualConsole({
                       const authorName =
                         (catchRow.created_by && authors?.get(catchRow.created_by)?.full_name) ||
                         (catchRow.created_by ? catchRow.created_by.slice(0, 8) : '—')
+                      const mini = miniTours.find((item) => item.id === catchRow.mini_tour_id)
                       return (
                         <div key={catchRow.id} className="pc-judge-result-row">
                           <div className="pc-judge-result-main">
                             <Text size="xs" c="dimmed">
                               {formatLogTime(catchRow.created_at)}
+                              {mini ? ` · МТ ${mini.mini_number}` : ''}
                               {' · '}
                               {authorName}
                             </Text>
@@ -649,24 +848,25 @@ export function IndividualConsole({
 
       {editing && user && !inputLocked && (
         <WeightNumpad
-          key={editing.member.id}
+          key={`${editing.member.id}:${activeEditMiniTourId ?? 'none'}`}
           subjectName={editing.member.full_name_snapshot}
           recordedGrams={editingWeight}
-          targetLabel={weighLabel}
+          targetLabel={editTargetLabel}
           saving={saveMutation.isPending}
           error={saveMutation.isError ? (saveMutation.error as Error).message : null}
           onSave={(grams) => {
-            if (!weighMiniId) return
+            if (!activeEditMiniTourId) return
             saveMutation.mutate({
               grams,
               entryId: editing.entry.id,
               rosterMemberId: editing.member.id,
-              miniTourId: weighMiniId,
+              miniTourId: activeEditMiniTourId,
             })
           }}
           onClose={() => {
             saveMutation.reset()
             setEditingMemberId(null)
+            setEditingMiniTourId(null)
           }}
         />
       )}

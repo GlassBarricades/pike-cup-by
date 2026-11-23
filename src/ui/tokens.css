@@ -280,6 +280,11 @@ body {
   padding-bottom: 0.5rem;
 }
 
+.pc-judge-add-catch {
+  border: 1px solid color-mix(in srgb, var(--pc-signal) 35%, var(--pc-line));
+  background: color-mix(in srgb, var(--pc-signal) 8%, transparent);
+}
+
 .pc-judge-team-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

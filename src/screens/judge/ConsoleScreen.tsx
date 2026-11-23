@@ -42,7 +42,7 @@ import {
     type ZoneCode,
     type ZoneJudgeAssignment,
 } from '../../features/tournament/types'
-import { EmptyState, VenueMapView } from '../../ui'
+import { EmptyState, Panel, VenueMapView } from '../../ui'
 
 type Panel = 'console' | 'results'
 
@@ -255,6 +255,9 @@ function PikecupConsole({
     const [panel, setPanel] = useState<Panel>('console')
     const [search, setSearch] = useState('')
     const [editingEntryId, setEditingEntryId] = useState<string | null>(null)
+    const [editingMiniTourId, setEditingMiniTourId] = useState<string | null>(null)
+    const [addMiniTourId, setAddMiniTourId] = useState<string | null>(null)
+    const [addEntryId, setAddEntryId] = useState<string | null>(null)
     const [failedSave, setFailedSave] = useState<{ grams: number; entryId: string; miniTourId: string } | null>(null)
     const [savedNote, setSavedNote] = useState(false)
     const [showVenueMap, setShowVenueMap] = useState(false)
@@ -287,10 +290,26 @@ function PikecupConsole({
             .sort((a, b) => entryTeamName(a.entry).localeCompare(entryTeamName(b.entry), 'ru'))
     }, [zoneEntries, tourNumber, catches, miniTours])
 
-    const editingEntry = entries.find((e) => e.id === editingEntryId)
-    const editingRows = editingEntry ? tourCatches(editingEntry.id, tourNumber, catches, miniTours) : []
-    const editingWeight = editingRows.reduce((sum, c) => sum + c.weight_grams, 0)
+    const tourMinis = useMemo(
+        () =>
+            miniTours
+                .filter((m) => m.tour_number === tourNumber)
+                .slice()
+                .sort((a, b) => a.mini_number - b.mini_number),
+        [miniTours, tourNumber],
+    )
 
+    const addTeamOptions = useMemo(
+        () =>
+            entries
+                .filter((e) => physicalZone(e.start_zone, tourNumber) === zone)
+                .slice()
+                .sort((a, b) => entryTeamName(a).localeCompare(entryTeamName(b), 'ru'))
+                .map((e) => ({ value: e.id, label: entryTeamName(e) })),
+        [entries, tourNumber, zone],
+    )
+
+    const editingEntry = entries.find((e) => e.id === editingEntryId)
     const mapWindow = resolveMapWindow(activeTournament, segments, now)
     const clockKey = mapWindow
         ? `${mapWindow.state}-${mapWindow.state === 'off' ? mapWindow.label : `${mapWindow.tour}-${mapWindow.mini}`}-${phase?.kind ?? ''}-${tourNumber}`
@@ -322,9 +341,39 @@ function PikecupConsole({
         weighTarget.slot == null
             ? null
             : (miniTours.find((mini) => mini.tour_number === weighTarget.slot?.tour && mini.mini_number === weighTarget.slot?.mini)?.id ?? null)
+    const activeEditMiniTourId = editingMiniTourId ?? weighMiniId
+    const activeEditMini = activeEditMiniTourId
+        ? (miniTours.find((m) => m.id === activeEditMiniTourId) ?? null)
+        : null
     const weighLabel = weighTarget.slot ? `${slotTitle(weighTarget.slot)}${weighTarget.note ? ` · ${weighTarget.note}` : ''}` : null
+    const editTargetLabel = activeEditMini
+        ? editingMiniTourId
+            ? `${activeEditMini.tour_number === 1 ? 'I' : 'II'} тур · МТ ${activeEditMini.mini_number}`
+            : weighLabel
+        : null
+    const editingWeight = editingEntryId && activeEditMiniTourId
+        ? catches
+              .filter((c) => c.entry_id === editingEntryId && c.mini_tour_id === activeEditMiniTourId)
+              .reduce((sum, c) => sum + c.weight_grams, 0)
+        : 0
     const msLeft = phase?.endsAtEffective != null ? Math.max(0, phase.endsAtEffective.getTime() - phase.effectiveNow.getTime()) : null
     const minutesLeft = msLeft != null && (phase?.kind === 'active' || phase?.kind === 'gap') ? Math.ceil(msLeft / 60_000) : null
+
+    useEffect(() => {
+        if (addMiniTourId && !tourMinis.some((m) => m.id === addMiniTourId)) {
+            setAddMiniTourId(null)
+            setAddEntryId(null)
+        }
+    }, [tourMinis, addMiniTourId])
+
+    useEffect(() => {
+        if (addMiniTourId) return
+        if (weighMiniId && tourMinis.some((m) => m.id === weighMiniId)) {
+            setAddMiniTourId(weighMiniId)
+        } else if (tourMinis[0]) {
+            setAddMiniTourId(tourMinis[0].id)
+        }
+    }, [weighMiniId, tourMinis, addMiniTourId])
 
     const invalidate = useCallback(async () => {
         if (tournamentId) {
@@ -375,6 +424,7 @@ function PikecupConsole({
             setFailedSave(null)
             setSavedNote(true)
             setEditingEntryId(null)
+            setEditingMiniTourId(null)
         },
         onError: (_error, input) => {
             setSavedNote(false)
@@ -587,7 +637,7 @@ function PikecupConsole({
                         ·
                     </Text>
                     <UnstyledButton className={`pc-judge-tab ${panel === 'results' ? 'pc-judge-tab--active' : ''}`} onClick={() => goToPanel('results')}>
-                        Результаты
+                        Журнал
                     </UnstyledButton>
                 </Group>
             </Stack>
@@ -616,7 +666,9 @@ function PikecupConsole({
                                             key={entry.id}
                                             className={`pc-judge-team-btn ${w > 0 ? 'pc-judge-team-btn--done' : ''}`}
                                             onClick={() => {
-                                                if (!inputLocked) setEditingEntryId(entry.id)
+                                                if (inputLocked) return
+                                                setEditingMiniTourId(null)
+                                                setEditingEntryId(entry.id)
                                             }}
                                         >
                                             <Text fw={800} size="md" lineClamp={2} ta="center">
@@ -635,9 +687,74 @@ function PikecupConsole({
 
                 <section className="pc-judge-panel">
                     <Stack gap="sm" h="100%">
-                        <Text fw={700} size="sm" c="dimmed">
-                            Вводы зоны {zone} · {tourNumber === 1 ? 'I' : 'II'} тур
+                        <Text fw={700} size="sm">
+                            Журнал зоны {zone} · {tourNumber === 1 ? 'I' : 'II'} тур
                         </Text>
+
+                        <Panel
+                            p="sm"
+                            className="pc-judge-add-catch"
+                            style={{
+                                borderColor: 'color-mix(in srgb, var(--pc-signal) 40%, var(--pc-line))',
+                                background: 'color-mix(in srgb, var(--pc-signal) 8%, var(--pc-panel))',
+                            }}
+                        >
+                            <Stack gap="sm">
+                                <div>
+                                    <Text fw={800} size="sm">
+                                        Добавить улов
+                                    </Text>
+                                    <Text size="xs" c="dimmed">
+                                        Выберите мини-тур и команду зоны, затем введите вес
+                                    </Text>
+                                </div>
+                                {inputLocked ? (
+                                    <Text size="sm" c="dimmed">
+                                        {closed
+                                            ? 'Турнир завершён — запись закрыта.'
+                                            : 'Взвешивание зоны завершено. Нажмите «Продолжить взвешивание» выше, чтобы добавить улов.'}
+                                    </Text>
+                                ) : (
+                                    <>
+                                        <Select
+                                            label="Мини-тур"
+                                            placeholder="Выберите МТ"
+                                            data={tourMinis.map((m) => ({
+                                                value: m.id,
+                                                label: `МТ ${m.mini_number}`,
+                                            }))}
+                                            value={addMiniTourId}
+                                            onChange={setAddMiniTourId}
+                                            searchable
+                                            size="md"
+                                        />
+                                        <Select
+                                            label="Команда"
+                                            placeholder="Команда зоны"
+                                            data={addTeamOptions}
+                                            value={addEntryId}
+                                            onChange={setAddEntryId}
+                                            searchable
+                                            size="md"
+                                        />
+                                        <Button
+                                            color="signal"
+                                            size="lg"
+                                            fullWidth
+                                            disabled={!addMiniTourId || !addEntryId}
+                                            onClick={() => {
+                                                if (!addMiniTourId || !addEntryId) return
+                                                setEditingMiniTourId(addMiniTourId)
+                                                setEditingEntryId(addEntryId)
+                                            }}
+                                        >
+                                            Ввести вес
+                                        </Button>
+                                    </>
+                                )}
+                            </Stack>
+                        </Panel>
+
                         {deleteMutation.isError && (
                             <Text c="red" size="sm">
                                 {(deleteMutation.error as Error).message}
@@ -652,18 +769,9 @@ function PikecupConsole({
                                 {resultGroups.map(({ entry, rows, weight }) => (
                                     <Stack key={entry.id} gap={6}>
                                         <Group justify="space-between" wrap="nowrap" gap="xs">
-                                            <UnstyledButton
-                                                style={{ minWidth: 0, flex: 1, textAlign: 'left' }}
-                                                onClick={() => {
-                                                    if (inputLocked) return
-                                                    goToPanel('console')
-                                                    setEditingEntryId(entry.id)
-                                                }}
-                                            >
-                                                <Text fw={700} lineClamp={1}>
-                                                    {entryTeamName(entry)}
-                                                </Text>
-                                            </UnstyledButton>
+                                            <Text fw={700} lineClamp={1} style={{ minWidth: 0, flex: 1 }}>
+                                                {entryTeamName(entry)}
+                                            </Text>
                                             <Text fw={800} className="pc-tabular" size="lg">
                                                 {weight} г
                                             </Text>
@@ -677,7 +785,7 @@ function PikecupConsole({
                                                     <div className="pc-judge-result-main">
                                                         <Text size="xs" c="dimmed">
                                                             {formatLogTime(row.created_at)}
-                                                            {mini ? ` · мини-тур ${mini.mini_number}` : ''}
+                                                            {mini ? ` · МТ ${mini.mini_number}` : ''}
                                                             {' · '}
                                                             {authorName}
                                                         </Text>
@@ -717,19 +825,20 @@ function PikecupConsole({
 
             {editingEntry && user && !inputLocked && (
                 <WeightNumpad
-                    key={editingEntry.id}
+                    key={`${editingEntry.id}:${activeEditMiniTourId ?? 'none'}`}
                     subjectName={entryTeamName(editingEntry)}
                     recordedGrams={editingWeight}
-                    targetLabel={weighLabel}
+                    targetLabel={editTargetLabel}
                     saving={saveMutation.isPending}
                     error={saveMutation.isError ? (saveMutation.error as Error).message : null}
                     onSave={(grams) => {
-                        if (!editingEntryId || !weighMiniId) return
-                        saveMutation.mutate({ grams, entryId: editingEntryId, miniTourId: weighMiniId })
+                        if (!editingEntryId || !activeEditMiniTourId) return
+                        saveMutation.mutate({ grams, entryId: editingEntryId, miniTourId: activeEditMiniTourId })
                     }}
                     onClose={() => {
                         saveMutation.reset()
                         setEditingEntryId(null)
+                        setEditingMiniTourId(null)
                     }}
                 />
             )}
