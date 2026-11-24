@@ -39,9 +39,23 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: '/index.html',
-        // Главный бандл ~2.1 MB; дефолт workbox 2 MiB валит сборку.
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        // Главный бандл ~3.5 MB (slip packs + libs); дефолт workbox 2 MiB валит сборку.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
       },
     }),
   ],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            { name: 'slip-packs', test: /features\/tournament\/slipPacks\/packs/ },
+            { name: 'vendor-docs', test: /node_modules\/(jspdf|jspdf-autotable|exceljs)/ },
+            { name: 'vendor-maps', test: /node_modules\/(leaflet|react-leaflet)/ },
+            { name: 'vendor-charts', test: /node_modules\/recharts/ },
+          ],
+        },
+      },
+    },
+  },
 })
