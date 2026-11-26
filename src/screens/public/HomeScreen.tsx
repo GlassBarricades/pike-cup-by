@@ -19,6 +19,7 @@ import { getCompetitionStage, getCurrentPhase, tourNumberFromPhase, type Current
 import { useNow } from '../../features/tournament/useNow'
 import type { CatchRow, MiniTour, TournamentEntry } from '../../features/tournament/types'
 import { BrandMark, EmptyState, SectionTitle, SurfaceCard } from '../../ui'
+import { InstallAppGuide } from './InstallAppGuide'
 
 function tourWeight(
   entryId: string,
@@ -162,6 +163,8 @@ export function HomeScreen() {
             </Group>
           )}
         </Stack>
+
+        <InstallAppGuide />
 
         {live && tournament ? (
           <UnstyledButton component={Link} to="/live" className="pc-live-card">
