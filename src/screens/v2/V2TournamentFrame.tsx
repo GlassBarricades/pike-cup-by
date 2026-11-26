@@ -1,6 +1,8 @@
 import { Group, Stack, Text, Title } from '@mantine/core'
 import { NavLink, Outlet } from 'react-router-dom'
 import { defaultMapMode, getFormat, isEntryCatch } from '../../features/tournament/formats'
+import { getCompetitionStage } from '../../features/tournament/schedule'
+import { useNow } from '../../features/tournament/useNow'
 import { SpectatorRefreshBar } from '../../ui'
 import { useV2Tournament } from './context'
 
@@ -15,19 +17,24 @@ const baseLinks = [
 ]
 
 export function V2SectionNav() {
-  const { tournament } = useV2Tournament()
+  const { tournament, segments } = useV2Tournament()
+  const now = useNow(5_000)
   const format = getFormat(tournament)
   const base = `/live/t/${tournament.id}`
   const schematicDraft = isEntryCatch(format) && defaultMapMode(format) === 'schematic'
-  const links = baseLinks.map((item) =>
-    item.to === '/map' && schematicDraft
-      ? {
-          ...item,
-          hint: 'черновик',
-          title: 'Карта ещё дорабатывается — пока сырое решение',
-        }
-      : item,
-  )
+  const showReview = getCompetitionStage(tournament, segments, now) === 'completed'
+  const links = [
+    ...baseLinks.map((item) =>
+      item.to === '/map' && schematicDraft
+        ? {
+            ...item,
+            hint: 'черновик',
+            title: 'Карта ещё дорабатывается — пока сырое решение',
+          }
+        : item,
+    ),
+    ...(showReview ? [{ to: '/review', label: 'Разбор', end: true }] : []),
+  ]
   return (
     <Stack gap="sm">
       <Title order={3} className="pc-display" lineClamp={2}>

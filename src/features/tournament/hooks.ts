@@ -212,13 +212,6 @@ export function useShowLiveNav() {
   return useActiveStage()?.stage === 'live'
 }
 
-/** Пункт «Разбор» для активного турнира, когда день уже закончился. */
-export function useReviewNavTo() {
-  const active = useActiveStage()
-  if (!active || active.stage !== 'completed') return null
-  return `/live/t/${active.id}/review`
-}
-
 export function useMiniTours(tournamentId: string | undefined) {
   return useQuery({
     queryKey: tournamentKeys.miniTours(tournamentId ?? ''),

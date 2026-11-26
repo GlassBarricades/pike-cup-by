@@ -140,7 +140,6 @@ export const router = createBrowserRouter([
             path: 't/:tournamentId',
             element: <V2TournamentOutlet />,
             children: [
-              { path: 'review', element: <V2Review /> },
               {
                 element: <V2TournamentFrame />,
                 children: [
@@ -154,6 +153,7 @@ export const router = createBrowserRouter([
                   { path: 'teams', element: <V2Teams /> },
                   { path: 'team/:entryId', element: <V2Team /> },
                   { path: 'compare', element: <V2Compare /> },
+                  { path: 'review', element: <V2Review /> },
                 ],
               },
             ],
